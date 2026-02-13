@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">Sleep</string>
+    <string name="tab_sleep">수면</string>
+    <string name="tab_report">리포트</string>
+    <string name="tab_setting">설정</string>
+    <string name="am">오전</string>
+    <string name="pm">오후</string>
+    <string name="button_sleep">수면 시작</string>
+    <string name="time_format">%02d</string>
+    <string name="route_measure">measure?mode=$mode&amp;hour=$selectedHour&amp;minute=$selectedMinute</string>
+</resources>

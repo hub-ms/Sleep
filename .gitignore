@@ -1,0 +1,14 @@
+# Root folder
+.gradle/
+.idea/
+.kotlin/
+build/
+sleep-edf-database-expanded/
+tflite/
+gradle.properties
+local.properties
+SHA256SUMS.txt
+
+# App folder
+app/.cxx/
+app/build/

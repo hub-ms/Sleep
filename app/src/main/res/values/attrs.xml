@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<declare-styleable name="Aps">
+		<attr name="width" format="integer" />
+		<attr name="height" format="integer" />
+		<attr name="paperTray" format="integer" />
+		<attr name="fillMode" format="string" />
+		<attr name="renderTransform" format="string" />
+		<attr name="Alignment" format="string" />
+		<attr name="DashCap" format="string" />
+		<attr name="DashOffset" format="float" />
+		<attr name="DashStyle" format="string" />
+		<attr name="EndCap" format="string" />
+		<attr name="LineJoin" format="string" />
+		<attr name="mitertLimit" format="float" />
+		<attr name="startCap" format="string" />
+		<attr name="lineColor" format="color" />
+		<attr name="color" format="color" />
+		<attr name="isClosed" format="boolean" />
+		<attr name="X" format="float" />
+		<attr name="Y" format="float" />
+		<attr name="curveColor" format="color" />
+		<attr name="startPoint" format="string" />
+		<attr name="EndPoint" format="string" />
+	</declare-styleable>
+</resources>

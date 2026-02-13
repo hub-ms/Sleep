@@ -1,0 +1,106 @@
+# TensorFlow Bazel 설정 파일입니다.
+# 이 파일은 TensorFlow 빌드 옵션을 그룹화하고 단순화합니다.
+#
+# ----설정 옵션----
+# Android 옵션:
+#    android:
+#    android_arm:
+#    android_arm64:
+#    android_x86:
+#    android_x86_64:
+#
+# iOS 옵션:
+#     ios:
+#     ios_armv7:
+#     ios_arm64:
+#     ios_x86_64:
+#     ios_fat:
+#
+# Macosx 옵션
+#     darwin_arm64:
+#
+# 컴파일러 옵션:
+#     cuda_clang:             CUDA 코드 빌드시 Clang 사용.
+#     avx_linux:              리눅스에서 avx 명령어셋으로 빌드.
+#     avx_win:                윈도우에서 avx 명령어셋으로 빌드.
+#
+# 기타 빌드 옵션:
+#     short_logs:       빌드 중 에러만 로그, 경고 생략.
+#     verbose_logs:     모든 컴파일러 경고 로그 출력.
+#     monolithic:       모든 TF C++ 코드를 하나의 공유 객체로 빌드.
+#     dynamic_kernels:  모든 커널을 동적으로 링크 시도(실험적).
+#     dbg:              디버그 정보 포함 빌드.
+#
+# TF 버전 옵션:
+#     v2: TF v2 빌드
+#
+# 기능 및 서드파티 라이브러리 지원 옵션:
+#     xla:          XLA 지원 빌드
+#     tpu:          TPU 지원 빌드
+#     cuda:         CUDA 지원 빌드
+#     cuda_clang    CUDA Clang 지원 빌드
+#     rocm:         AMD GPU 지원(ROCm)
+#     mkl:          MKL 전체 지원 활성화
+#     nogcp:        GCS 지원 비활성화
+#     nonccl:       NCCL 지원 비활성화
+#
+# 원격 빌드 실행 옵션(현재 TF 팀 프로젝트만 지원)
+#     rbe_base:                       모든 flavor에 공통 RBE 옵션
+#     rbe_linux:                      모든 리눅스 빌드에 사용되는 RBE 옵션
+#     rbe_win_base:                   모든 윈도우 빌드에 사용되는 RBE 옵션(단독 사용 불가)
+#     rbe_windows_x86_cpu_2022:       윈도우 전용 RBE 옵션
+#
+#     rbe_linux_cpu:                  CPU 지원만으로 빌드하는 RBE 옵션
+#     rbe_linux_cuda:                 GPU 지원(Clang)으로 빌드하는 RBE 옵션
+#     rbe_linux_cuda_nvcc:            GPU 지원(NVCC)으로 빌드하는 RBE 옵션
+#
+# 임베디드 리눅스 옵션(실험적, TFLite 빌드만 테스트됨)
+#     elinux:          모든 flavor에 공통 임베디드 리눅스 옵션
+#     elinux_aarch64:  aarch64(ARM64) CPU 지원 임베디드 리눅스 옵션
+#     elinux_armhf:    armhf(ARMv7) CPU 지원 임베디드 리눅스 옵션
+#
+# 릴리즈 빌드 옵션(모든 OS)
+#     release_base:                    모든 OS 공통 옵션
+#     release_cpu_linux:               리눅스 CPU 빌드용 툴체인 및 CUDA 옵션
+#     release_gpu_linux:               리눅스 GPU 빌드용 툴체인 및 CUDA 옵션
+#     release_cpu_macos:               MacOS CPU 빌드용 툴체인 및 CUDA 옵션
+#     release_cpu_windows:             윈도우 CPU 빌드용 툴체인 및 CUDA 옵션
+build:android_arm64 --config=android
+build:android_arm64 --cpu=arm64-v8a
+build:android_arm64 --fat_apk_cpu=arm64-v8a
+
+build:android_x86 --config=android
+build:android_x86 --cpu=x86
+build:android_x86 --fat_apk_cpu=x86
+
+build:android_x86_64 --config=android
+build:android_x86_64 --cpu=x86_64
+build:android_x86_64 --fat_apk_cpu=x86_64
+
+build:macos_arm64 --cpu=darwin_arm64
+build:macos_arm64 --macos_minimum_os=11.0
+build:ios_armv7 --cpu=ios_armv7
+
+build:ios_arm64 --config=ios
+build:ios_arm64 --cpu=ios_arm64
+
+build:ios_arm64e --config=ios
+build:ios_arm64e --cpu=ios_arm64e
+
+build:ios_sim_arm64 --config=ios
+build:ios_sim_arm64 --cpu=ios_sim_arm64
+
+build:ios_x86_64 --config=ios
+build:ios_x86_64 --cpu=ios_x86_64
+
+build:elinux_aarch64 --config=elinux
+build:elinux_aarch64 --cpu=aarch64
+
+build:elinux_armhf --config=elinux
+build:elinux_armhf --cpu=armhf
+
+build:cross_compile_base --host_cpu=k8
+
+build:cross_compile_linux_arm64 --cpu=aarch64
+
+build:cross_compile_macos_x86 --cpu=darwin

@@ -1,0 +1,11 @@
+module(name = "sleep")
+
+# TODO: WORKSPACE에 선언되어 있던 외부 레포지토(repository rule)들을
+# module system 규격에 맞춰 이 파일로 옮기십시오.
+#
+# 예:
+# bazel_dep(name = "com_google_protobuf", version = "3.21.0")
+# 그리고 필요한 repository_rule 호출(registering 등)을 추가합니다.
+#
+# 현재는 모듈 마이그레이션의 골격만 생성했습니다. 실제 의존성 버전과
+# 레포지토리 정보에 따라 이 파일을 채워주십시오.

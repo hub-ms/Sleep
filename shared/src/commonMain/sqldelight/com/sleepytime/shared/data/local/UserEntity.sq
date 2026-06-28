@@ -1,0 +1,24 @@
+import kotlin.Boolean;
+import kotlin.Int;
+import kotlinx.datetime.LocalDateTime;
+
+
+CREATE TABLE UserEntity (
+    userId INTEGER NOT NULL PRIMARY KEY,
+    email TEXT,
+    nickname TEXT NOT NULL,
+    profileImageUrl TEXT,
+    isPremium INTEGER AS Boolean NOT NULL DEFAULT 0,
+    isActive INTEGER AS Boolean NOT NULL DEFAULT 1,
+    lastLoginAt TEXT AS LocalDateTime,
+    createdAt TEXT AS LocalDateTime NOT NULL,
+    updatedAt TEXT AS LocalDateTime
+);
+insertUser:
+INSERT OR REPLACE INTO UserEntity VALUES ?;
+
+getUser:
+SELECT * FROM UserEntity LIMIT 1;
+
+deleteUser:
+DELETE FROM UserEntity;

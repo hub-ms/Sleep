@@ -1,0 +1,21 @@
+import kotlin.Boolean;
+
+CREATE TABLE SessionEntity (
+    id INTEGER NOT NULL PRIMARY KEY,
+    userId INTEGER NOT NULL,
+    accessToken TEXT NOT NULL,
+    refreshToken TEXT,
+    expiresAt INTEGER NOT NULL, -- Epoch 밀리초 단위 시간 저장을 위해 Long 매핑 구조인 INTEGER 사용
+    isActive INTEGER AS Boolean NOT NULL DEFAULT 1,
+    createdAt INTEGER NOT NULL
+);
+
+-- Queries
+insertSession:
+INSERT OR REPLACE INTO SessionEntity VALUES ?;
+
+getActiveSession:
+SELECT * FROM SessionEntity WHERE isActive = 1 LIMIT 1;
+
+deleteSession:
+DELETE FROM SessionEntity;

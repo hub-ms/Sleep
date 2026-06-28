@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="splash_background">#0F172A</color>
+    <color name="splash_primary">#10B981</color>
+    <color name="splash_secondary">#6B7280</color>
+    <color name="purple_700">#8B5CF6</color>
+    <color name="purple_500">#A78BFA</color>
+    <color name="purple_200">#10B981</color>
+</resources>

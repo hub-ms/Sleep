@@ -1,0 +1,51 @@
+import com.sleepytime.shared.domain.model.Alarm.Sound;
+import com.sleepytime.shared.domain.model.Alarm;
+import kotlin.Boolean;
+import kotlin.Float;
+import kotlin.Int;
+
+CREATE TABLE IF NOT EXISTS AlarmEntity(
+    alarmId INTEGER NOT NULL PRIMARY KEY DEFAULT 1,
+
+    hour INTEGER AS Int NOT NULL DEFAULT 7,
+    minute INTEGER AS Int NOT NULL DEFAULT 30,
+
+    isEnabled INTEGER AS Boolean NOT NULL DEFAULT 0,
+    isVibrationEnabled INTEGER AS Boolean NOT NULL DEFAULT 0,
+    isSmartAlarmEnabled INTEGER AS Boolean NOT NULL DEFAULT 0,
+    smartAlarmRange INTEGER AS Int NOT NULL DEFAULT 20,
+    isGradualVolume INTEGER AS Boolean NOT NULL DEFAULT 0,
+
+    sound TEXT AS Alarm.Sound NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS alarm_isEnabled ON AlarmEntity(isEnabled);
+CREATE INDEX IF NOT EXISTS alarm_time ON AlarmEntity(hour, minute);
+
+upsertAlarm:
+INSERT OR REPLACE INTO AlarmEntity (
+    alarmId,
+
+    hour,
+    minute,
+
+    isEnabled,
+    isVibrationEnabled,
+    isSmartAlarmEnabled,
+    smartAlarmRange,
+    isGradualVolume,
+
+    sound
+) VALUES (
+    1, ?, ?, ?, ?, ?, ?, ?, ?
+);
+
+getAlarm:
+SELECT * FROM AlarmEntity;
+
+setEnabled:
+UPDATE AlarmEntity SET isEnabled = ? WHERE alarmId = 1;
+
+updateTime:
+UPDATE AlarmEntity SET hour = ?, minute = ? WHERE alarmId = 1;
+

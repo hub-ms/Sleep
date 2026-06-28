@@ -1,0 +1,65 @@
+import com.sleepytime.shared.domain.model.EnvironmentFeature;
+import com.sleepytime.shared.domain.model.SleepMetrics;
+import com.sleepytime.shared.domain.model.SleepStage;
+import com.sleepytime.shared.enum_.SleepStageType;
+import kotlin.Float;
+import kotlin.Int;
+import kotlin.collections.List;
+import kotlin.collections.Map;
+
+CREATE TABLE SleepSessionEntity (
+    sessionId TEXT NOT NULL PRIMARY KEY,
+    date INTEGER NOT NULL,
+
+    sleepMetrics TEXT AS SleepMetrics NOT NULL,
+
+    environmentHistory TEXT AS List<EnvironmentFeature.Snapshot> NOT NULL,
+    environmentStats TEXT AS EnvironmentFeature.Statistics NOT NULL,
+    environmentFlags TEXT AS EnvironmentFeature.Flag NOT NULL,
+
+
+    awakeMinutes REAL NOT NULL,
+    lightMinutes REAL NOT NULL,
+    deepMinutes REAL NOT NULL,
+    remMinutes REAL NOT NULL,
+    sleepLatencyMinutes REAL NOT NULL,
+    stageTimeline TEXT AS List<SleepStage> NOT NULL,
+    stagesDistribution TEXT AS Map<SleepStageType, Float> NOT NULL,
+
+    wakeCount INTEGER AS Int NOT NULL,
+    sleepEfficiency INTEGER AS Int NOT NULL,
+
+    sensorCsv TEXT NOT NULL ,
+    environmentCsv TEXT NOT NULL,
+    createdAt INTEGER NOT NULL,
+    updatedAt INTEGER NOT NULL
+);
+insertSession: INSERT OR REPLACE INTO SleepSessionEntity VALUES ?;
+
+getSessionById:
+SELECT * FROM SleepSessionEntity WHERE
+sessionId = :sessionId LIMIT 1;
+
+getSessionByDate:
+SELECT * FROM SleepSessionEntity
+WHERE date >= :startOfDayMs
+  AND date < :endOfDayMs
+ORDER BY createdAt DESC
+LIMIT 1;
+
+getSessionsByDateRange:
+SELECT * FROM SleepSessionEntity
+WHERE date >= :fromEpochMs
+  AND date < :toEpochMs
+ORDER BY date ASC;
+
+getSessionDatesByMonth:
+SELECT date FROM SleepSessionEntity
+WHERE
+    CAST(strftime('%Y', date / 1000, 'unixepoch', 'localtime') AS INTEGER) = :year
+    AND CAST(strftime('%m', date / 1000, 'unixepoch', 'localtime') AS INTEGER) = :month;
+
+getLatestSession: SELECT * FROM SleepSessionEntity
+ORDER BY createdAt DESC
+LIMIT 1;
+deleteSession: DELETE FROM SleepSessionEntity WHERE sessionId = ?;

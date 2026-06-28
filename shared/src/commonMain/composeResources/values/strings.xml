@@ -1,0 +1,46 @@
+<resources>
+    <string name="root_project">Sleep</string>
+    <string name="project_path">app</string>
+    <string name="tab_home">홈</string>
+    <string name="tab_report">리포트</string>
+    <string name="tab_mypage">마이페이지</string>
+    <string name="am">오전</string>
+    <string name="pm">오후</string>
+    <string name="button_onboarding_intro">시작하기</string>
+    <string name="button_onboarding_next">다음</string>
+    <string name="button_onboarding_last">완료</string>
+    <string name="button_sleep_start">수면 시작</string>
+    <string name="button_sleep_end">수면 종료</string>
+    <string name="button_sleep_save">설정 저장</string>
+    <string name="alarm_sound_message">알람을 켜면 사운드는 항상 활성화됩니다</string>
+    <string name="button_alarm_save">알람 저장</string>
+    <string name="button_confirm">확인</string>
+    <string name="time_format">%02d</string>
+
+    <string name="report_analysis_wake_count">깨어남 횟수</string>
+    <string name="report_analysis_sleep_continuity">수면 안정성</string>
+    <string name="report_analysis_deep_duration">깊은 수면</string>
+    <string name="report_analysis_rem_duration">렘수면</string>
+    <string name="report_analysis_sleep_latency">수면 잠복기</string>
+
+
+    <string name="route_measure">measure?mode=$mode&amp;hour=$selectedHour&amp;minute=$selectedMinute</string>
+
+    <string name="title_sea">깊은 바다의 휴식</string>
+    <string name="title_forest">숲속의 빗소리</string>
+    <string name="title_stream">숲속의 계곡물</string>
+    <string name="title_campfire">따뜻한 모닥불</string>
+    <string name="title_cricket">여름밤의 귀뚜라미</string>
+    <string name="title_wind">겨울 들판의 바람</string>
+    <string name="title_lake">고요한 호숫가</string>
+    <string name="title_delta">델타파 음악</string>
+    <string name="title_theta">세타파 명상</string>
+
+    <string name="title_alarm_bird">새벽을 깨우는 소리</string>
+    <string name="title_alarm_cricket">고요한 정원의 풀벌레</string>
+    <string name="title_alarm_piano">창가로 스미는 피아노</string>
+    <string name="title_alarm_wave">부드러운 파도의 숨결</string>
+    <string name="title_alarm_upbeat">오늘을 여는 발걸음</string>
+
+    <string name="title_unknown">잔잔한 음악</string>
+</resources>

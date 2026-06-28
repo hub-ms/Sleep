@@ -1,0 +1,13 @@
+import kotlin.time.Duration;
+import kotlinx.datetime.LocalDateTime;
+
+CREATE TABLE SleepStageEntity (
+    id TEXT NOT NULL PRIMARY KEY,
+    sessionId TEXT NOT NULL,
+    type TEXT NOT NULL,
+    startTime TEXT AS LocalDateTime NOT NULL,
+    endTime TEXT AS LocalDateTime NOT NULL,
+    duration TEXT AS Duration NOT NULL
+);
+insertStage: INSERT INTO SleepStageEntity(id, sessionId, type, startTime, endTime, duration) VALUES ?;
+getStagesForSession: SELECT * FROM SleepStageEntity WHERE sessionId = ?;

@@ -44,14 +44,13 @@ class AuthRepositoryImpl(
         }
 
         val providerString = settings.getStringOrNull(SOCIAL_PROVIDER) ?: return User.AuthInfo.Guest
-        val savedUserId = settings.getString("logged_in_user_id", defaultValue = "")
-        if (savedUserId.isEmpty()) return User.AuthInfo.Guest
+        val savedUserId = settings.getLong("logged_in_user_id", defaultValue = 0L)
 
         return when (providerString.uppercase()) {
-            AuthProvider.KAKAO.name -> User.AuthInfo.Member("", savedUserId, AuthProvider.KAKAO)
-            AuthProvider.GOOGLE.name -> User.AuthInfo.Member("", savedUserId, AuthProvider.GOOGLE)
-            AuthProvider.APPLE.name -> User.AuthInfo.Member("", savedUserId, AuthProvider.APPLE)
-            AuthProvider.EMAIL.name -> User.AuthInfo.Member("", savedUserId, AuthProvider.EMAIL)
+            AuthProvider.KAKAO.name -> User.AuthInfo.Member("", savedUserId.toString(), AuthProvider.KAKAO)
+            AuthProvider.GOOGLE.name -> User.AuthInfo.Member("", savedUserId.toString(), AuthProvider.GOOGLE)
+            AuthProvider.APPLE.name -> User.AuthInfo.Member("", savedUserId.toString(), AuthProvider.APPLE)
+            AuthProvider.EMAIL.name -> User.AuthInfo.Member("", savedUserId.toString(), AuthProvider.EMAIL)
             else -> User.AuthInfo.Guest
         }
     }

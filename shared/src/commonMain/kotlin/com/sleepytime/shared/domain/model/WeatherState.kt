@@ -1,5 +1,7 @@
 package com.sleepytime.shared.domain.model
 
+import kotlinx.serialization.Serializable
+
 sealed class WeatherState {
 
 
@@ -46,7 +48,7 @@ sealed class WeatherState {
         val adaptiveTempBias: Float = 0f,
         val adaptiveHumidityBias: Float = 0f
     )
-
+    @Serializable
     data class HourlyObservation(
         val hour: Int,
         val indoorTemp: Float,

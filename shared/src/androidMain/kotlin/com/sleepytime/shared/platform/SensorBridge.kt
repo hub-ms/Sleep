@@ -60,8 +60,8 @@ actual class SensorBridge(
     actual fun startHeartRateSensor(scope: CoroutineScope) {
         heartRateMonitor.startMonitoring(scope)
         val hrSensor = sensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE)
-        if (!hasBodySensorsPermission()) {
-            Log.w(TAG, "BODY_SENSORS 권한 없음 — 심박수 시뮬레이션으로 대체")
+        if (hrSensor == null || !hasBodySensorsPermission()) {
+            Log.w(TAG, "BODY_SENSORS 권한 없거나 센서 미지원 — 심박수 시뮬레이션으로 대체")
             simulateHeartRate(scope)
             return
         }

@@ -66,8 +66,10 @@ class AndroidTrackingManager @Inject constructor(
     }
 
     fun attachCallbacks(
+        onNotificationUpdate: (String) -> Unit,
         onRequestStopForeground: () -> Unit
     ) {
+        this.onNotificationUpdate = onNotificationUpdate
         this.onRequestStopForeground = onRequestStopForeground
     }
 
@@ -144,6 +146,7 @@ class AndroidTrackingManager @Inject constructor(
                 cleanup()
                 return@launch
             }
+            Napier.d("musicTitle:$musicTitle")
 
             musicTitle?.let {
                 withContext(Dispatchers.Main) {
@@ -182,7 +185,7 @@ class AndroidTrackingManager @Inject constructor(
     private fun setupSensorCallbacks() {
         measureManager.onWindowReady = { windowData ->
             scope.launch {
-                Log.d("SleepTracker", "onWindowReady called, isReady=${sleepSessionRepository.isReady()}")
+                Napier.d("onWindowReady called, isReady=${sleepSessionRepository.isReady()}")
                 if (!sleepSessionRepository.isReady()) return@launch
 
                 sleepSessionRepository.analyzeSleepData(sensorData = windowData, environmentFeature = null)
@@ -197,7 +200,7 @@ class AndroidTrackingManager @Inject constructor(
             }
         }
         measureManager.onEnvironmentReady = { envFeature ->
-            Log.d("AndroidTrackingManager","envFeature=${envFeature}")
+            Napier.d("envFeature=${envFeature}")
             scope.launch {
                 sleepSessionRepository.updateEnvironmentContext(envFeature)
                 _trackingState.update {
@@ -336,6 +339,7 @@ class AndroidTrackingManager @Inject constructor(
                         .toLocalDateTime(TimeZone.currentSystemDefault())
                 )
             }
+            stopSensors()
             cleanup()
 
             val sensorData = measureManager.getCapturedSensorData()
@@ -388,8 +392,6 @@ class AndroidTrackingManager @Inject constructor(
             }.onFailure { e ->
                 Log.e("TrackingService", "분석 실패", e)
             }
-
-            cleanup()
         }
     }
     override fun updateEndTime(hour: Int, minute: Int) {
@@ -419,20 +421,16 @@ class AndroidTrackingManager @Inject constructor(
             )
         }
     }
-
-    fun clear() {
-        scope.cancel()
-    }
-
-    private fun cleanup() {
+    private fun stopSensors() {
         if (isCleanedUp) return
         isCleanedUp = true
-
         runCatching { measureManager.stop() }
         runCatching { heartRateMonitor.stopMonitoring() }
         runCatching { noiseDetector.stopMonitoring() }
         runCatching { musicPlayer.stop() }
-
-        onRequestStopForeground?.invoke()
+    }
+    fun clear() {
+        stopSensors()
+        scope.cancel()
     }
 }

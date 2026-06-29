@@ -12,17 +12,21 @@ import androidx.media3.common.util.UnstableApi
 import com.sleepytime.shared.MainActivity
 import com.sleepytime.shared.R
 import com.sleepytime.shared.platform.AndroidTrackingManager
-import javax.inject.Inject
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 
 @UnstableApi
-class SleepTrackingService : Service() {
-    @Inject
-    lateinit var trackingManager: AndroidTrackingManager
+class SleepTrackingService : Service(), KoinComponent {
+    private val trackingManager: AndroidTrackingManager by inject()
 
     companion object {
         const val ACTION_START = "com.sleepytime.app.ACTION_START_TRACKING"
         const val ACTION_DISCARD = "com.sleepytime.app.ACTION_DISCARD_TRACKING"
         const val ACTION_FINISH = "com.sleepytime.app.ACTION_FINISH_TRACKING"
+
+        const val EXTRA_SESSION_ID = "extra_session_id"
+        const val EXTRA_DURATION = "extra_duration"
+        const val EXTRA_MUSIC_TITLE = "extra_music_title"
 
         const val NOTIFICATION_ID = 1001
         const val CHANNEL_ID = "sleep_tracking_channel"
@@ -32,6 +36,9 @@ class SleepTrackingService : Service() {
         super.onCreate()
         createNotificationChannel()
         trackingManager.attachCallbacks(
+            onNotificationUpdate = { text ->
+                notificationManager.notify(NOTIFICATION_ID, createNotification(text))
+            },
             onRequestStopForeground = {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
@@ -46,17 +53,28 @@ class SleepTrackingService : Service() {
         flags: Int,
         startId: Int
     ): Int {
-        if (intent == null) return START_STICKY
+        if (intent == null) {
+            if (trackingManager.trackingState.value.isTracking) {
+                startForeground(NOTIFICATION_ID, createNotification("수면 측정 중.."))
+            }
+            return START_STICKY
+        }
 
         when (intent.action) {
             ACTION_START -> {
-                // Ensure foreground service is started only once.
-                // Re-start if already running to update state if necessary
                 startForeground(NOTIFICATION_ID, createNotification("수면 측정 중.."))
+                if (!trackingManager.trackingState.value.isTracking) {
+                    val sessionId = intent.getStringExtra(EXTRA_SESSION_ID) ?: return START_STICKY
+                    val duration = intent.getIntExtra(EXTRA_DURATION, 480)
+                    val musicTitle = intent.getStringExtra(EXTRA_MUSIC_TITLE)
+                    trackingManager.start(sessionId, duration, musicTitle)
+                }
             }
-            ACTION_DISCARD, ACTION_FINISH -> {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
+            ACTION_FINISH -> {
+                trackingManager.finish()
+            }
+            ACTION_DISCARD -> {
+                trackingManager.discard()
             }
         }
         return START_STICKY
@@ -102,7 +120,6 @@ class SleepTrackingService : Service() {
             .build()
     }
     override fun onDestroy() {
-        trackingManager.clear()
         super.onDestroy()
     }
 }

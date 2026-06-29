@@ -61,6 +61,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.koin.android.ext.koin.androidContext
+import org.koin.dsl.bind
 import org.koin.dsl.module
 import java.util.concurrent.TimeUnit
 
@@ -176,7 +177,7 @@ val androidModule = module {
     single<SleepSessionRepository> {
         SleepSessionRepositoryImpl(get(),get(), get())
     }
-    single<TrackingManager> {
+    single {
         AndroidTrackingManager(
             context = androidContext(),
             classifier = get(),
@@ -189,5 +190,5 @@ val androidModule = module {
             musicPlayer = get(),
             csvExporter = get()
         )
-    }
+    } bind TrackingManager::class
 }

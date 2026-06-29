@@ -11,6 +11,8 @@ import com.sleepytime.shared.domain.model.Stats
 import com.sleepytime.shared.domain.repository.WeatherRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentLinkedDeque
@@ -51,6 +53,8 @@ class AndroidSleepMeasureManager @Inject constructor(
     override var onWindowReady: ((List<FloatArray>) -> Unit)? = null
     override var onEnvironmentReady: ((EnvironmentFeature) -> Unit)? = null
 
+    private var measureScope: CoroutineScope? = null
+
     private val windowSize = 1500
     private val maxBufferSize = 3000
     private var currentTemp: Float = 22.5f
@@ -74,11 +78,14 @@ class AndroidSleepMeasureManager @Inject constructor(
         heartRateQueue.addLast(HeartRateData(clampedBpm, System.currentTimeMillis()))
     }
 
+
     override fun start() {
         Log.d("AndroidSleepMeasureManager", "start()")
         if (isMeasuring) return
         isMeasuring = true
         clearAllBuffers()
+
+        measureScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
         Log.d("AndroidSleepMeasureManager", "accelerometer=$accelerometer")
 
@@ -90,9 +97,10 @@ class AndroidSleepMeasureManager @Inject constructor(
     }
 
     override fun stop() {
-        sensorManager.unregisterListener(this)
-        heartRateMonitor?.stopMonitoring()
         isMeasuring = false
+        sensorManager.unregisterListener(this)
+        measureScope?.cancel()  // ← 루프 코루틴 정상 취소
+        measureScope = null
     }
 
     private fun clearAllBuffers() {
@@ -116,7 +124,7 @@ class AndroidSleepMeasureManager @Inject constructor(
     override fun getCapturedTimestamps(): List<Long> = capturedTimestamps.toList()
 
     private fun scheduleWindowUpdate() {
-        CoroutineScope(Dispatchers.Default).launch {
+        measureScope?.launch {
             while (isMeasuring) {
                 delay(100)
                 windowBuffer.addAll(sensorDataQueue.pollAll())

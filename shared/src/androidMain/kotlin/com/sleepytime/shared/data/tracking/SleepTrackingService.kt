@@ -18,6 +18,9 @@ import org.koin.core.component.inject
 @UnstableApi
 class SleepTrackingService : Service(), KoinComponent {
     private val trackingManager: AndroidTrackingManager by inject()
+    private val notificationManager by lazy {
+        getSystemService(NotificationManager::class.java)
+    }
 
     companion object {
         const val ACTION_START = "com.sleepytime.app.ACTION_START_TRACKING"
@@ -118,8 +121,5 @@ class SleepTrackingService : Service(), KoinComponent {
             .setSmallIcon(R.drawable.ic_sleep)
             .setContentIntent(openPending)
             .build()
-    }
-    override fun onDestroy() {
-        super.onDestroy()
     }
 }

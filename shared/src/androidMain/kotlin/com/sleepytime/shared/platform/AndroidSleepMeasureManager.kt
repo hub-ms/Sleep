@@ -5,8 +5,8 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import android.util.Log
 import com.sleepytime.shared.domain.model.EnvironmentFeature
+import com.sleepytime.shared.domain.model.SleepMinuteAggregate
 import com.sleepytime.shared.domain.model.Stats
 import com.sleepytime.shared.domain.repository.WeatherRepository
 import kotlinx.coroutines.CoroutineScope
@@ -15,19 +15,42 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.CopyOnWriteArrayList
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.sqrt
 
-data class SensorData(val values: FloatArray, val timestamp: Long)
-data class HeartRateData(val bpm: Float, val timestamp: Long)
-data class NoiseData(val db: Float, val timestamp: Long)
-data class TemperatureData(val temperature: Float, val timestamp: Long)
+data class RawAccel(val values: FloatArray, val timestamp: Long) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as RawAccel
+
+        if (timestamp != other.timestamp) return false
+        if (!values.contentEquals(other.values)) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = timestamp.hashCode()
+        result = 31 * result + values.contentHashCode()
+        return result
+    }
+}
+
+data class RawHeartRate(val bpm: Float, val timestamp: Long)
+data class RawNoise(val db: Float, val timestamp: Long)
+
 
 @Singleton
 class AndroidSleepMeasureManager @Inject constructor(
-    private val context: Context,
+    context: Context,
     private val weatherRepository: WeatherRepository,
     private val heartRateMonitor: HeartRateMonitor? = null
 ) : SleepMeasureManager, SensorEventListener {
@@ -35,65 +58,53 @@ class AndroidSleepMeasureManager @Inject constructor(
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
-    private val sensorDataQueue = ConcurrentLinkedDeque<SensorData>()
-    private val noiseQueue = ConcurrentLinkedDeque<NoiseData>()
-    private val heartRateQueue = ConcurrentLinkedDeque<HeartRateData>()
-    private val temperatureQueue = ConcurrentLinkedDeque<TemperatureData>()
+    private val accelQueue = ConcurrentLinkedDeque<RawAccel>()
+    private val heartRateQueue = ConcurrentLinkedDeque<RawHeartRate>()
+    private val noiseQueue = ConcurrentLinkedDeque<RawNoise>()
 
-    private val windowBuffer = mutableListOf<SensorData>()
-    private val noiseWindowBuffer = mutableListOf<NoiseData>()
-    private val heartRateWindowBuffer = mutableListOf<HeartRateData>()
-    private val tempWindowBuffer = mutableListOf<TemperatureData>()
+    private val minuteAccel = mutableListOf<RawAccel>()
+    private val minuteHeartRate = mutableListOf<RawHeartRate>()
+    private val minuteNoise = mutableListOf<RawNoise>()
+    private var lastBucketTimestamp: Long = 0
 
-    private val capturedSensorData = CopyOnWriteArrayList<List<FloatArray>>()
+    private val capturedAggregates = CopyOnWriteArrayList<SleepMinuteAggregate>()
     private val capturedEnvironmentFeatures = CopyOnWriteArrayList<EnvironmentFeature>()
-    private val capturedTimestamps = CopyOnWriteArrayList<Long>()
+
+    private val bufferMutex = Mutex()
 
     private var isMeasuring = false
     override var onWindowReady: ((List<FloatArray>) -> Unit)? = null
     override var onEnvironmentReady: ((EnvironmentFeature) -> Unit)? = null
-
+    var onMinuteAggregateReady: ((SleepMinuteAggregate) -> Unit)? = null
     private var measureScope: CoroutineScope? = null
-
-    private val windowSize = 1500
-    private val maxBufferSize = 3000
-    private var currentTemp: Float = 22.5f
-    private var lastTempUpdate: Long = 0L
 
     override fun onSensorChanged(event: SensorEvent?) {
         if (!isMeasuring || event == null) return
         if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
-            val data = SensorData(event.values.clone(), System.currentTimeMillis())
-            sensorDataQueue.addLast(data)
-            if (sensorDataQueue.size % 100 == 0) {
-                Log.d("AndroidSleepMeasureManager", "가속도: ${sensorDataQueue.size}")
-            }
+            accelQueue.addLast(RawAccel(event.values.clone(), System.currentTimeMillis()))
         }
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
-    fun updateHeartRateFromWatch(bpm: Float) {
-        val clampedBpm = bpm.coerceIn(40f, 180f)
-        heartRateQueue.addLast(HeartRateData(clampedBpm, System.currentTimeMillis()))
-    }
-
-
     override fun start() {
-        Log.d("AndroidSleepMeasureManager", "start()")
         if (isMeasuring) return
         isMeasuring = true
-        clearAllBuffers()
 
         measureScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-        Log.d("AndroidSleepMeasureManager", "accelerometer=$accelerometer")
+        measureScope?.launch {
+            clearAllBuffers()
+            lastBucketTimestamp = (System.currentTimeMillis() / 60000) * 60000
 
-        accelerometer?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
+            withContext(Dispatchers.Main) {
+                accelerometer?.let {
+                    sensorManager.registerListener(this@AndroidSleepMeasureManager, it, SensorManager.SENSOR_DELAY_GAME)
+                }
+            }
+            heartRateMonitor?.startMonitoring(CoroutineScope(Dispatchers.Default))
+            scheduleWindowUpdate()
         }
-        heartRateMonitor?.startMonitoring(CoroutineScope(Dispatchers.Default))
-        scheduleWindowUpdate()
     }
 
     override fun stop() {
@@ -103,108 +114,127 @@ class AndroidSleepMeasureManager @Inject constructor(
         measureScope = null
     }
 
-    private fun clearAllBuffers() {
-        sensorDataQueue.clear()
-        noiseQueue.clear()
-        heartRateQueue.clear()
-        temperatureQueue.clear()
-        windowBuffer.clear()
-        noiseWindowBuffer.clear()
-        heartRateWindowBuffer.clear()
-        tempWindowBuffer.clear()
-        capturedSensorData.clear()
-        capturedEnvironmentFeatures.clear()
-        capturedTimestamps.clear()
+    private suspend fun clearAllBuffers() {
+        bufferMutex.withLock {
+            accelQueue.clear()
+            noiseQueue.clear()
+            heartRateQueue.clear()
+
+            minuteAccel.clear()
+            minuteNoise.clear()
+            minuteHeartRate.clear()
+
+            capturedAggregates.clear()
+            capturedEnvironmentFeatures.clear()
+        }
     }
-
-    override fun getCapturedSensorData(): List<List<FloatArray>> = capturedSensorData.toList()
-    override fun getCapturedEnvironmentFeatures(): List<EnvironmentFeature> =
-        capturedEnvironmentFeatures.toList()
-
-    override fun getCapturedTimestamps(): List<Long> = capturedTimestamps.toList()
-
     private fun scheduleWindowUpdate() {
         measureScope?.launch {
             while (isMeasuring) {
-                delay(100)
-                windowBuffer.addAll(sensorDataQueue.pollAll())
-                noiseWindowBuffer.addAll(noiseQueue.pollAll())
-                heartRateWindowBuffer.addAll(heartRateQueue.pollAll())
-                tempWindowBuffer.addAll(temperatureQueue.pollAll())
+                delay(500) // 배터리 절약을 위한 500ms 폴링 주기
 
                 val now = System.currentTimeMillis()
-                val epochStart = now - 30_000L
+                val currentBucket = (now / 60000) * 60000
 
-                val accelEpoch = windowBuffer.filter { it.timestamp >= epochStart }
-                if (accelEpoch.size >= 1500) {
-                    val windowData = accelEpoch.takeLast(1500).map { it.values }
-                    capturedSensorData.add(windowData)
-                    capturedTimestamps.add(now)
-                    onWindowReady?.invoke(windowData)
+                // 1. Thread-safe 큐에서 임시로 데이터를 안전하게 먼저 꺼냄 (락 범위 최소화)
+                val newAccels = accelQueue.pollAll()
+                val newNoises = noiseQueue.pollAll()
+                val newHeartRates = heartRateQueue.pollAll()
+
+                bufferMutex.withLock {
+                    minuteAccel.addAll(newAccels)
+                    minuteNoise.addAll(newNoises)
+                    minuteHeartRate.addAll(newHeartRates)
+
+                    // 1분이 지나 버킷 타임스탬프가 변경되었을 때 압축 수행
+                    if (currentBucket > lastBucketTimestamp) {
+                        // 내부에서 minute* 버퍼를 읽고 clear하므로 반드시 락 내부에서 실행되어야 함
+                        processMinuteAggregate(lastBucketTimestamp)
+                        lastBucketTimestamp = currentBucket
+                    }
                 }
-
-                val envFeature = createEnvironmentFeature(epochStart, now)
-                if (envFeature != null) {
-                    capturedEnvironmentFeatures.add(envFeature)
-                    onEnvironmentReady?.invoke(envFeature)
-                }
-
-                windowBuffer.removeAll { it.timestamp < now - 60_000 }
-                noiseWindowBuffer.removeAll { it.timestamp < now - 60_000 }
             }
         }
     }
+    private suspend fun processMinuteAggregate(bucketTimestamp: Long) {
+        if (minuteAccel.isEmpty() && minuteHeartRate.isEmpty() && minuteNoise.isEmpty()) return
 
-    private suspend fun createEnvironmentFeature(
-        epochStart: Long,
-        timestamp: Long
-    ): EnvironmentFeature? {
-        val hrData = heartRateWindowBuffer.filter { it.timestamp >= epochStart }
-        val heartRate =
-            if (hrData.isNotEmpty()) Stats.from(hrData.map { it.bpm }) else Stats(75f, 5f, 60f, 90f)
+        val hrValues = minuteHeartRate.map { it.bpm }
+        val avgHr = if (hrValues.isNotEmpty()) hrValues.average().toFloat() else 65f
+        val maxHr = if (hrValues.isNotEmpty()) hrValues.maxOrNull() ?: 65f else 65f
+        val minHr = if (hrValues.isNotEmpty()) hrValues.minOrNull() ?: 65f else 65f
 
-        val noiseData = noiseWindowBuffer.filter { it.timestamp >= epochStart }
-        val noise = if (noiseData.isNotEmpty()) Stats.from(noiseData.map { it.db }) else Stats(
-            35f,
-            10f,
-            25f,
-            45f
+        val noiseValues = minuteNoise.map { it.db }
+        val avgNoise = if (noiseValues.isNotEmpty()) noiseValues.average().toFloat() else 30f
+        val maxNoise = if (noiseValues.isNotEmpty()) noiseValues.maxOrNull() ?: 30f else 30f
+        val minNoise = if (noiseValues.isNotEmpty()) noiseValues.minOrNull() ?: 30f else 30f
+
+        val movementCount = minuteAccel.count {
+            val totalForce = sqrt(it.values[0] * it.values[0] + it.values[1] * it.values[1] + it.values[2] * it.values[2])
+            totalForce > 12.0f
+        }
+
+        val aggregate = SleepMinuteAggregate(
+            timestampBucket = bucketTimestamp,
+            avgHeartRate = avgHr,
+            maxHeartRate = maxHr,
+            minHeartRate = minHr,
+            avgNoiseDb = avgNoise,
+            maxNoiseDb = maxNoise,
+            minNoiseDb = minNoise,
+            movementCount = movementCount
         )
 
+        capturedAggregates.add(aggregate)
+        onMinuteAggregateReady?.invoke(aggregate)
+
+        // 하위 호환 컴포넌트 기능 유지용 환경 피처 생성 호출
+        val envFeature = createEnvironmentFeature(bucketTimestamp, aggregate)
+        capturedEnvironmentFeatures.add(envFeature)
+        onEnvironmentReady?.invoke(envFeature)
+
+        minuteAccel.clear()
+        minuteHeartRate.clear()
+        minuteNoise.clear()
+    }
+    private suspend fun createEnvironmentFeature(timestamp: Long, aggregate: SleepMinuteAggregate): EnvironmentFeature {
         val weatherTemp = weatherRepository.getCurrentTemperature()
         val weatherHumidity = weatherRepository.getCurrentHumidity()
-        val temperature = Stats(weatherTemp, 1f, weatherTemp - 0.5f, weatherTemp + 0.5f)
-        val humidity = Stats(weatherHumidity, 3f, 40f, 60f)
 
         return EnvironmentFeature(
             timestamp = timestamp,
             snapshot = EnvironmentFeature.Snapshot(
-                heartRate = heartRate.avg,
-                noise = noise.avg,
-                temperature = temperature.avg,
-                humidity = humidity.avg
+                heartRate = aggregate.avgHeartRate,
+                noise = aggregate.avgNoiseDb,
+                temperature = weatherTemp,
+                humidity = weatherHumidity
             ),
             stats = EnvironmentFeature.Statistics(
-                heartRate = heartRate,
-                noise = noise,
-                temperature = temperature,
-                humidity = humidity
+                heartRate = Stats(aggregate.avgHeartRate, 5f, aggregate.minHeartRate, aggregate.maxHeartRate),
+                noise = Stats(aggregate.avgNoiseDb, 5f, aggregate.minNoiseDb, aggregate.maxNoiseDb),
+                temperature = Stats(weatherTemp, 0f, weatherTemp, weatherTemp),
+                humidity = Stats(weatherHumidity, 0f, weatherHumidity, weatherHumidity)
             ),
             flag = EnvironmentFeature.Flag(
-                isHeartRateAnomaly = heartRate.stddev > 15f || heartRate.max > 110f,
-                isNoiseDanger = noise.avg > 60f,
-                isTempExtreme = temperature.avg !in 18f..28f,
-                isHumidityExtreme = humidity.avg !in 40f..60f,
+                isHeartRateAnomaly = aggregate.maxHeartRate > 110f,
+                isNoiseDanger = aggregate.avgNoiseDb > 60f,
+                isTempExtreme = weatherTemp !in 18f..28f,
+                isHumidityExtreme = weatherHumidity !in 40f..60f
             )
         )
     }
-    fun <T> ConcurrentLinkedDeque<T>.pollAll(): List<T> {
+    private fun <T> ConcurrentLinkedDeque<T & Any>.pollAll(): List<T> {
         val result = mutableListOf<T>()
-        var item: T?
-        do {
-            item = poll()
-            item?.let { result.add(it) }
-        } while (item != null)
+        var item = this.poll()
+        while (item != null) {
+            result.add(item)
+            item = this.poll()
+        }
         return result
     }
+
+    override fun getCapturedAggregates(): List<SleepMinuteAggregate> = capturedAggregates.toList()
+    override fun getCapturedSensorData(): List<List<FloatArray>> = emptyList() // 메모리 절약을 위해 Raw 완전 제거
+    override fun getCapturedEnvironmentFeatures(): List<EnvironmentFeature> = capturedEnvironmentFeatures.toList()
+    override fun getCapturedTimestamps(): List<Long> = capturedAggregates.map { it.timestampBucket }
 }

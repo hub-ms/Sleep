@@ -7,13 +7,11 @@ import com.sleepytime.shared.domain.model.SleepMetrics
 import com.sleepytime.shared.domain.model.SleepSession
 import com.sleepytime.shared.domain.model.Stats
 import com.sleepytime.shared.domain.repository.SleepSessionRepository
-import com.sleepytime.shared.domain.repository.WeatherRepository
 import com.sleepytime.shared.ui.tracking.TrackingContract
-import com.sleepytime.shared.util.StatsUtil
-import com.sleepytime.shared.util.StatsUtil.RollingStats
 import io.github.aakira.napier.Napier
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -36,16 +34,15 @@ import kotlin.time.Duration.Companion.days
 class AndroidTrackingManager @Inject constructor(
     private val context: Context,
     private val classifier: SleepStageClassifier,
-    private val measureManager: SleepMeasureManager,
+    private val measureManager: AndroidSleepMeasureManager,
     private val sleepSessionRepository: SleepSessionRepository,
-    private val weatherRepository: WeatherRepository,
     private val heartRateMonitor: HeartRateMonitor,
     private val noiseDetector: NoiseDetector,
     private val sensorBridge: SensorBridge,
     private val musicPlayer: MusicPlayer,
     private val csvExporter: CsvExporter
 ) : TrackingManager {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private val _trackingState = MutableStateFlow(TrackingContract.State())
     override val trackingState: StateFlow<TrackingContract.State> = _trackingState.asStateFlow()
@@ -55,13 +52,7 @@ class AndroidTrackingManager @Inject constructor(
     private var isCleanedUp = false
 
     companion object {
-        private const val WINDOW_SIZE = 1500
-        private const val SAMPLE_RATE = 50
-        private const val WINDOW_SECONDS = WINDOW_SIZE / SAMPLE_RATE
-        private const val MIN_WINDOWS = 300 / WINDOW_SECONDS
-        private const val MIN_ENV_WINDOWS = 1
-        private const val ENV_HISTORY_SIZE = 60
-        private const val ENV_COLLECTION_INTERVAL = 60 * 1000L
+        private const val MIN_MINUTES_REQUIRED = 30 // 최소 수면 측정 시간 조건 (예: 30분)
         private const val ELAPSED_UPDATE_INTERVAL = 1000L
     }
 
@@ -74,6 +65,9 @@ class AndroidTrackingManager @Inject constructor(
     }
 
     override fun start(sessionId: String, duration: Int, musicTitle: String?) {
+        if (scope.coroutineContext[Job]?.isActive != true) {
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        }
         scope.launch {
             isCleanedUp = false
             _trackingState.update { it.copy(isFinished = false) }
@@ -143,7 +137,7 @@ class AndroidTrackingManager @Inject constructor(
             val initResult = sleepSessionRepository.initializeModel()
             if (initResult.isFailure) {
                 Log.e("TrackingService", "모델 초기화 실패", initResult.exceptionOrNull())
-                cleanup()
+                clear()
                 return@launch
             }
             Napier.d("musicTitle:$musicTitle")
@@ -164,7 +158,6 @@ class AndroidTrackingManager @Inject constructor(
 
             sensorBridge.startHeartRateSensor(scope)
             sensorBridge.startNoiseSensor(scope)
-
             heartRateMonitor.startMonitoring(scope)
             noiseDetector.startMonitoring(scope)
 
@@ -178,11 +171,21 @@ class AndroidTrackingManager @Inject constructor(
             }
 
             onNotificationUpdate?.invoke("수면 측정 중..")
-            startEnvironmentTracking()
             startElapsedTimeUpdater()
         }
     }
     private fun setupSensorCallbacks() {
+        measureManager.onMinuteAggregateReady = { aggregate ->
+            scope.launch {
+                Log.d("SleepTracker", "1분 압축 데이터 수집됨: ${aggregate.timestampBucket}")
+                _trackingState.update { current ->
+                    current.copy(
+                        avgHeartRate = aggregate.avgHeartRate,
+                        avgNoise = aggregate.avgNoiseDb
+                    )
+                }
+            }
+        }
         measureManager.onWindowReady = { windowData ->
             scope.launch {
                 Napier.d("onWindowReady called, isReady=${sleepSessionRepository.isReady()}")
@@ -200,101 +203,24 @@ class AndroidTrackingManager @Inject constructor(
             }
         }
         measureManager.onEnvironmentReady = { envFeature ->
-            Napier.d("envFeature=${envFeature}")
+            Napier.d("envFeature 수신 = $envFeature")
             scope.launch {
                 sleepSessionRepository.updateEnvironmentContext(envFeature)
-                _trackingState.update {
-                    it.copy(
-                        avgHeartRate = envFeature.snapshot.heartRate,
-                        avgNoise = envFeature.snapshot.noise,
+                _trackingState.update { current ->
+                    val newHistory = (current.environmentHistory + envFeature.snapshot).takeLast(60)
+                    current.copy(
+                        environmentHistory = newHistory,
                         avgTemperature = envFeature.snapshot.temperature,
                         avgHumidity = envFeature.snapshot.humidity,
                         isHeartRateAnomaly = envFeature.flag.isHeartRateAnomaly,
                         isNoiseDanger = envFeature.flag.isNoiseDanger,
                         isTempExtreme = envFeature.flag.isTempExtreme,
-                        isHumidityExtreme = envFeature.flag.isHumidityExtreme,
+                        isHumidityExtreme = envFeature.flag.isHumidityExtreme
                     )
                 }
             }
         }
     }
-
-    private fun startEnvironmentTracking() {
-        scope.launch {
-            while (isActive && _trackingState.value.isTracking) {
-                try {
-                    val hr = sensorBridge.getHeartRate()
-                    val noise = sensorBridge.getNoiseLevel()
-
-                    val tempStats = try {
-                        val t = weatherRepository.getCurrentTemperature()
-                        RollingStats(t, 0f, t, t, t)
-                    } catch (_: Exception) {
-                        RollingStats(
-                            avg = _trackingState.value.avgTemperature,
-                            std = _trackingState.value.stddevTemp,
-                            max = _trackingState.value.maxTemp,
-                            min = _trackingState.value.minTemp,
-                            last = _trackingState.value.avgTemperature
-                        )
-                    }
-
-                    val humStats = try {
-                        val h = weatherRepository.getCurrentHumidity()
-                        RollingStats(h, 0f, h, h, h)
-                    } catch (_: Exception) {
-                        RollingStats(
-                            avg = _trackingState.value.avgHumidity,
-                            std = _trackingState.value.stddevHumidity,
-                            max = _trackingState.value.maxHumidity,
-                            min = _trackingState.value.minHumidity,
-                            last = _trackingState.value.avgHumidity
-                        )
-                    }
-
-                    val snapshot = EnvironmentFeature.Snapshot(
-                        heartRate = hr,
-                        noise = noise,
-                        temperature = tempStats.avg,
-                        humidity = humStats.avg
-                    )
-
-                    _trackingState.update { current ->
-                        val newHistory =
-                            (current.environmentHistory + snapshot).takeLast(ENV_HISTORY_SIZE)
-                        val stats = StatsUtil.calcEnvironmentStats(newHistory)
-                        current.copy(
-                            environmentHistory = newHistory,
-                            avgHeartRate = stats.avgHeartRate,
-                            avgNoise = stats.avgNoise,
-                            avgTemperature = stats.avgTemp,
-                            avgHumidity = stats.avgHumidity,
-                            stddevHeartRate = stats.stddevHeartRate,
-                            stddevNoise = stats.stddevNoise,
-                            stddevTemp = stats.stddevTemp,
-                            stddevHumidity = stats.stddevHumidity,
-                            maxHeartRate = stats.maxHeartRate,
-                            maxNoise = stats.maxNoise,
-                            maxTemp = stats.maxTemp,
-                            maxHumidity = stats.maxHumidity,
-                            minHeartRate = stats.minHeartRate,
-                            minNoise = stats.minNoise,
-                            minTemp = stats.minTemp,
-                            minHumidity = stats.minHumidity,
-                            isHeartRateAnomaly = hr !in 40f..100f,
-                            isNoiseDanger = noise !in 1f..39f,
-                            isTempExtreme = tempStats.avg !in 18f..24f,
-                            isHumidityExtreme = humStats.avg !in 40f..60f,
-                        )
-                    }
-                } catch (e: Exception) {
-                    Log.e("TrackingService", "환경 수집 실패", e)
-                }
-                delay(ENV_COLLECTION_INTERVAL)
-            }
-        }
-    }
-
     private fun startElapsedTimeUpdater() {
         scope.launch {
             while (isActive && _trackingState.value.isTracking) {
@@ -317,7 +243,7 @@ class AndroidTrackingManager @Inject constructor(
         scope.launch {
             val sessionId = _trackingState.value.sessionId
 
-            cleanup()
+            clear()
             if (sessionId.isNotEmpty()) {
                 runCatching {
                     sleepSessionRepository.deleteSession(sessionId)
@@ -340,54 +266,43 @@ class AndroidTrackingManager @Inject constructor(
                 )
             }
             stopSensors()
-            cleanup()
 
-            val sensorData = measureManager.getCapturedSensorData()
+            val aggregates = measureManager.getCapturedAggregates()
             val environmentFeatures = measureManager.getCapturedEnvironmentFeatures()
-            val timestamps = measureManager.getCapturedTimestamps()
 
-            if (sensorData.size < MIN_WINDOWS || environmentFeatures.size < MIN_ENV_WINDOWS) {
-                Log.w(
-                    "TrackingService",
-                    "데이터 부족: 센서=${sensorData.size}/$MIN_WINDOWS, 환경=${environmentFeatures.size}/$MIN_ENV_WINDOWS"
-                )
-                cleanup()
+            if (aggregates.size < MIN_MINUTES_REQUIRED) {
+                Log.w("TrackingService", "수면 데이터 부족으로 분석 생략: ${aggregates.size}분 측정됨.")
+                clear()
                 return@launch
             }
 
             val sessionId = _trackingState.value.sessionId
-            val startTime = timestamps.firstOrNull() ?: System.currentTimeMillis()
 
-            Napier.d("sensorData:${sensorData}")
-            Napier.d("environmentFeatures:${environmentFeatures}")
+            sensorBridge.stopHeartRateSensor()
+            sensorBridge.stopNoiseSensor()
+            heartRateMonitor.stopMonitoring()
+            noiseDetector.stopMonitoring()
 
-            csvExporter.exportSensorData(
-                data = sensorData, fileName = "sleep_$sessionId.csv", startTimestamp = startTime
-            )
-            csvExporter.exportEnvironmentData(
-                features = environmentFeatures, fileName = "env_$sessionId.csv"
-            )
+            csvExporter.exportEnvironmentData(features = environmentFeatures, fileName = "env_$sessionId.csv")
 
             withContext(Dispatchers.Default) {
+                // 수면 세션 분석을 하이드레이션된 1분 데이터 셋 기반으로 변경하는 아키텍처 연계
                 sleepSessionRepository.analyzeSleepSession(
-                    sensorData = sensorData,
-                    timestamps = timestamps,
+                    sensorData = emptyList(), // 더 이상 무거운 원시 리스트 목록을 힙에 들고 전달하지 않음
+                    timestamps = aggregates.map { it.timestampBucket },
                     environmentFeatures = environmentFeatures,
                     sessionId = sessionId
                 )
             }.onSuccess { report ->
-                Napier.d("분석 완료: $report")
                 sleepSessionRepository.insertSession(report)
                 _trackingState.update {
                     it.copy(
                         isFinished = true,
-                        finishedSessionId   = report.sessionId,
-                        trackingEndTime = Clock.System.now()
-                            .toLocalDateTime(TimeZone.currentSystemDefault()),
+                        finishedSessionId = report.sessionId,
                         sessionId = report.sessionId
                     )
                 }
-                onNotificationUpdate?.invoke("측정 종료! 분석 중..")
+                onNotificationUpdate?.invoke("측정 종료! 분석 완료.")
                 onRequestStopForeground?.invoke()
             }.onFailure { e ->
                 Log.e("TrackingService", "분석 실패", e)

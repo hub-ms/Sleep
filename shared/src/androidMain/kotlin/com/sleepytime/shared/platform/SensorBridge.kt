@@ -18,9 +18,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.util.Calendar
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.sin
@@ -34,6 +34,7 @@ actual class SensorBridge(
     companion object {
         private const val TAG = "AndroidSensorBridge"
         private const val BASE_SPL_OFFSET_DB = 94.0
+        private const val NOISE_FLOOR_DB = 30.0
 
         private val DEVICE_FREQ_CORRECTION_DB = mapOf(
             63 to 2.0,
@@ -47,6 +48,14 @@ actual class SensorBridge(
             16000 to 3.0
         )
         private const val FFT_SIZE = 1024
+        private const val HOP_SIZE = FFT_SIZE / 2
+
+        private const val F1_SQ = 20.6 * 20.6
+        private const val F2_SQ = 107.7 * 107.7
+        private const val F3_SQ = 737.9 * 737.9
+        private const val F4_SQ = 12200.0 * 12200.0
+
+        private val SPL_LINEAR_SCALE = 10.0.pow(BASE_SPL_OFFSET_DB / 10.0)
     }
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -56,6 +65,7 @@ actual class SensorBridge(
     private val hannWindow: DoubleArray = DoubleArray(FFT_SIZE) { n ->
         0.5 * (1.0 - cos(2.0 * PI * n / (FFT_SIZE - 1)))
     }
+    private val hannPowerCorrection: Double = FFT_SIZE.toDouble() / hannWindow.sumOf { it * it }
 
     actual fun startHeartRateSensor(scope: CoroutineScope) {
         heartRateMonitor.startMonitoring(scope)
@@ -94,37 +104,55 @@ actual class SensorBridge(
         Log.e(TAG, "소음 측정 시작")
         noiseDetector.startMonitoring(scope)
         val sampleRate = getBestSampleRate()
+        Log.d(TAG, "sampleRate=$sampleRate")
         val minBuf = AudioRecord.getMinBufferSize(
             sampleRate,
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT
         )
-        val bufferSize = maxOf(minBuf, FFT_SIZE * 2)
+        val bufferSize = maxOf(minBuf, FFT_SIZE * 4)
         val perBinGain = buildPerBinGain(sampleRate)
 
         noiseJob = scope.launch(Dispatchers.IO) {
             val recorder = createAudioRecord(sampleRate, bufferSize)
             try {
                 recorder.startRecording()
-                val audioBuffer = ShortArray(bufferSize)
-                var smoothedDb = 0.0
-                val alpha = 0.05
-                var isFirstSample = true
+                val slidingBuffer = ShortArray(FFT_SIZE)
+                val hopBuffer = ShortArray(HOP_SIZE)
                 val fftReal = DoubleArray(FFT_SIZE)
                 val fftImag = DoubleArray(FFT_SIZE)
+
+                val alphaAttack = 1.0 - exp(-HOP_SIZE.toDouble() / (sampleRate * 0.035))
+                val alphaRelease = 1.0 - exp(-HOP_SIZE.toDouble() / (sampleRate * 1.5))
+
+                var smoothedEnergy = 10.0.pow(NOISE_FLOOR_DB / 10.0)
+                var isBufferReady = false
                 while (isActive) {
-                    val read = recorder.read(audioBuffer, 0, bufferSize)
-                    if (read < FFT_SIZE) continue
-                    val aWeightedDbSpl =
-                        computeAWeightedDbSpl(audioBuffer, read, fftReal, fftImag, perBinGain)
-                    val rakingCorrectedDb = applyRakingApproximation(aWeightedDbSpl)
-                    smoothedDb = if (isFirstSample) {
-                        isFirstSample = false
-                        rakingCorrectedDb
-                    } else {
-                        alpha * rakingCorrectedDb + (1.0 - alpha) * smoothedDb
+                    val read = recorder.read(hopBuffer, 0, HOP_SIZE)
+                    if (read < HOP_SIZE) continue
+
+                    System.arraycopy(slidingBuffer, HOP_SIZE, slidingBuffer, 0, HOP_SIZE)
+                    System.arraycopy(hopBuffer, 0, slidingBuffer, HOP_SIZE, HOP_SIZE)
+
+
+                    if (!isBufferReady) {
+                        isBufferReady = true
+                        continue  // 첫 번째 hop은 절반만 유효한 데이터
                     }
-                    noiseDetector.onNewNoiseSample(smoothedDb.toFloat())
+
+                    val frameEnergy = computeFrameEnergy(slidingBuffer, fftReal, fftImag, perBinGain)
+
+                    val floorEnergy = 10.0.pow(NOISE_FLOOR_DB / 10.0)
+                    val gatedEnergy = maxOf(frameEnergy * SPL_LINEAR_SCALE, floorEnergy)
+
+                    val alpha = if (gatedEnergy > smoothedEnergy) alphaAttack else alphaRelease
+                    smoothedEnergy = alpha * gatedEnergy + (1.0 - alpha) * smoothedEnergy
+
+
+                    val dBSpl = 10.0 * log10(smoothedEnergy)
+                    noiseDetector.onNewNoiseSample(
+                        dBSpl.toFloat().coerceIn(NOISE_FLOOR_DB.toFloat(), 120f)
+                    )
                 }
             } finally {
                 recorder.stop()
@@ -141,9 +169,6 @@ actual class SensorBridge(
 
     actual fun getHeartRate(): Float = heartRateMonitor.getCurrentHeartRate()
     actual fun getNoiseLevel(): Float = noiseDetector.getCurrentNoise()
-    actual fun isDataReady(): Boolean =
-        heartRateMonitor.getCurrentHeartRate() > 0f || noiseDetector.getCurrentNoise() > 0f
-
     private fun simulateHeartRate(scope: CoroutineScope) {
         scope.launch(Dispatchers.Default) {
             while (isActive) {
@@ -185,61 +210,57 @@ actual class SensorBridge(
         )
     }
 
-    private fun computeAWeightedDbSpl(
-        audioBuffer: ShortArray,
-        readSize: Int,
+    private fun computeFrameEnergy(
+        frame: ShortArray,
         fftReal: DoubleArray,
         fftImag: DoubleArray,
         perBinGain: DoubleArray
     ): Double {
-        var weightedEnergySum = 0.0
-        var frameCount = 0
-        var offset = 0
-        while (offset + FFT_SIZE <= readSize) {
-            for (i in 0 until FFT_SIZE) {
-                fftReal[i] = audioBuffer[offset + i] / 32768.0 * hannWindow[i]
-                fftImag[i] = 0.0
-            }
-            fftInPlace(fftReal, fftImag)
-            var frameEnergy = 0.0
-            for (k in 1..FFT_SIZE / 2) {
-                val mag = fftReal[k].pow(2.0) + fftImag[k].pow(2.0)
-                frameEnergy += mag * (if (k < FFT_SIZE / 2) 2.0 else 1.0) * perBinGain[k].pow(2.0)
-            }
-            weightedEnergySum += frameEnergy
-            frameCount++
-            offset += FFT_SIZE
+        for (i in 0 until FFT_SIZE) {
+            fftReal[i] = frame[i] / 32768.0 * hannWindow[i]
+            fftImag[i] = 0.0
         }
-        if (frameCount == 0 || weightedEnergySum == 0.0) return -160.0
-        return 10.0 * log10((weightedEnergySum / frameCount) * 10.0.pow(BASE_SPL_OFFSET_DB / 10.0))
+        fftInPlace(fftReal, fftImag)
+
+        var energy = 0.0
+        for (k in 1..FFT_SIZE / 2) {
+            val re = fftReal[k]; val im = fftImag[k]
+            val mirror = if (k < FFT_SIZE / 2) 2.0 else 1.0
+            energy += (re * re + im * im) * mirror * perBinGain[k] * perBinGain[k]
+        }
+        return energy * hannPowerCorrection
     }
 
     private fun buildPerBinGain(sampleRate: Int): DoubleArray {
-        val gain = DoubleArray(FFT_SIZE / 2 + 1)
-        for (k in 0..FFT_SIZE / 2) {
-            val freq = k.toDouble() * sampleRate / FFT_SIZE
-            val corr = if (freq < 1.0) 0.0 else interpolateDeviceCorrection(freq.toInt())
-            val aWeight = if (freq < 10.0) -160.0 else aWeightingDb(freq)
-            gain[k] = 10.0.pow((corr + aWeight) / 20.0)
+        val binWidth = sampleRate.toDouble() / FFT_SIZE
+
+        return DoubleArray(FFT_SIZE / 2 + 1) { k ->
+            val freq = k * binWidth
+
+            val deviceCorr = when {
+                freq < 1.0  -> 0.0
+                else        -> interpolateDeviceCorrection(freq)  // Double 유지 — toInt() 절삭 제거
+            }
+            val aWeight = when {
+                freq < 10.0 -> -160.0
+                else        -> aWeightingDb(freq)
+            }
+
+            10.0.pow((deviceCorr + aWeight) / 20.0)
         }
-        return gain
     }
 
     private fun aWeightingDb(freq: Double): Double {
-        val f2 = freq.pow(2.0)
-        val ra =
-            (12200.0.pow(2) * f2.pow(2)) / ((f2 + 20.6.pow(2)) * sqrt(f2 + 107.7.pow(2)) * sqrt(
-                f2 + 737.9.pow(2)
-            ) * (f2 + 12200.0.pow(2)))
-        return if (ra > 0.0) 2.0 + 20.0 * log10(ra) else -160.0
-    }
+        val f2 = freq * freq  // pow(2.0) 대신 직접 곱셈 — 루프 내 반복 호출 시 유의미한 차이
 
-    private fun applyRakingApproximation(dBA: Double): Double {
-        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        val bias = dBA - if (hour in 22..23 || hour in 0..5) 35.0 else 45.0
-        return if (bias > 10.0 || bias < -10.0) dBA - bias * 0.5 else dBA
-    }
+        val numerator = F4_SQ * f2 * f2
+        val denominator = (f2 + F1_SQ) *
+                sqrt((f2 + F2_SQ) * (f2 + F3_SQ)) *  // sqrt 2개 → 1개로 병합
+                (f2 + F4_SQ)
 
+        return if (denominator > 0.0) 2.0 + 20.0 * log10(numerator / denominator)
+        else -160.0
+    }
     private fun fftInPlace(re: DoubleArray, im: DoubleArray) {
         val n = re.size
         var j = 0
@@ -280,13 +301,14 @@ actual class SensorBridge(
         }
     }
 
-    private fun interpolateDeviceCorrection(freq: Int): Double {
+    private fun interpolateDeviceCorrection(freq: Double): Double {
         val sorted = DEVICE_FREQ_CORRECTION_DB.keys.sorted()
         if (freq <= sorted.first()) return DEVICE_FREQ_CORRECTION_DB[sorted.first()]!!
-        if (freq >= sorted.last()) return DEVICE_FREQ_CORRECTION_DB[sorted.last()]!!
-        val lo = sorted.last { it <= freq }
-        val hi = sorted.first { it > freq }
-        val t = (freq - lo).toDouble() / (hi - lo).toDouble()
+        if (freq >= sorted.last())  return DEVICE_FREQ_CORRECTION_DB[sorted.last()]!!
+
+        val lo = sorted.last  { it <= freq }
+        val hi = sorted.first { it > freq  }
+        val t  = (freq - lo) / (hi - lo)
         return DEVICE_FREQ_CORRECTION_DB[lo]!! + t * (DEVICE_FREQ_CORRECTION_DB[hi]!! - DEVICE_FREQ_CORRECTION_DB[lo]!!)
     }
 

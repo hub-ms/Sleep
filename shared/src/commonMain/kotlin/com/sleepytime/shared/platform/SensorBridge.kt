@@ -12,5 +12,4 @@ expect class SensorBridge {
     fun stopNoiseSensor()
     fun getHeartRate(): Float
     fun getNoiseLevel(): Float
-    fun isDataReady(): Boolean
 }

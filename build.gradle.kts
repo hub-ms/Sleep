@@ -19,3 +19,9 @@ plugins {
 
     alias(libs.plugins.googleGmsServices) apply false
 }
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions {
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
+}

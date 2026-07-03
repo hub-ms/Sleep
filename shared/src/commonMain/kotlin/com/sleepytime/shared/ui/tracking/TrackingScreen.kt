@@ -396,7 +396,7 @@ fun EnvironmentStatusCard(
 ) {
     val latest = trackingState.environmentHistory.lastOrNull()
     val hasSensorError = latest?.let {
-        it.heartRate == 0f || it.noise == 0f || it.temperature == 0f || it.humidity == 0f
+        it.heartRate == 0f || it.noise == 0f
     } ?: true
 
     val allGood = !trackingState.isHeartRateAnomaly &&

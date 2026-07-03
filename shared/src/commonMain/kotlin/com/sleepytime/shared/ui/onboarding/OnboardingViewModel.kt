@@ -5,7 +5,6 @@ import cafe.adriel.voyager.core.model.screenModelScope
 import com.sleepytime.shared.enum_.OnboardingSelectionMode
 import com.sleepytime.shared.enum_.PermissionType
 import com.sleepytime.shared.platform.PermissionState
-import com.sleepytime.shared.platform.checkPermissionState
 import io.github.aakira.napier.Napier
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -31,7 +30,6 @@ class OnboardingViewModel: ScreenModel {
     private val _intentChannel = Channel<OnboardingContract.Intent>(Channel.BUFFERED)
 
     init {
-        _permissionState.update { checkPermissionState() }
         screenModelScope.launch {
             for (intent in _intentChannel) {
                 processIntent(intent)
@@ -100,12 +98,12 @@ class OnboardingViewModel: ScreenModel {
 
     fun updatePermission(type: PermissionType, granted: Boolean) {
         Napier.d(tag = "OnboardingVM", message = "Update permission: $type = $granted")
-        _permissionState.update { current ->
+        _permissionState.update {
             when (type) {
-                PermissionType.ACTIVITY -> current.copy(activityRecognition = granted)
-                PermissionType.AUDIO -> current.copy(audio = granted)
-                PermissionType.LOCATION -> current.copy(location = granted)
-                PermissionType.NOTIFICATION -> current.copy(notification = granted)
+                PermissionType.AUDIO -> it.copy(audio = granted)
+                PermissionType.NOTIFICATION -> it.copy(notification = granted)
+                PermissionType.ACTIVITY_RECOGNITION -> it.copy(activity = granted)
+                PermissionType.BATTERY_OPTIMIZATION -> it.copy(batteryOptimizationIgnored = granted)
             }
         }
     }

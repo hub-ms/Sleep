@@ -4,11 +4,13 @@ import com.sleepytime.shared.data.local.dao.SleepSessionDao
 import com.sleepytime.shared.ui.tracking.SleepAnalyzer
 import com.sleepytime.shared.domain.model.EnvironmentFeature
 import com.sleepytime.shared.domain.model.SleepAnalysis
+import com.sleepytime.shared.domain.model.SleepMetrics
 import com.sleepytime.shared.domain.model.SleepSession
 import com.sleepytime.shared.domain.repository.SleepSessionRepository
 import com.sleepytime.shared.util.SleepReportCalculator
 import com.sleepytime.shared.util.SleepReportCalculator.toEfficiencyScore
 import com.sleepytime.shared.domain.model.SleepStage
+import com.sleepytime.shared.domain.model.Stats
 import com.sleepytime.shared.domain.repository.AuthRepository
 import com.sleepytime.shared.enum_.SleepStageType
 import com.sleepytime.shared.enum_.PredictionStageType
@@ -41,64 +43,42 @@ class SleepSessionRepositoryImpl(
     private var isSessionAnalyzing = false
 
     override suspend fun analyzeSleepSession(
-        sensorData: List<List<FloatArray>>,
         timestamps: List<Long>,
         environmentFeatures: List<EnvironmentFeature>,
         sessionId: String
     ): Result<SleepSession> = withContext(Dispatchers.Default) {
         runCatching {
             isSessionAnalyzing = true
-
             val analysisList = historyMutex.withLock {
                 predictionHistory.sortedBy { it.timestamp }
             }
-            Napier.d("analysisList: $analysisList")
-
             if (analysisList.isEmpty()) throw Exception("No analysis data found")
 
             val trackingStartTime = timestamps.firstOrNull() ?: analysisList.first().timestamp
-
             val metrics = SleepReportCalculator.calculateSessionMetrics(
                 analysisList,
                 trackingStartTime
             )
-            Napier.d("metrics: $metrics")
+            val efficiency = calculateEfficiency(metrics, environmentFeatures)
+            val stageTimeline = generateStageTimeLine(analysisList)
+            val stagesDistribution = calculateStagesDistribution(metrics)
 
-            val isHeartRateAnomaly = environmentFeatures.any { it.flag.isHeartRateAnomaly }
-            val isNoiseDanger = environmentFeatures.any { it.flag.isNoiseDanger }
-            val isTempExtreme = environmentFeatures.any { it.flag.isTempExtreme }
-            val isHumidityExtreme = environmentFeatures.any { it.flag.isHumidityExtreme }
-            val sleepEfficiencyScore = metrics.toEfficiencyScore(
-                isHeartRateAnomaly = isHeartRateAnomaly,
-                isNoiseDanger = isNoiseDanger,
-                isTempExtreme = isTempExtreme,
-                isHumidityExtreme = isHumidityExtreme
-            )
-
-
-            val stageTimeLine = generateStageTimeLine(analysisList)
-
-            val totalMins = metrics.awakeMinutes + metrics.lightMinutes + metrics.deepMinutes + metrics.remMinutes
-            val stagesDistribution = if (totalMins > 0) {
-                mapOf(
-                    SleepStageType.AWAKE to (metrics.awakeMinutes / totalMins).toFloat(),
-                    SleepStageType.LIGHT to (metrics.lightMinutes / totalMins).toFloat(),
-                    SleepStageType.DEEP to (metrics.deepMinutes / totalMins).toFloat(),
-                    SleepStageType.REM to (metrics.remMinutes / totalMins).toFloat()
-                )
-            } else emptyMap()
-
+            val latestFeature = environmentFeatures.lastOrNull()
+            val now = Clock.System.now().toEpochMilliseconds()
             SleepSession(
                 sessionId = sessionId,
                 date = trackingStartTime,
                 sleepMetrics = metrics,
-                stageTimeline = stageTimeLine,
+                stageTimeline = stageTimeline,
                 stagesDistribution = stagesDistribution,
-                sleepEfficiency = sleepEfficiencyScore,
+                sleepEfficiency = efficiency,
                 environment = SleepSession.Environment(
                     history = environmentFeatures.map { it.snapshot },
-                    stats = environmentFeatures.first().stats,
-                    flags = environmentFeatures.first().flag,
+                    stats = latestFeature?.stats ?: EnvironmentFeature.Statistics(Stats(), Stats()),
+                    flags = latestFeature?.flag ?: EnvironmentFeature.Flag(
+                        isHeartRateAnomaly = false,
+                        isNoiseDanger = false
+                    )
                 ),
                 csvData = SleepSession.CsvData(
                     sensorCsv = "",
@@ -112,10 +92,7 @@ class SleepSessionRepositoryImpl(
                     sleepLatencyMinutes = metrics.sleepLatencyMinutes
                 ),
                 wakeCount = metrics.wakeCount,
-                timestamp = SleepSession.Timestamp(
-                    createdAt = Clock.System.now().toEpochMilliseconds(),
-                    updatedAt = Clock.System.now().toEpochMilliseconds()
-                ),
+                timestamp = SleepSession.Timestamp(createdAt = now, updatedAt = now),
             )
         }.also {
             historyMutex.withLock {
@@ -123,6 +100,21 @@ class SleepSessionRepositoryImpl(
             }
             isSessionAnalyzing = false
         }
+    }
+    private fun calculateEfficiency(metrics: SleepMetrics, features: List<EnvironmentFeature>): Int =
+        metrics.toEfficiencyScore(
+            isHeartRateAnomaly = features.any { it.flag.isHeartRateAnomaly },
+            isNoiseDanger = features.any { it.flag.isNoiseDanger },
+        )
+    private fun calculateStagesDistribution(metrics: SleepMetrics): Map<SleepStageType, Float> {
+        val totalMins = metrics.awakeMinutes + metrics.lightMinutes + metrics.deepMinutes + metrics.remMinutes
+        if (totalMins <= 0) return emptyMap()
+        return mapOf(
+            SleepStageType.AWAKE to (metrics.awakeMinutes / totalMins).toFloat(),
+            SleepStageType.LIGHT to (metrics.lightMinutes / totalMins).toFloat(),
+            SleepStageType.DEEP to (metrics.deepMinutes / totalMins).toFloat(),
+            SleepStageType.REM to (metrics.remMinutes / totalMins).toFloat(),
+        )
     }
 
     override suspend fun insertSession(session: SleepSession) =

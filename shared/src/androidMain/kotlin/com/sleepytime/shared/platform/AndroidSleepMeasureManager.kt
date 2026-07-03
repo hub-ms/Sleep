@@ -8,7 +8,7 @@ import android.hardware.SensorManager
 import com.sleepytime.shared.domain.model.EnvironmentFeature
 import com.sleepytime.shared.domain.model.SleepMinuteAggregate
 import com.sleepytime.shared.domain.model.Stats
-import com.sleepytime.shared.domain.repository.WeatherRepository
+import com.sleepytime.shared.util.StatsUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -51,8 +51,6 @@ data class RawNoise(val db: Float, val timestamp: Long)
 @Singleton
 class AndroidSleepMeasureManager @Inject constructor(
     context: Context,
-    private val weatherRepository: WeatherRepository,
-    private val heartRateMonitor: HeartRateMonitor? = null
 ) : SleepMeasureManager, SensorEventListener {
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -73,10 +71,19 @@ class AndroidSleepMeasureManager @Inject constructor(
     private val bufferMutex = Mutex()
 
     private var isMeasuring = false
+    private var measureScope: CoroutineScope? = null
+
+    companion object {
+        private const val MOVEMENT_THRESHOLD_MS2 = 12.0f
+        private const val DEFAULT_HEART_RATE_BPM = 65f
+        private const val DEFAULT_NOISE_DB = 30f
+        private const val HEART_RATE_ANOMALY_LOW_THRESHOLD = 40f
+        private const val HEART_RATE_ANOMALY_HIGH_THRESHOLD = 110f
+        private const val NOISE_DANGER_THRESHOLD = 60f
+    }
     override var onWindowReady: ((List<FloatArray>) -> Unit)? = null
     override var onEnvironmentReady: ((EnvironmentFeature) -> Unit)? = null
-    var onMinuteAggregateReady: ((SleepMinuteAggregate) -> Unit)? = null
-    private var measureScope: CoroutineScope? = null
+    override var onMinuteAggregateReady: ((SleepMinuteAggregate) -> Unit)? = null
 
     override fun onSensorChanged(event: SensorEvent?) {
         if (!isMeasuring || event == null) return
@@ -90,20 +97,20 @@ class AndroidSleepMeasureManager @Inject constructor(
     override fun start() {
         if (isMeasuring) return
         isMeasuring = true
-
         measureScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
         measureScope?.launch {
             clearAllBuffers()
             lastBucketTimestamp = (System.currentTimeMillis() / 60000) * 60000
-
-            withContext(Dispatchers.Main) {
-                accelerometer?.let {
-                    sensorManager.registerListener(this@AndroidSleepMeasureManager, it, SensorManager.SENSOR_DELAY_GAME)
-                }
-            }
-            heartRateMonitor?.startMonitoring(CoroutineScope(Dispatchers.Default))
+            registerAccelerometerListener()
             scheduleWindowUpdate()
+        }
+    }
+    private suspend fun registerAccelerometerListener() {
+        withContext(Dispatchers.Main) {
+            accelerometer?.let {
+                sensorManager.registerListener(this@AndroidSleepMeasureManager, it, SensorManager.SENSOR_DELAY_GAME)
+            }
         }
     }
 
@@ -156,40 +163,28 @@ class AndroidSleepMeasureManager @Inject constructor(
             }
         }
     }
-    private suspend fun processMinuteAggregate(bucketTimestamp: Long) {
+    private fun processMinuteAggregate(bucketTimestamp: Long) {
         if (minuteAccel.isEmpty() && minuteHeartRate.isEmpty() && minuteNoise.isEmpty()) return
 
-        val hrValues = minuteHeartRate.map { it.bpm }
-        val avgHr = if (hrValues.isNotEmpty()) hrValues.average().toFloat() else 65f
-        val maxHr = if (hrValues.isNotEmpty()) hrValues.maxOrNull() ?: 65f else 65f
-        val minHr = if (hrValues.isNotEmpty()) hrValues.minOrNull() ?: 65f else 65f
-
-        val noiseValues = minuteNoise.map { it.db }
-        val avgNoise = if (noiseValues.isNotEmpty()) noiseValues.average().toFloat() else 30f
-        val maxNoise = if (noiseValues.isNotEmpty()) noiseValues.maxOrNull() ?: 30f else 30f
-        val minNoise = if (noiseValues.isNotEmpty()) noiseValues.minOrNull() ?: 30f else 30f
-
-        val movementCount = minuteAccel.count {
-            val totalForce = sqrt(it.values[0] * it.values[0] + it.values[1] * it.values[1] + it.values[2] * it.values[2])
-            totalForce > 12.0f
-        }
+        val hrStats = StatsUtil.computeStats(minuteHeartRate.map { it.bpm })
+        val noiseStats = StatsUtil.computeStats(minuteNoise.map { it.db })
+        val movementCount = countMovements(minuteAccel)
 
         val aggregate = SleepMinuteAggregate(
             timestampBucket = bucketTimestamp,
-            avgHeartRate = avgHr,
-            maxHeartRate = maxHr,
-            minHeartRate = minHr,
-            avgNoiseDb = avgNoise,
-            maxNoiseDb = maxNoise,
-            minNoiseDb = minNoise,
-            movementCount = movementCount
+            avgHeartRate = hrStats.avg.ifEmpty(hrStats.count, DEFAULT_HEART_RATE_BPM),
+            maxHeartRate = hrStats.max.ifEmpty(hrStats.count, DEFAULT_HEART_RATE_BPM),
+            minHeartRate = hrStats.min.ifEmpty(hrStats.count, DEFAULT_HEART_RATE_BPM),
+            avgNoiseDb = noiseStats.avg.ifEmpty(noiseStats.count, DEFAULT_NOISE_DB),
+            maxNoiseDb = noiseStats.max.ifEmpty(noiseStats.count, DEFAULT_NOISE_DB),
+            minNoiseDb = noiseStats.min.ifEmpty(noiseStats.count, DEFAULT_NOISE_DB),
+            movementCount = movementCount,
         )
 
         capturedAggregates.add(aggregate)
         onMinuteAggregateReady?.invoke(aggregate)
 
-        // 하위 호환 컴포넌트 기능 유지용 환경 피처 생성 호출
-        val envFeature = createEnvironmentFeature(bucketTimestamp, aggregate)
+        val envFeature = createEnvironmentFeature(bucketTimestamp, hrStats,noiseStats)
         capturedEnvironmentFeatures.add(envFeature)
         onEnvironmentReady?.invoke(envFeature)
 
@@ -197,29 +192,28 @@ class AndroidSleepMeasureManager @Inject constructor(
         minuteHeartRate.clear()
         minuteNoise.clear()
     }
-    private suspend fun createEnvironmentFeature(timestamp: Long, aggregate: SleepMinuteAggregate): EnvironmentFeature {
-        val weatherTemp = weatherRepository.getCurrentTemperature()
-        val weatherHumidity = weatherRepository.getCurrentHumidity()
-
+    private fun countMovements(accel: List<RawAccel>): Int = accel.count {
+        val force = sqrt(it.values[0] * it.values[0] + it.values[1] * it.values[1] + it.values[2] * it.values[2])
+        force > MOVEMENT_THRESHOLD_MS2
+    }
+    private fun createEnvironmentFeature(
+        timestamp: Long,
+        hrStats: StatsUtil.RollingStats,
+        noiseStats: StatsUtil.RollingStats,
+    ): EnvironmentFeature {
         return EnvironmentFeature(
             timestamp = timestamp,
             snapshot = EnvironmentFeature.Snapshot(
-                heartRate = aggregate.avgHeartRate,
-                noise = aggregate.avgNoiseDb,
-                temperature = weatherTemp,
-                humidity = weatherHumidity
+                heartRate = hrStats.last,
+                noise = noiseStats.last,
             ),
             stats = EnvironmentFeature.Statistics(
-                heartRate = Stats(aggregate.avgHeartRate, 5f, aggregate.minHeartRate, aggregate.maxHeartRate),
-                noise = Stats(aggregate.avgNoiseDb, 5f, aggregate.minNoiseDb, aggregate.maxNoiseDb),
-                temperature = Stats(weatherTemp, 0f, weatherTemp, weatherTemp),
-                humidity = Stats(weatherHumidity, 0f, weatherHumidity, weatherHumidity)
+                heartRate = Stats(hrStats.avg, hrStats.std, hrStats.min, hrStats.max),
+                noise = Stats(noiseStats.avg, noiseStats.std, noiseStats.min, noiseStats.max),
             ),
             flag = EnvironmentFeature.Flag(
-                isHeartRateAnomaly = aggregate.maxHeartRate > 110f,
-                isNoiseDanger = aggregate.avgNoiseDb > 60f,
-                isTempExtreme = weatherTemp !in 18f..28f,
-                isHumidityExtreme = weatherHumidity !in 40f..60f
+                isHeartRateAnomaly = hrStats.min < HEART_RATE_ANOMALY_LOW_THRESHOLD || hrStats.max > HEART_RATE_ANOMALY_HIGH_THRESHOLD,
+                isNoiseDanger = noiseStats.avg > NOISE_DANGER_THRESHOLD,
             )
         )
     }
@@ -232,9 +226,10 @@ class AndroidSleepMeasureManager @Inject constructor(
         }
         return result
     }
+    private fun Float.ifEmpty(count: Int, default: Float): Float = if (count == 0) default else this
 
     override fun getCapturedAggregates(): List<SleepMinuteAggregate> = capturedAggregates.toList()
-    override fun getCapturedSensorData(): List<List<FloatArray>> = emptyList() // 메모리 절약을 위해 Raw 완전 제거
+    override fun getCapturedSensorData(): List<List<FloatArray>> = emptyList()
     override fun getCapturedEnvironmentFeatures(): List<EnvironmentFeature> = capturedEnvironmentFeatures.toList()
     override fun getCapturedTimestamps(): List<Long> = capturedAggregates.map { it.timestampBucket }
 }

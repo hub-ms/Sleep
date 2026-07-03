@@ -24,11 +24,11 @@ class CsvExporter(private val fileSaver: FileSaver) {
         features.forEach { feat ->
             sb.append(
                 "${feat.snapshot}," +
-                "${feat.stats.heartRate.avg},${feat.stats.noise.avg},${feat.stats.temperature.avg},${feat.stats.humidity.avg}," +
-                "${feat.stats.heartRate.stddev},${feat.stats.noise.stddev},${feat.stats.temperature.stddev},${feat.stats.humidity.stddev}," +
-                "${feat.stats.heartRate.max},${feat.stats.noise.max},${feat.stats.temperature.max},${feat.stats.humidity.max}," +
-                "${feat.stats.heartRate.min},${feat.stats.noise.min},${feat.stats.temperature.min},${feat.stats.humidity.min}," +
-                "${feat.flag.isHeartRateAnomaly }, ${ feat.flag.isNoiseDanger }, ${ feat.flag.isTempExtreme }, ${ feat.flag.isHumidityExtreme }\n")
+                "${feat.stats.heartRate.avg},${feat.stats.noise.avg}," +
+                "${feat.stats.heartRate.stddev},${feat.stats.noise.stddev}," +
+                "${feat.stats.heartRate.max},${feat.stats.noise.max}," +
+                "${feat.stats.heartRate.min},${feat.stats.noise.min}," +
+                "${feat.flag.isHeartRateAnomaly }, ${ feat.flag.isNoiseDanger }\n")
         }
         fileSaver.saveText (fileName, sb.toString())
     }

@@ -339,8 +339,8 @@ object HomeScreen : Screen {
                             onNextMonthClicked = {
                                 reportViewModel.sendIntent(ReportContract.Intent.NextMonthClicked(it))
                             },
-                            onNavigateToSleepEnvironment = { history, hr, noise, temp, hum ->
-                                navigator.push(SleepEnvironmentScreen(history, hr, noise, temp, hum))
+                            onNavigateToSleepEnvironment = { history, hr, noise ->
+                                navigator.push(SleepEnvironmentScreen(history, hr, noise))
                             }
                         )
                     }
@@ -450,8 +450,6 @@ data class SleepEnvironmentScreen(
     val environmentHistory: List<EnvironmentFeature.Snapshot>,
     val avgHeartRate: Float,
     val avgNoise: Float,
-    val avgTemperature: Float,
-    val avgHumidity: Float
 ) : Screen {
     @Composable
     override fun Content() {
@@ -459,8 +457,6 @@ data class SleepEnvironmentScreen(
         SleepEnvironmentContent(
             avgHeartRate = avgHeartRate,
             avgNoise = avgNoise,
-            avgTemperature = avgTemperature,
-            avgHumidity = avgHumidity,
             environmentHistory = environmentHistory,
             onBack = { navigator.pop() })
     }
@@ -515,8 +511,6 @@ data class ReportScreen(val sessionId: String) : Screen {
                                 reportState.reportData.environmentHistory,
                                 reportState.reportData.avgHeartRate,
                                 reportState.reportData.avgNoise,
-                                reportState.reportData.avgTemperature,
-                                reportState.reportData.avgHumidity
                             )
                         )
                     }
@@ -548,8 +542,8 @@ data class ReportScreen(val sessionId: String) : Screen {
             onNextMonthClicked = {
                 reportViewModel.sendIntent(ReportContract.Intent.NextMonthClicked(it))
             },
-            onNavigateToSleepEnvironment = { history, hr, noise, temp, hum ->
-                navigator.push(SleepEnvironmentScreen(history, hr, noise, temp, hum))
+            onNavigateToSleepEnvironment = { history, hr, noise ->
+                navigator.push(SleepEnvironmentScreen(history, hr, noise))
             },
 
         )

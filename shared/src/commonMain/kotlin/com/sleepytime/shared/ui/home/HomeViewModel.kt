@@ -15,7 +15,6 @@ import com.sleepytime.shared.domain.repository.AuthRepository
 import com.sleepytime.shared.domain.repository.SleepMusicRepository
 import com.sleepytime.shared.domain.repository.SleepSessionRepository
 import com.sleepytime.shared.domain.repository.SleepSettingsRepository
-import com.sleepytime.shared.domain.repository.WeatherRepository
 import com.sleepytime.shared.enum_.ReportTab
 import com.sleepytime.shared.ui.auth.AuthContract
 import com.sleepytime.shared.ui.environment.EnvironmentContract
@@ -53,7 +52,6 @@ class HomeViewModel(
     private val sleepSettingsRepository: SleepSettingsRepository,
     private val sleepMusicRepository: SleepMusicRepository,
     private val authRepository: AuthRepository,
-    private val weatherRepository: WeatherRepository,
     private val sleepSessionRepository: SleepSessionRepository,
     private val sleepSessionDao: SleepSessionDao,
 ) : ScreenModel {
@@ -103,45 +101,7 @@ class HomeViewModel(
                 processIntent(intent)
             }
         }
-        refreshEnvironmentPeriodically()
     }
-
-    private fun refreshEnvironmentPeriodically() {
-        screenModelScope.launch {
-            do {
-                try {
-                    Napier.d(tag = "HomeViewModel", message = "수면환경 데이터 로드 시작")
-                    _environmentState.value = when (val weather = weatherRepository.fetchCurrentWeather()) {
-                        is WeatherState.Success -> {
-                            Napier.d(
-                                tag = "HomeViewModel",
-                                message = "온도: ${weather.indoor.indoorTemp}°C, 습도: ${weather.indoor.indoorHumidity}%"
-                            )
-                            EnvironmentContract.State.Success(
-                                temperature = weather.indoor.indoorTemp,
-                                humidity    = weather.indoor.indoorHumidity,
-                                precipitation = weather.cached?.precip ?: 0f,
-                                nx = weather.cached?.nx ?: "",
-                                ny = weather.cached?.ny ?: ""
-                            )
-                        }
-                        is WeatherState.Error -> {
-                            Napier.w(tag = "HomeViewModel", message = "환경 오류: ${weather.message}")
-                            EnvironmentContract.State.Error(weather.message)
-                        }
-                    }
-                } catch (e: Exception) {
-                    Napier.e(tag = "HomeViewModel", message = "환경 데이터 로드 실패", throwable = e)
-                    _environmentState.value = EnvironmentContract.State.Error(
-                        e.message ?: "네트워크 오류"
-                    )
-                }
-
-                delay(10 * 60 * 1000)  // 10???
-            } while (true)
-        }
-    }
-
     private fun observeSleepSettings() {
         Napier.d(tag = "HomeViewModel", message = "수면 설정 관찰(Observe) 시작")
 

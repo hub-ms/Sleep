@@ -1,6 +1,7 @@
 package com.sleepytime.shared
 
 import android.app.Application
+import android.util.Log
 import com.kakao.sdk.common.KakaoSdk
 import com.russhwolf.settings.ExperimentalSettingsApi
 import com.sleepytime.shared.di.androidModule
@@ -21,8 +22,8 @@ import kotlin.time.ExperimentalTime
 class SleepApp : Application() {
     override fun onCreate() {
         super.onCreate()
-        Napier.base(DebugAntilog())
-        AndroidContextProvider.context = applicationContext
+        Log.d("SleepApp", "onCreate 호출됨, pid=${android.os.Process.myPid()}")
+        AndroidContextProvider.context = this
         KakaoSdk.init(this, BuildConfig.KAKAO_NATIVE_APP_KEY)
         startKoin {
             androidContext(this@SleepApp)

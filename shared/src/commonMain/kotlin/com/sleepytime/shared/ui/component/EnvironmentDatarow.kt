@@ -50,13 +50,9 @@ sealed class EnvironmentDisplayMode {
 private data class EnvironmentValues(
     val heartRate: Float,
     val noise: Float,
-    val temperature: Float,
-    val humidity: Float,
 
     val isHeartRateAnomaly: Boolean = false,
     val isNoiseDanger: Boolean = false,
-    val isTempExtreme: Boolean = false,
-    val isHumidityExtreme: Boolean = false,
 )
 
 @Composable
@@ -70,8 +66,6 @@ fun EnvironmentDataRow(
             EnvironmentValues(
                 heartRate = latest?.heartRate ?: 0f,
                 noise = latest?.noise ?: 0f,
-                temperature = latest?.temperature ?: 0f,
-                humidity = latest?.humidity ?: 0f
             )
         }
 
@@ -79,12 +73,8 @@ fun EnvironmentDataRow(
             EnvironmentValues(
                 heartRate = mode.reportData.avgHeartRate,
                 noise = mode.reportData.avgNoise,
-                temperature = mode.reportData.avgTemperature,
-                humidity = mode.reportData.avgHumidity,
                 isHeartRateAnomaly = mode.reportData.isHeartRateAnomaly,
                 isNoiseDanger = mode.reportData.isNoiseDanger,
-                isTempExtreme = mode.reportData.isTempExtreme,
-                isHumidityExtreme = mode.reportData.isHumidityExtreme,
             )
         }
     }
@@ -127,34 +117,6 @@ private fun EnvironmentDataRowContent(
                 else -> EnvironmentColors.NORMAL
             }
         )
-
-        EnvironmentCategory.TEMPERATURE -> EnvironmentStatus(
-            statusText = when {
-                (values.temperature == 0f && mode is EnvironmentDisplayMode.Live) -> "측정 중"
-                values.temperature < 18f -> "추움"
-                values.temperature in 18f..24f -> "쾌적"
-                else -> "더움"
-            },
-            primaryColor = when {
-                values.temperature == 0f -> Color.White.copy(0.4f)
-                values.isTempExtreme -> EnvironmentColors.ANOMALY
-                else -> EnvironmentColors.NORMAL
-            }
-        )
-
-        EnvironmentCategory.HUMIDITY -> EnvironmentStatus(
-            statusText = when {
-                (values.humidity == 0f && mode is EnvironmentDisplayMode.Live) -> "측정 중"
-                values.humidity < 40f -> "건조함"
-                values.humidity in 40f..60f -> "쾌적"
-                else -> "습함"
-            },
-            primaryColor = when {
-                values.humidity == 0f -> Color.White.copy(0.4f)
-                values.isHumidityExtreme -> EnvironmentColors.ANOMALY
-                else -> EnvironmentColors.NORMAL
-            }
-        )
     }
 
     val items = listOf(
@@ -181,31 +143,7 @@ private fun EnvironmentDataRowContent(
                     withStyle(baseBodyStyle) { append("--") }
                 }
             }
-        ),
-        Triple(
-            painterResource(Res.drawable.ic_temperature),
-            EnvironmentCategory.TEMPERATURE,
-            buildAnnotatedString {
-                if (values.temperature > 0f) {
-                    withStyle(baseSectionStyle) { append("${values.temperature.toInt()}") }
-                    withStyle(baseBodyStyle) { append("°C") }
-                } else {
-                    withStyle(baseBodyStyle) { append("--") }
-                }
-            }
-        ),
-        Triple(
-            painterResource(Res.drawable.ic_humidity),
-            EnvironmentCategory.HUMIDITY,
-            buildAnnotatedString {
-                if (values.humidity > 0f) {
-                    withStyle(baseSectionStyle) { append("${values.humidity.toInt()}") }
-                    withStyle(baseBodyStyle) { append("%") }
-                } else {
-                    withStyle(baseBodyStyle) { append("--") }
-                }
-            }
-        ),
+        )
     )
 
     Column(

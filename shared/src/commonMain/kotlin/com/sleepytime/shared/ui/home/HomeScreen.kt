@@ -96,8 +96,6 @@ val EnvironmentCategory.displayName: String
     get() = when (this) {
         EnvironmentCategory.HEART_RATE -> "심박수"
         EnvironmentCategory.NOISE -> "소음"
-        EnvironmentCategory.TEMPERATURE -> "온도"
-        EnvironmentCategory.HUMIDITY -> "습도"
     }
 
 

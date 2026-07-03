@@ -221,8 +221,6 @@ object DemoReportFactory {
         val sleepScore = with(SleepReportCalculator) { sleepMetrics.toEfficiencyScore(
             isHeartRateAnomaly = isHeartRateAnomaly,
             isNoiseDanger = isNoiseDanger,
-            isTempExtreme = isTempExtreme,
-            isHumidityExtreme = isHumidityExtreme
         ) }
 
 
@@ -243,12 +241,8 @@ object DemoReportFactory {
             sleepScore = sleepScore,
             avgHeartRate = avgHeartRate,
             avgNoise = avgNoise,
-            avgTemperature = avgTemperature,
-            avgHumidity = avgHumidity,
             isHeartRateAnomaly = isHeartRateAnomaly,
             isNoiseDanger = isNoiseDanger,
-            isTempExtreme = isTempExtreme,
-            isHumidityExtreme = isHumidityExtreme,
             dailyLatencyMinutes = mapOf(targetDate to sleepLatencyMinutes),
             dailyBedTimes = mapOf(targetDate to bedTime),
             dailyWakeTimes = mapOf(targetDate to wakeTime),
@@ -256,8 +250,6 @@ object DemoReportFactory {
             dailyScores = mapOf(targetDate to sleepScore),
             dailyAvgHeartRates = mapOf(targetDate to avgHeartRate),
             dailyAvgNoises = mapOf(targetDate to avgNoise),
-            dailyAvgTemps = mapOf(targetDate to avgTemperature),
-            dailyAvgHumidities = mapOf(targetDate to avgHumidity),
 
         )
     }

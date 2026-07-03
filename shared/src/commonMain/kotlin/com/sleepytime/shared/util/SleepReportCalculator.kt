@@ -105,8 +105,6 @@ object SleepReportCalculator {
     fun SleepMetrics.toEfficiencyScore(
         isHeartRateAnomaly: Boolean,
         isNoiseDanger: Boolean,
-        isTempExtreme: Boolean,
-        isHumidityExtreme: Boolean
     ): Int {
         // 1단계: 5가지 수면 핵심 지표 가중치 계산 (최대 100점)
         val w = object {
@@ -134,14 +132,6 @@ object SleepReportCalculator {
         if (isNoiseDanger) {
             environmentPenalty += 10.0 // 침실 소음 과다 시 10점 감점
         }
-        if (isTempExtreme) {
-            environmentPenalty += 7.0  // 침실 온도 부적절 시 7점 감점
-        }
-        if (isHumidityExtreme) {
-            environmentPenalty += 5.0  // 침실 습도 부적절 시 5점 감점
-        }
-
-        // 3단계: 기본 수면 점수에서 환경 페널티를 차감하여 최종 0 ~ 100점 사이로 바인딩
         return (baseScore - environmentPenalty).roundToInt().coerceIn(0, 100)
     }
     fun calculateContinuityScore(awakeMinutes: Double, totalSleepMinutes: Double, wakeCount: Int): Double {

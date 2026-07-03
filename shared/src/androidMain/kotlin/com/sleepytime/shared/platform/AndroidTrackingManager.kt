@@ -1,7 +1,11 @@
 package com.sleepytime.shared.platform
 
 import android.content.Context
+import android.content.Intent
 import android.util.Log
+import androidx.core.content.ContextCompat
+import androidx.media3.common.util.UnstableApi
+import com.sleepytime.shared.data.tracking.SleepTrackingService
 import com.sleepytime.shared.domain.model.EnvironmentFeature
 import com.sleepytime.shared.domain.model.SleepMetrics
 import com.sleepytime.shared.domain.model.SleepSession
@@ -14,7 +18,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,16 +34,17 @@ import javax.inject.Inject
 import kotlin.onSuccess
 import kotlin.time.Duration.Companion.days
 
+
+@UnstableApi
 class AndroidTrackingManager @Inject constructor(
     private val context: Context,
     private val classifier: SleepStageClassifier,
-    private val measureManager: AndroidSleepMeasureManager,
+    private val measureManager: SleepMeasureManager,
     private val sleepSessionRepository: SleepSessionRepository,
-    private val heartRateMonitor: HeartRateMonitor,
-    private val noiseDetector: NoiseDetector,
     private val sensorBridge: SensorBridge,
     private val musicPlayer: MusicPlayer,
-    private val csvExporter: CsvExporter
+    private val csvExporter: CsvExporter,
+    private val activeSessionStore: ActiveSessionStore
 ) : TrackingManager {
     private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -49,14 +53,30 @@ class AndroidTrackingManager @Inject constructor(
 
     private var onNotificationUpdate: ((String) -> Unit)? = null
     private var onRequestStopForeground: (() -> Unit)? = null
-    private var isCleanedUp = false
+   @Volatile private var isCleanedUp = false
 
     companion object {
-        private const val MIN_MINUTES_REQUIRED = 30 // 최소 수면 측정 시간 조건 (예: 30분)
-        private const val ELAPSED_UPDATE_INTERVAL = 1000L
+        private const val MIN_TRACKING_MINUTES = 30
+        private const val WINDOW_DURATION_SECONDS = 30
+
+        private const val MIN_WINDOWS = (MIN_TRACKING_MINUTES * 60) / WINDOW_DURATION_SECONDS
+
+        private const val ENV_SAMPLE_INTERVAL_SECONDS = 60
+        private const val MIN_ENV_WINDOWS = (MIN_TRACKING_MINUTES * 60) / ENV_SAMPLE_INTERVAL_SECONDS
+
+        private data class CaptureResult(
+            val sensorData: List<List<FloatArray>>,
+            val environmentFeatures: List<EnvironmentFeature>,
+            val timestamps: List<Long>
+        ) {
+            fun isSufficient() = sensorData.size >= MIN_WINDOWS && environmentFeatures.size >= MIN_ENV_WINDOWS
+        }
+    }
+    init {
+        Log.d("AndroidTrackingManager", "인스턴스 생성됨, pid=${android.os.Process.myPid()}, hashCode=${this.hashCode()}")
     }
 
-    fun attachCallbacks(
+    override fun attachCallbacks(
         onNotificationUpdate: (String) -> Unit,
         onRequestStopForeground: () -> Unit
     ) {
@@ -65,113 +85,29 @@ class AndroidTrackingManager @Inject constructor(
     }
 
     override fun start(sessionId: String, duration: Int, musicTitle: String?) {
-        if (scope.coroutineContext[Job]?.isActive != true) {
-            scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val serviceIntent = Intent(context, SleepTrackingService::class.java).apply {
+            action = SleepTrackingService.ACTION_START
+            putExtra(SleepTrackingService.EXTRA_SESSION_ID, sessionId)
+            putExtra(SleepTrackingService.EXTRA_DURATION, duration)
+            putExtra(SleepTrackingService.EXTRA_MUSIC_TITLE, musicTitle)
         }
-        scope.launch {
-            isCleanedUp = false
-            _trackingState.update { it.copy(isFinished = false) }
-
-            val now = System.currentTimeMillis()
-            val session = SleepSession(
-                sleepMetrics = SleepMetrics(
-                    wakeCountScore = 0.0,
-                    continuityScore = 0.0,
-                    deepScore = 0.0,
-                    remScore = 0.0,
-                    latencyScore = 0.0,
-                    awakeMinutes = 0.0,
-                    lightMinutes = 0.0,
-                    deepMinutes = 0.0,
-                    remMinutes = 0.0,
-                    sleepLatencyMinutes = 0.0,
-                    wakeCount = 0
-                ),
-                environment = SleepSession.Environment(
-                    history = emptyList(),
-                    stats = EnvironmentFeature.Statistics(
-                        heartRate = Stats(),
-                        noise = Stats(),
-                        temperature = Stats(),
-                        humidity = Stats()
-                    ),
-                    flags = EnvironmentFeature.Flag(
-                        isHeartRateAnomaly = false,
-                        isNoiseDanger = false,
-                        isTempExtreme = false,
-                        isHumidityExtreme = false
-                    ),
-                ),
-                duration = SleepSession.Duration(
-                    awakeMinutes = 0.0,
-                    lightMinutes = 0.0,
-                    deepMinutes = 0.0,
-                    remMinutes = 0.0,
-                    sleepLatencyMinutes = 0.0,
-                ),
-                csvData = SleepSession.CsvData(
-                    sensorCsv = "",
-                    environmentCsv = ""
-                ),
-                timestamp = SleepSession.Timestamp(
-                    createdAt = now,
-                    updatedAt = now
-                ),
-                stageTimeline = emptyList(),
-                stagesDistribution = emptyMap(),
-                sleepEfficiency = 0,
-
-                sessionId = sessionId,
-
-                date = now,
-                wakeCount = 0,
-            )
-
-
-            Log.d("SleepTracker", "startTracking() - 음악: $musicTitle")
-
-            sleepSessionRepository.insertSession(session)
-
-            classifier.initialize(context)
-
-            val initResult = sleepSessionRepository.initializeModel()
-            if (initResult.isFailure) {
-                Log.e("TrackingService", "모델 초기화 실패", initResult.exceptionOrNull())
-                clear()
-                return@launch
+        ContextCompat.startForegroundService(context, serviceIntent)
+    }
+    private suspend fun initializeModel(): Boolean {
+        val initResult = sleepSessionRepository.initializeModel()
+        if (initResult.isFailure) {
+            Log.e("TrackingService", "모델 초기화 실패", initResult.exceptionOrNull())
+            clear()
+            return false
+        }
+        return true
+    }
+    private suspend fun playMusic(musicTitle: String?) {
+        musicTitle?.let {
+            withContext(Dispatchers.Main) {
+                musicPlayer.setVolume(0.4f)
+                musicPlayer.play(it, startSeconds = 0)
             }
-            Napier.d("musicTitle:$musicTitle")
-
-            musicTitle?.let {
-                withContext(Dispatchers.Main) {
-                    musicPlayer.setVolume(0.4f)
-
-                    musicPlayer.play(it, startSeconds = 0)
-                    Log.d("TrackingService", "음악 재생: $it")
-                }
-            }
-
-            setupSensorCallbacks()
-            measureManager.start()
-            // Note: Sensors are started through monitor triggers within measureManager or handled by OS background sensors.
-            // Bridge simply reads the current state.
-
-            sensorBridge.startHeartRateSensor(scope)
-            sensorBridge.startNoiseSensor(scope)
-            heartRateMonitor.startMonitoring(scope)
-            noiseDetector.startMonitoring(scope)
-
-            _trackingState.update {
-                it.copy(
-                    isTracking = true,
-                    trackingStartTime = Clock.System.now()
-                        .toLocalDateTime(TimeZone.currentSystemDefault()),
-                    sessionId = session.sessionId
-                )
-            }
-
-            onNotificationUpdate?.invoke("수면 측정 중..")
-            startElapsedTimeUpdater()
         }
     }
     private fun setupSensorCallbacks() {
@@ -210,16 +146,17 @@ class AndroidTrackingManager @Inject constructor(
                     val newHistory = (current.environmentHistory + envFeature.snapshot).takeLast(60)
                     current.copy(
                         environmentHistory = newHistory,
-                        avgTemperature = envFeature.snapshot.temperature,
-                        avgHumidity = envFeature.snapshot.humidity,
                         isHeartRateAnomaly = envFeature.flag.isHeartRateAnomaly,
                         isNoiseDanger = envFeature.flag.isNoiseDanger,
-                        isTempExtreme = envFeature.flag.isTempExtreme,
-                        isHumidityExtreme = envFeature.flag.isHumidityExtreme
                     )
                 }
             }
         }
+    }
+    private fun startAllSensors() {
+        measureManager.start()
+        sensorBridge.startHeartRateSensor(scope)
+        sensorBridge.startNoiseSensor(scope)
     }
     private fun startElapsedTimeUpdater() {
         scope.launch {
@@ -234,12 +171,60 @@ class AndroidTrackingManager @Inject constructor(
                 val hours = elapsed / 3600
                 val minutes = (elapsed % 3600) / 60
                 onNotificationUpdate?.invoke("측정 시간: ${hours}시간 ${minutes}분")
-                delay(ELAPSED_UPDATE_INTERVAL)
             }
         }
     }
 
     override fun discard() {
+        val serviceIntent = Intent(context, SleepTrackingService::class.java).apply {
+            action = SleepTrackingService.ACTION_DISCARD
+        }
+        context.startService(serviceIntent)
+    }
+
+    override fun finish() {
+        val serviceIntent = Intent(context, SleepTrackingService::class.java).apply {
+            action = SleepTrackingService.ACTION_FINISH
+        }
+        context.startService(serviceIntent)
+    }
+    fun performStart(sessionId: String, duration: Int, musicTitle: String?) {
+        if (scope.coroutineContext[Job]?.isActive != true) {
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        }
+        scope.launch {
+            isCleanedUp = false
+            _trackingState.update { it.copy(isFinished = false) }
+
+            val session = createInitialSession(sessionId)
+            sleepSessionRepository.insertSession(session)
+
+            classifier.initialize(context)
+            if (!initializeModel()) return@launch
+
+            playMusic(musicTitle)
+            setupSensorCallbacks()
+            startAllSensors()
+
+            val startTime = Clock.System.now()
+            _trackingState.update {
+                it.copy(
+                    isTracking = true,
+                    trackingStartTime = startTime.toLocalDateTime(TimeZone.currentSystemDefault()),
+                    sessionId = session.sessionId
+                )
+            }
+            activeSessionStore.save(
+                sessionId = session.sessionId,
+                startTimeMillis = startTime.toEpochMilliseconds(),
+                duration = duration,
+                musicTitle = musicTitle
+            )
+            onNotificationUpdate?.invoke("수면 측정 중..")
+            startElapsedTimeUpdater()
+        }
+    }
+    fun performDiscard() {
         scope.launch {
             val sessionId = _trackingState.value.sessionId
 
@@ -252,11 +237,11 @@ class AndroidTrackingManager @Inject constructor(
                     Napier.e("discard: 세션 삭제 실패", it)
                 }
             }
+            activeSessionStore.clear()
             _trackingState.value = TrackingContract.State()
         }
     }
-
-    override fun finish() {
+    fun performFinish() {
         scope.launch {
             _trackingState.update {
                 it.copy(
@@ -267,48 +252,25 @@ class AndroidTrackingManager @Inject constructor(
             }
             stopSensors()
 
-            val aggregates = measureManager.getCapturedAggregates()
-            val environmentFeatures = measureManager.getCapturedEnvironmentFeatures()
-
-            if (aggregates.size < MIN_MINUTES_REQUIRED) {
-                Log.w("TrackingService", "수면 데이터 부족으로 분석 생략: ${aggregates.size}분 측정됨.")
-                clear()
+            val capture = collectCapturedData()
+            if(!capture.isSufficient()) {
+                Log.w("TrackingService", "데이터 부족")
+                onRequestStopForeground?.invoke()
+                activeSessionStore.clear()
                 return@launch
             }
 
-            val sessionId = _trackingState.value.sessionId
-
-            sensorBridge.stopHeartRateSensor()
-            sensorBridge.stopNoiseSensor()
-            heartRateMonitor.stopMonitoring()
-            noiseDetector.stopMonitoring()
-
-            csvExporter.exportEnvironmentData(features = environmentFeatures, fileName = "env_$sessionId.csv")
-
-            withContext(Dispatchers.Default) {
-                // 수면 세션 분석을 하이드레이션된 1분 데이터 셋 기반으로 변경하는 아키텍처 연계
-                sleepSessionRepository.analyzeSleepSession(
-                    sensorData = emptyList(), // 더 이상 무거운 원시 리스트 목록을 힙에 들고 전달하지 않음
-                    timestamps = aggregates.map { it.timestampBucket },
-                    environmentFeatures = environmentFeatures,
-                    sessionId = sessionId
-                )
-            }.onSuccess { report ->
-                sleepSessionRepository.insertSession(report)
-                _trackingState.update {
-                    it.copy(
-                        isFinished = true,
-                        finishedSessionId = report.sessionId,
-                        sessionId = report.sessionId
-                    )
-                }
-                onNotificationUpdate?.invoke("측정 종료! 분석 완료.")
-                onRequestStopForeground?.invoke()
-            }.onFailure { e ->
-                Log.e("TrackingService", "분석 실패", e)
-            }
+            exportCsv(capture)
+            analyzeAndSave(capture)
         }
     }
+
+
+    private fun collectCapturedData() = CaptureResult(
+        sensorData = measureManager.getCapturedSensorData(),
+        environmentFeatures = measureManager.getCapturedEnvironmentFeatures(),
+        timestamps = measureManager.getCapturedTimestamps()
+    )
     override fun updateEndTime(hour: Int, minute: Int) {
         val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
         val tz  = TimeZone.currentSystemDefault()
@@ -340,12 +302,105 @@ class AndroidTrackingManager @Inject constructor(
         if (isCleanedUp) return
         isCleanedUp = true
         runCatching { measureManager.stop() }
-        runCatching { heartRateMonitor.stopMonitoring() }
-        runCatching { noiseDetector.stopMonitoring() }
+        runCatching { sensorBridge.stopHeartRateSensor() }
+        runCatching { sensorBridge.stopNoiseSensor() }
         runCatching { musicPlayer.stop() }
+    }
+    private fun exportCsv(capture: CaptureResult) {
+        val sessionId = _trackingState.value.sessionId
+        val startTime = capture.timestamps.firstOrNull() ?: System.currentTimeMillis()
+
+        csvExporter.exportSensorData(
+            capture.sensorData,
+            "sleep_$sessionId.csv",
+            startTime
+        )
+        csvExporter.exportEnvironmentData(
+            capture.environmentFeatures,
+            "env_$sessionId.csv"
+        )
+    }
+    private suspend fun analyzeAndSave(capture: CaptureResult) {
+        val sessionId = _trackingState.value.sessionId
+
+        withContext(Dispatchers.Default) {
+            sleepSessionRepository.analyzeSleepSession(
+                capture.timestamps,
+                capture.environmentFeatures,
+                sessionId
+            )
+        }.onSuccess { report ->
+            sleepSessionRepository.insertSession(report)
+            activeSessionStore.clear()
+            _trackingState.update {
+                it.copy(
+                    isFinished = true,
+                    finishedSessionId = report.sessionId,
+                    sessionId = report.sessionId
+                )
+            }
+            onNotificationUpdate?.invoke("측정 완료!")
+            onRequestStopForeground?.invoke()
+        }.onFailure { e ->
+            Log.e("TrackingService", "분석 실패", e)
+            onRequestStopForeground?.invoke()
+        }
     }
     fun clear() {
         stopSensors()
         scope.cancel()
+    }
+
+    private fun createInitialSession(sessionId: String): SleepSession {
+        val now = System.currentTimeMillis()
+        return SleepSession(
+            sleepMetrics = SleepMetrics(
+                wakeCountScore = 0.0,
+                continuityScore = 0.0,
+                deepScore = 0.0,
+                remScore = 0.0,
+                latencyScore = 0.0,
+                awakeMinutes = 0.0,
+                lightMinutes = 0.0,
+                deepMinutes = 0.0,
+                remMinutes = 0.0,
+                sleepLatencyMinutes = 0.0,
+                wakeCount = 0
+            ),
+            environment = SleepSession.Environment(
+                history = emptyList(),
+                stats = EnvironmentFeature.Statistics(
+                    heartRate = Stats(),
+                    noise = Stats(),
+                ),
+                flags = EnvironmentFeature.Flag(
+                    isHeartRateAnomaly = false,
+                    isNoiseDanger = false,
+                ),
+            ),
+            duration = SleepSession.Duration(
+                awakeMinutes = 0.0,
+                lightMinutes = 0.0,
+                deepMinutes = 0.0,
+                remMinutes = 0.0,
+                sleepLatencyMinutes = 0.0,
+            ),
+            csvData = SleepSession.CsvData(
+                sensorCsv = "",
+                environmentCsv = ""
+            ),
+            timestamp = SleepSession.Timestamp(
+                createdAt = now,
+                updatedAt = now
+            ),
+            stageTimeline = emptyList(),
+            stagesDistribution = emptyMap(),
+            sleepEfficiency = 0,
+
+            sessionId = sessionId,
+
+            date = now,
+            wakeCount = 0,
+        )
     }
 }

@@ -12,4 +12,5 @@ interface SleepMeasureManager {
     fun getCapturedTimestamps(): List<Long>
     var onWindowReady: ((List<FloatArray>) -> Unit)?
     var onEnvironmentReady: ((EnvironmentFeature) -> Unit)?
+    var onMinuteAggregateReady: ((SleepMinuteAggregate) -> Unit)?
 }

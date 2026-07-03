@@ -305,12 +305,8 @@ class ReportViewModel(
                     sleepScore = 0,
                     avgHeartRate = 0f,
                     avgNoise = 0f,
-                    avgTemperature = 0f,
-                    avgHumidity = 0f,
                     isHeartRateAnomaly = false,
                     isNoiseDanger = false,
-                    isTempExtreme = false,
-                    isHumidityExtreme = false,
                     dailyLatencyMinutes = emptyMap(),
                     dailyBedTimes = emptyMap(),
                     dailyWakeTimes = emptyMap(),
@@ -318,8 +314,6 @@ class ReportViewModel(
                     dailyScores = emptyMap(),
                     dailyAvgHeartRates = emptyMap(),
                     dailyAvgNoises = emptyMap(),
-                    dailyAvgTemps = emptyMap(),
-                    dailyAvgHumidities = emptyMap(),
                     sleepMetrics = SleepMetrics(
                         wakeCountScore = 0.0,
                         continuityScore = 0.0,
@@ -386,12 +380,8 @@ class ReportViewModel(
                 sleepScore = sessions.map { it.sleepEfficiency }.average().toInt(),
                 avgHeartRate = sessions.map { it.environment.stats.heartRate.avg }.average().toFloat(),
                 avgNoise = sessions.map { it.environment.stats.noise.avg }.average().toFloat(),
-                avgTemperature = sessions.map { it.environment.stats.temperature.avg }.average().toFloat(),
-                avgHumidity = sessions.map { it.environment.stats.humidity.avg }.average().toFloat(),
                 isHeartRateAnomaly = sessions.any { it.environment.flags.isHeartRateAnomaly },
                 isNoiseDanger = sessions.any { it.environment.flags.isNoiseDanger },
-                isTempExtreme = sessions.any { it.environment.flags.isTempExtreme },
-                isHumidityExtreme = sessions.any { it.environment.flags.isHumidityExtreme },
                 dailyLatencyMinutes = targetDays.mapNotNull { date ->
                     sessionMap[date]?.let {
                         date to it.duration.sleepLatencyMinutes
@@ -415,12 +405,6 @@ class ReportViewModel(
                 }.toMap(),
                 dailyAvgNoises = targetDays.mapNotNull { date ->
                     sessionMap[date]?.let { date to it.environment.stats.noise.avg }
-                }.toMap(),
-                dailyAvgTemps = targetDays.mapNotNull { date ->
-                    sessionMap[date]?.let { date to it.environment.stats.temperature.avg }
-                }.toMap(),
-                dailyAvgHumidities = targetDays.mapNotNull { date ->
-                    sessionMap[date]?.let { date to it.environment.stats.humidity.avg }
                 }.toMap(),
                 totalWakeCount = sessions.sumOf { it.wakeCount },
                 dailyScores = targetDays.mapNotNull { date ->

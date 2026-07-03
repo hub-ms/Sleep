@@ -36,6 +36,11 @@ object DatabaseHolder {
 
     private val mutex = Mutex()
 
+    private val json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+    }
+
     // ── 기본 타입 어댑터 ──────────────────────────────────────
 
     private val intAdapter = object : ColumnAdapter<Int, Long> {
@@ -68,55 +73,60 @@ object DatabaseHolder {
 
     private val sleepMetricsAdapter = object : ColumnAdapter<SleepMetrics, String> {
         override fun decode(databaseValue: String): SleepMetrics =
-            Json.decodeFromString(databaseValue)
+            json.decodeFromString(databaseValue) // 💡 기존 Json -> json 변경
 
-        override fun encode(value: SleepMetrics): String = Json.encodeToString(value)
+        override fun encode(value: SleepMetrics): String = json.encodeToString(value)
     }
 
     private val sleepStageListAdapter = object : ColumnAdapter<List<SleepStage>, String> {
         override fun decode(databaseValue: String): List<SleepStage> =
-            if (databaseValue.isEmpty()) emptyList() else Json.decodeFromString(databaseValue)
+            if (databaseValue.isEmpty()) emptyList() else json.decodeFromString(databaseValue)
 
-        override fun encode(value: List<SleepStage>): String = Json.encodeToString(value)
+        override fun encode(value: List<SleepStage>): String = json.encodeToString(value)
     }
 
     private val sleepStageTypeMapAdapter =
         object : ColumnAdapter<Map<SleepStageType, Float>, String> {
             override fun decode(databaseValue: String): Map<SleepStageType, Float> =
                 if (databaseValue.isEmpty()) emptyMap()
-                else Json.decodeFromString<Map<String, Float>>(databaseValue)
+                else json.decodeFromString<Map<String, Float>>(databaseValue)
                     .mapKeys { SleepStageType.valueOf(it.key) }
 
             override fun encode(value: Map<SleepStageType, Float>): String =
-                Json.encodeToString(value.entries.associate { it.key.name to it.value })
+                json.encodeToString(value.entries.associate { it.key.name to it.value })
         }
+
     private val environmentHistoryAdapter =
         object : ColumnAdapter<List<EnvironmentFeature.Snapshot>, String> {
             override fun decode(databaseValue: String): List<EnvironmentFeature.Snapshot> =
-                if (databaseValue.isEmpty()) emptyList() else Json.decodeFromString(databaseValue)
+                if (databaseValue.isEmpty()) emptyList() else json.decodeFromString(databaseValue)
 
             override fun encode(value: List<EnvironmentFeature.Snapshot>): String =
-                Json.encodeToString(value)
+                json.encodeToString(value)
         }
+
     private val environmentFlagsAdapter = object : ColumnAdapter<EnvironmentFeature.Flag, String> {
         override fun decode(databaseValue: String): EnvironmentFeature.Flag =
-            Json.decodeFromString(databaseValue)
+            json.decodeFromString(databaseValue)
 
-        override fun encode(value: EnvironmentFeature.Flag): String = Json.encodeToString(value)
+        override fun encode(value: EnvironmentFeature.Flag): String = json.encodeToString(value)
     }
+
+    // 🔥 크래시가 발생했던 핵심 타겟
     private val environmentStatsAdapter =
         object : ColumnAdapter<EnvironmentFeature.Statistics, String> {
             override fun decode(databaseValue: String): EnvironmentFeature.Statistics =
-                Json.decodeFromString(databaseValue)
+                json.decodeFromString(databaseValue) // 💡 대문자 Json을 소문자 json으로 교체!
 
             override fun encode(value: EnvironmentFeature.Statistics): String =
-                Json.encodeToString(value)
+                json.encodeToString(value)
         }
+
     private val soundAdapter = object : ColumnAdapter<Alarm.Sound, String> {
         override fun decode(databaseValue: String): Alarm.Sound =
-            Json.decodeFromString(databaseValue)
+            json.decodeFromString(databaseValue)
 
-        override fun encode(value: Alarm.Sound): String = Json.encodeToString(value)
+        override fun encode(value: Alarm.Sound): String = json.encodeToString(value)
     }
 
     // ── 인스턴스 생성 ─────────────────────────────────────────

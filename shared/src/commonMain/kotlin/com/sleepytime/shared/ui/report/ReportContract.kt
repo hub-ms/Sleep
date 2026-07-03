@@ -41,13 +41,9 @@ object ReportContract {
 
         val avgHeartRate: Float,
         val avgNoise: Float,
-        val avgTemperature: Float,
-        val avgHumidity: Float,
 
         val isHeartRateAnomaly: Boolean,
         val isNoiseDanger: Boolean,
-        val isTempExtreme: Boolean,
-        val isHumidityExtreme: Boolean,
 
         val dailyLatencyMinutes: Map<LocalDate, Double>,
         val dailyBedTimes: Map<LocalDate, LocalDateTime>,
@@ -58,8 +54,6 @@ object ReportContract {
 
         val dailyAvgHeartRates: Map<LocalDate, Float>,
         val dailyAvgNoises: Map<LocalDate, Float>,
-        val dailyAvgTemps: Map<LocalDate, Float>,
-        val dailyAvgHumidities: Map<LocalDate, Float>,
 
         val sleepMetrics: SleepMetrics = SleepMetrics(
             wakeCountScore = 0.0,
@@ -76,16 +70,6 @@ object ReportContract {
             wakeCount = 0
         )
     ) {
-
-        val averageHeartRate: Float? get() = dailyAvgHeartRates.values.takeIf { it.isNotEmpty() }?.average()?.toFloat()
-        val averageNoise: Float? get() = dailyAvgNoises.values.takeIf { it.isNotEmpty() }?.average()?.toFloat()
-        val averageTemp: Float? get() = dailyAvgTemps.values.takeIf { it.isNotEmpty() }?.average()?.toFloat()
-        val averageHumidity: Float? get() = dailyAvgHumidities.values.takeIf { it.isNotEmpty() }?.average()?.toFloat()
-
-        val averageLatencyMinutes: Long? get() {
-            if (dailyLatencyMinutes.isEmpty()) return null
-            return dailyLatencyMinutes.values.average().toLong()
-        }
         val averageBedTime: LocalDateTime? get() {
             if (dailyBedTimes.isEmpty()) return null
             val avgSeconds = dailyBedTimes.values.map { it.toInstant(TimeZone.currentSystemDefault()).epochSeconds }.average()

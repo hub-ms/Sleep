@@ -35,10 +35,11 @@ import com.sleepytime.shared.platform.rememberPermissionHandler
 import com.sleepytime.shared.enum_.PermissionType
 import com.sleepytime.shared.enum_.AuthProvider
 import com.sleepytime.shared.platform.PermissionState
+import com.sleepytime.shared.platform.isAndroidPlatform
 import com.sleepytime.shared.resources.Res
 import com.sleepytime.shared.resources.bg_onboarding
 import com.sleepytime.shared.resources.ic_check
-import com.sleepytime.shared.resources.ic_location
+import com.sleepytime.shared.resources.ic_heart_rate
 import com.sleepytime.shared.resources.ic_microphone
 import com.sleepytime.shared.resources.ic_motion
 import com.sleepytime.shared.resources.ic_notification
@@ -154,27 +155,11 @@ fun PermissionPage(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             PermissionCard(
-                icon = Res.drawable.ic_motion,
-                content = "수면 단계를 분석하기 위해 신체 활동 권한이 필요합니다",
-                granted = permissionState.activityRecognition,
-                onClick = {
-                    permissionHandler.request(PermissionType.ACTIVITY)
-                }
-            )
-            PermissionCard(
                 icon = Res.drawable.ic_microphone,
                 content = "주변 소음을 녹음하기 위해 마이크 권한이 필요합니다",
                 granted = permissionState.audio,
                 onClick = {
                     permissionHandler.request(PermissionType.AUDIO)
-                }
-            )
-            PermissionCard(
-                icon = Res.drawable.ic_location,
-                content = "실내 온도와 습도를 계산하기 위해 위치 권한이 필요합니다",
-                granted = permissionState.location,
-                onClick = {
-                    permissionHandler.request(PermissionType.LOCATION)
                 }
             )
             PermissionCard(
@@ -185,6 +170,22 @@ fun PermissionPage(
                     permissionHandler.request(PermissionType.NOTIFICATION)
                 }
             )
+            PermissionCard(
+                icon = Res.drawable.ic_heart_rate,
+                content = "심박수 측정을 위해 신체 활동 권한이 필요합니다",
+                granted = permissionState.activity,
+                onClick = {
+                    permissionHandler.request(PermissionType.ACTIVITY_RECOGNITION)
+                }
+            )
+            if (isAndroidPlatform) {
+                PermissionCard(   // ⭐ 추가
+                    icon = Res.drawable.ic_motion,  // 적절한 아이콘으로 교체
+                    content = "수면 중 측정이 끊기지 않도록 설정에서 배터리 사용량을 '제한 없음'으로 변경해 주세요.",
+                    granted = permissionState.batteryOptimizationIgnored,
+                    onClick = { permissionHandler.request(PermissionType.BATTERY_OPTIMIZATION) }
+                )
+            }
         }
         val allGranted = permissionState.isAllGranted()
         Button(
@@ -379,7 +380,10 @@ fun OnboardingPermissionPreview() {
     SleepAppTheme {
         OnboardingContent(
             onboardingState = OnboardingContract.State(step = 1),
-            permissionState = PermissionState(activityRecognition = true),
+            permissionState = PermissionState(
+                audio = true,
+                notification = true
+            ),
             onNextStepClicked = {},
             onUpdatePermission = { _, _ -> },
             onGuestLogin = {},

@@ -1,30 +1,26 @@
 package com.sleepytime.shared
 
+import android.R.attr.data
 import android.app.Activity
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.sp
-import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.UnstableApi
 import cafe.adriel.voyager.navigator.CurrentScreen
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.NavigatorDisposeBehavior
 import com.sleepytime.shared.ui.navigation.EmailAuthScreen
-import com.sleepytime.shared.ui.navigation.HomeScreen
 import com.sleepytime.shared.ui.navigation.OnboardingScreen
 import com.sleepytime.shared.ui.navigation.TrackingScreen
 import com.sleepytime.shared.ui.theme.SleepAppTheme
@@ -39,6 +35,7 @@ import org.koin.android.ext.android.inject
 import java.io.File
 import java.lang.ref.WeakReference
 import java.util.Locale
+import kotlin.jvm.java
 import kotlin.random.Random
 import kotlin.time.ExperimentalTime
 
@@ -86,6 +83,7 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)

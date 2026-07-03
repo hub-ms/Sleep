@@ -7,6 +7,8 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
+import android.os.PowerManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.media3.common.util.UnstableApi
 import com.sleepytime.shared.MainActivity
@@ -21,6 +23,8 @@ class SleepTrackingService : Service(), KoinComponent {
     private val notificationManager by lazy {
         getSystemService(NotificationManager::class.java)
     }
+
+    private var wakeLock: PowerManager.WakeLock? = null
 
     companion object {
         const val ACTION_START = "com.sleepytime.app.ACTION_START_TRACKING"
@@ -43,6 +47,8 @@ class SleepTrackingService : Service(), KoinComponent {
                 notificationManager.notify(NOTIFICATION_ID, createNotification(text))
             },
             onRequestStopForeground = {
+                Log.d("SleepTrackingService", "onRequestStopForeground 콜백 호출됨")  // ⭐ 추가
+                releaseWakeLock()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
@@ -59,6 +65,7 @@ class SleepTrackingService : Service(), KoinComponent {
         if (intent == null) {
             if (trackingManager.trackingState.value.isTracking) {
                 startForeground(NOTIFICATION_ID, createNotification("수면 측정 중.."))
+                acquireWakeLock()
             }
             return START_STICKY
         }
@@ -66,21 +73,44 @@ class SleepTrackingService : Service(), KoinComponent {
         when (intent.action) {
             ACTION_START -> {
                 startForeground(NOTIFICATION_ID, createNotification("수면 측정 중.."))
+                Log.d("SleepTrackingService", "startForeground 완료")
+                acquireWakeLock()
+
                 if (!trackingManager.trackingState.value.isTracking) {
                     val sessionId = intent.getStringExtra(EXTRA_SESSION_ID) ?: return START_STICKY
                     val duration = intent.getIntExtra(EXTRA_DURATION, 480)
                     val musicTitle = intent.getStringExtra(EXTRA_MUSIC_TITLE)
-                    trackingManager.start(sessionId, duration, musicTitle)
+                    trackingManager.performStart(sessionId, duration, musicTitle)
                 }
             }
-            ACTION_FINISH -> {
-                trackingManager.finish()
-            }
-            ACTION_DISCARD -> {
-                trackingManager.discard()
-            }
+            ACTION_FINISH -> trackingManager.performFinish()
+            ACTION_DISCARD -> trackingManager.performDiscard()
         }
         return START_STICKY
+    }
+
+    override fun onDestroy() {
+        releaseWakeLock()
+        super.onDestroy()
+        Log.d("SleepTrackingService", "onDestroy 호출됨, pid=${android.os.Process.myPid()}")
+    }
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        if (!trackingManager.trackingState.value.isTracking) {
+            stopSelf()
+        }
+    }
+    private fun acquireWakeLock() {
+        if(wakeLock?.isHeld == true) return
+        val pm = getSystemService(PowerManager::class.java)
+        wakeLock = pm.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "SleepTrackingService:WakeLock"
+        ).also { it.acquire(8*60*60*1000L) }
+    }
+    private fun releaseWakeLock() {
+        if(wakeLock?.isHeld == true) wakeLock?.release()
+        wakeLock = null
     }
 
     private fun createNotificationChannel() {

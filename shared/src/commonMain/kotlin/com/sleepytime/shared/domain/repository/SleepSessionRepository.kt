@@ -3,8 +3,6 @@ package com.sleepytime.shared.domain.repository
 import com.sleepytime.shared.domain.model.EnvironmentFeature
 import com.sleepytime.shared.domain.model.SleepAnalysis
 import com.sleepytime.shared.domain.model.SleepSession
-import kotlinx.coroutines.flow.Flow
-import kotlinx.datetime.LocalDate
 
 interface SleepSessionRepository {
     suspend fun initializeModel(): Result<Unit>
@@ -13,7 +11,6 @@ interface SleepSessionRepository {
         environmentFeature: EnvironmentFeature?
     ): Result<SleepAnalysis>
     suspend fun analyzeSleepSession(
-        sensorData: List<List<FloatArray>>,
         timestamps: List<Long>,
         environmentFeatures: List<EnvironmentFeature> = emptyList(),
         sessionId: String

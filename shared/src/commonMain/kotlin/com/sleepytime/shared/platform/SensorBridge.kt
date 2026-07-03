@@ -1,15 +1,15 @@
 package com.sleepytime.shared.platform
 
+import com.sleepytime.shared.util.StatsUtil
 import kotlinx.coroutines.CoroutineScope
 
-/**
- * Interface to bridge sensor data collection with tracking services.
- */
-expect class SensorBridge {
+expect class SensorBridge() {
+    val latestHeartRateStats: StatsUtil.RollingStats
+    val latestNoiseStats: StatsUtil.RollingStats
+
+    // 센서 제어 함수들
     fun startHeartRateSensor(scope: CoroutineScope)
     fun stopHeartRateSensor()
     fun startNoiseSensor(scope: CoroutineScope)
     fun stopNoiseSensor()
-    fun getHeartRate(): Float
-    fun getNoiseLevel(): Float
 }

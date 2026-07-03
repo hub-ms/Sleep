@@ -110,16 +110,12 @@ val EnvironmentLegends = mapOf(
 fun SleepEnvironmentContent(
     avgHeartRate: Float,
     avgNoise: Float,
-    avgTemperature: Float,
-    avgHumidity: Float,
     environmentHistory: List<EnvironmentFeature.Snapshot>,
     onBack: () -> Unit
 ) {
     val graphItems = listOf(
         EnvironmentGraphItem("심박수", Res.drawable.ic_heart_rate, { it.heartRate }, "bpm", avgHeartRate, 40f, 120f, 5),
         EnvironmentGraphItem("소음", Res.drawable.ic_noise, { it.noise }, "dB", avgNoise, 0f, 80f, 5),
-        EnvironmentGraphItem("온도", Res.drawable.ic_temperature, { it.temperature }, "°C", avgTemperature, 10f, 30f, 5),
-        EnvironmentGraphItem("습도", Res.drawable.ic_humidity, { it.humidity }, "%", avgHumidity, 20f, 100f, 5),
     )
 
     Scaffold(
@@ -294,11 +290,9 @@ fun SleepEnvironmentScreenPreview() {
         SleepEnvironmentContent(
             avgHeartRate = 65f,
             avgNoise = 35f,
-            avgTemperature = 22f,
-            avgHumidity = 50f,
             environmentHistory = listOf(
-                EnvironmentFeature.Snapshot(22f, 50f, 65f, 35f),
-                EnvironmentFeature.Snapshot(23f, 52f, 68f, 38f)
+                EnvironmentFeature.Snapshot(22f, 50f),
+                EnvironmentFeature.Snapshot(23f, 52f)
             ),
             onBack = {}
         )

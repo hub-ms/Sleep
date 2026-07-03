@@ -16,14 +16,10 @@ fun SleepSessionResponse.toDomain() = SleepSession(
         stats = EnvironmentFeature.Statistics(
             heartRate = Stats(),
             noise = Stats(),
-            temperature = Stats(),
-            humidity = Stats()
         ),
         flags = EnvironmentFeature.Flag(
             isHeartRateAnomaly = false,
             isNoiseDanger = false,
-            isTempExtreme = false,
-            isHumidityExtreme = false
         ),
     ),
     duration = SleepSession.Duration(

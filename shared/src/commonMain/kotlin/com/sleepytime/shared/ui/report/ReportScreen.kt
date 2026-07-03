@@ -232,7 +232,7 @@ fun ReportContent(
     onCalendarToggleClicked: (Boolean) -> Unit,
     onReportModeSelected: (ReportTab) -> Unit,
     onDateSelected: (LocalDate) -> Unit,
-    onNavigateToSleepEnvironment: (List<EnvironmentFeature.Snapshot>, Float, Float, Float, Float) -> Unit,
+    onNavigateToSleepEnvironment: (List<EnvironmentFeature.Snapshot>, Float, Float) -> Unit,
     onPrevMonthClicked: (LocalDate) -> Unit,
     onNextMonthClicked: (LocalDate) -> Unit
 ) {
@@ -599,7 +599,7 @@ fun DailyContent(
     activeTooltipDate: LocalDate?,
     baseSectionStyle: SpanStyle,
     baseBodyStyle: SpanStyle,
-    onNavigateToSleepEnvironment: (List<EnvironmentFeature.Snapshot>, Float, Float, Float, Float) -> Unit
+    onNavigateToSleepEnvironment: (List<EnvironmentFeature.Snapshot>, Float, Float) -> Unit
 ) {
     var selectedStage by remember { mutableStateOf<SleepStageType?>(null) }
     val finalReportData = reportState.reportData
@@ -1262,7 +1262,7 @@ fun SleepTimeLineChart(
 @Composable
 fun EnvironmentInsightCard(
     reportState: ReportContract.State,
-    onNavigateToSleepEnvironment: (List<EnvironmentFeature.Snapshot>, Float, Float, Float, Float) -> Unit
+    onNavigateToSleepEnvironment: (List<EnvironmentFeature.Snapshot>, Float, Float) -> Unit
 ) {
     val finalReportData = remember(reportState.isPreview, reportState.date) {
         if (reportState.isPreview) {
@@ -1279,8 +1279,6 @@ fun EnvironmentInsightCard(
                     finalReportData.environmentHistory,
                     finalReportData.avgHeartRate,
                     finalReportData.avgNoise,
-                    finalReportData.avgTemperature,
-                    finalReportData.avgHumidity
                 )
             },
         shape = RoundedCornerShape(16.dp),
@@ -1827,7 +1825,7 @@ fun ReportScreenPreview() {
             onCalendarToggleClicked = {_ ->},
             onReportModeSelected = {},
             onDateSelected = {},
-            onNavigateToSleepEnvironment = { _, _, _, _, _ -> },
+            onNavigateToSleepEnvironment = { _, _, _ -> },
             onPrevMonthClicked = {},
             onNextMonthClicked = {}
         )

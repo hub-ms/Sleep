@@ -18,8 +18,6 @@ import com.sleepytime.shared.platform.AndroidVolumeObserver
 import com.sleepytime.shared.platform.AndroidFileSaver
 import com.sleepytime.shared.platform.AndroidSleepMeasureManager
 import com.sleepytime.shared.platform.CsvExporter
-import com.sleepytime.shared.platform.DeviceSensorProvider
-import com.sleepytime.shared.platform.LocationProvider
 import com.sleepytime.shared.platform.SleepMeasureManager
 import com.sleepytime.shared.platform.AndroidAudioSystem
 import com.sleepytime.shared.platform.DatabaseDriverFactory
@@ -28,10 +26,7 @@ import com.sleepytime.shared.data.local.repository.AuthRepositoryImpl
 import com.sleepytime.shared.data.local.repository.SleepMusicRepositoryImpl
 import com.sleepytime.shared.data.local.repository.SleepSessionRepositoryImpl
 import com.sleepytime.shared.data.local.repository.TokenRepositoryImpl
-import com.sleepytime.shared.data.local.repository.WeatherRepositoryImpl
 import com.sleepytime.shared.data.remote.api.AuthApi
-import com.sleepytime.shared.platform.HeartRateMonitor
-import com.sleepytime.shared.platform.NoiseDetector
 import com.sleepytime.shared.platform.SensorBridge
 import com.sleepytime.shared.platform.AesGcmSecureStorage
 import com.sleepytime.shared.platform.AndroidTrackingManager
@@ -44,6 +39,7 @@ import com.sleepytime.shared.platform.MusicPlayer
 import com.sleepytime.shared.platform.SocialAuthService
 import com.sleepytime.shared.ui.tracking.SleepAnalyzer
 import com.sleepytime.shared.domain.repository.*
+import com.sleepytime.shared.platform.ActiveSessionStore
 import com.sleepytime.shared.util.JwtLocalParser
 import com.sleepytime.shared.platform.SecureStorage
 import com.sleepytime.shared.platform.TrackingManager
@@ -106,6 +102,7 @@ val androidModule = module {
             }
         }
     }
+    single { ActiveSessionStore(get<ObservableSettings>()) }
     single<SleepDatabase> {
         runBlocking {
             DatabaseHolder.getInstance(get<DatabaseDriverFactory>())
@@ -115,12 +112,11 @@ val androidModule = module {
     single<SocialAuthService> { AndroidSocialAuthService(get()) }
     single { GridCoordinateConverter() }
     single { WeatherCorrectionCalculator() }
-    single<SleepMeasureManager> { AndroidSleepMeasureManager(get(), get(), get()) }
+    single<SleepMeasureManager> { AndroidSleepMeasureManager(get()) }
     single { CsvExporter(get()) }
     single<FileSaver> { AndroidFileSaver(androidContext()) }
     single { SleepAnalyzer(get()) }
     single { SleepStageClassifier() }
-    single { SensorBridge(androidContext(), get(), get()) }
 
 
     // ── 보안 & 설정 ─────────────────────────────────────────
@@ -140,29 +136,11 @@ val androidModule = module {
 
     // ── 플랫폼 서비스 ────────────────────────────────────────
     single<SocialAuthManager> { SocialAuthManager(androidContext()) }
-    single<LocationProvider> {
-        LocationProvider(fusedClient = get(), context = androidContext())
-    }
-    single { DeviceSensorProvider(androidContext()) }
-    single { HeartRateMonitor() }
-    single { NoiseDetector() }
-
     // ── API ─────────────────────────────────────────────────
     single { AuthApi(get()) }
 
     // ── Repository ──────────────────────────────────────────
     single<TokenRepository> { TokenRepositoryImpl(get(), get(), get()) }
-    single<WeatherRepository> {
-        WeatherRepositoryImpl(
-            httpClient = get(),
-            settings = get(),
-            locationProvider = get(),
-            sensorProvider = get(),
-            gridConverter = get(),
-            calculator = get(),
-            kmaServiceKey = get()
-        )
-    }
     single<MusicPlayer> { AndroidMusicPlayer() }
     single<AuthRepository> {
         AuthRepositoryImpl(
@@ -183,12 +161,10 @@ val androidModule = module {
             classifier = get(),
             measureManager = get(),
             sleepSessionRepository = get(),
-            weatherRepository = get(),
-            heartRateMonitor = get(),
-            noiseDetector = get(),
             sensorBridge = get(),
             musicPlayer = get(),
-            csvExporter = get()
+            csvExporter = get(),
+            activeSessionStore = get()
         )
     } bind TrackingManager::class
 }

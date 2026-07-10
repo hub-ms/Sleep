@@ -4,18 +4,15 @@ import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import com.sleepytime.shared.domain.model.SleepMetrics
 import com.sleepytime.shared.domain.model.SleepSession
-import com.sleepytime.shared.domain.model.SleepStage
 import com.sleepytime.shared.domain.model.User
 import com.sleepytime.shared.domain.repository.AuthRepository
 import com.sleepytime.shared.domain.repository.SleepSessionRepository
-import com.sleepytime.shared.enum_.ReportTab
+import com.sleepytime.shared.enum_.ChartTab
 import com.sleepytime.shared.ui.auth.AuthContract
 import com.sleepytime.shared.ui.tracking.TrackingContract
 import com.sleepytime.shared.util.SleepSessionUtil.toReportData
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
@@ -43,11 +40,8 @@ class ReportViewModel(
     private val initialDate = Clock.System.todayIn(TimeZone.currentSystemDefault())
     private val _state = MutableStateFlow(
         ReportContract.State(
-            selectedTab = ReportTab.WEEKLY,
-            date = initialDate,
-            isPreview = true,
-            sessionDates = emptySet(),
-            reportData = DemoReportFactory.createPreviewData(0L, initialDate)
+            reportData = DemoReportFactory.createPreviewData(0L, initialDate),
+            weeklyChartData = DemoReportFactory.createPreviewData(0L, initialDate)
         )
     )
     val state = _state.asStateFlow()
@@ -56,18 +50,11 @@ class ReportViewModel(
     val trackingState = _trackingState.asStateFlow()
 
     private val _authState = MutableStateFlow(AuthContract.State())
-    val authState = _authState.asStateFlow()
 
     private val currentUser: User?
         get() = _authState.value.user
 
-    private val _effect = MutableSharedFlow<ReportContract.Effect>()
-    val effect = _effect.asSharedFlow()
-
     private val _intentChannel = Channel<ReportContract.Intent>(Channel.BUFFERED)
-
-    private val _sleepStageHistory = MutableStateFlow<List<SleepStage>>(emptyList())
-    val sleepStageHistory = _sleepStageHistory.asStateFlow()
 
     init {
         screenModelScope.launch {
@@ -80,7 +67,7 @@ class ReportViewModel(
                     it.copy(user = user)
                 }
             }
-            handleSelectTab(_state.value.selectedTab)
+            loadData(_state.value.date)
         }
     }
 
@@ -92,70 +79,11 @@ class ReportViewModel(
 
     private fun processIntent(intent: ReportContract.Intent) {
         when (intent) {
-            is ReportContract.Intent.SelectReportMode -> handleSelectTab(intent.tab)
-            is ReportContract.Intent.SleepEnvironmentClicked -> {
-                screenModelScope.launch {
-                    _effect.emit(ReportContract.Effect.NavigateToSleepEnvironment)
-                }
-            }
-            is ReportContract.Intent.SelectDate -> {
-                val newDate = intent.date
-                _state.update {
-                    it.copy(date = newDate)
-                }
-                val epochMs = newDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
-
-                when (_state.value.selectedTab) {
-                    ReportTab.DAILY -> loadReportByDate(epochMs)
-                    ReportTab.WEEKLY -> loadReportByWeek(epochMs)
-                    ReportTab.MONTHLY -> loadReportByMonth(epochMs)
-                }
-            }
+            is ReportContract.Intent.SelectChartMode -> handleChartTab(intent.chartTab)
+            is ReportContract.Intent.SelectDate -> loadData(intent.date)
             is ReportContract.Intent.LoadFinishedSession -> loadFinishedSession(intent.sessionId)
-            is ReportContract.Intent.PrevMonthClicked -> {
-                val currentStoredDate = _state.value.date
-
-                // 💡 사용자가 선택한 탭에 따라 감산 단위를 다르게 적용합니다.
-                val prevDate = when (_state.value.selectedTab) {
-                    ReportTab.DAILY -> currentStoredDate.minus(1, DateTimeUnit.DAY)
-                    ReportTab.WEEKLY -> currentStoredDate.minus(7, DateTimeUnit.DAY) // 주간 탭일 때는 1주일 전으로
-                    ReportTab.MONTHLY -> currentStoredDate.minus(1, DateTimeUnit.MONTH) // 월간 탭일 때는 1달 전으로
-                }
-
-                val newEpochMs = prevDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
-
-                _state.update {
-                    it.copy(date = prevDate)
-                }
-
-                when(_state.value.selectedTab) {
-                    ReportTab.DAILY -> loadReportByDate(newEpochMs)
-                    ReportTab.WEEKLY -> loadReportByWeek(newEpochMs)
-                    ReportTab.MONTHLY -> loadReportByMonth(newEpochMs)
-                }
-            }
-            is ReportContract.Intent.NextMonthClicked -> {
-                val currentStoredDate = _state.value.date
-
-                // 💡 사용자가 선택한 탭에 따라 가산 단위를 다르게 적용합니다.
-                val nextDate = when (_state.value.selectedTab) {
-                    ReportTab.DAILY -> currentStoredDate.plus(1, DateTimeUnit.DAY)
-                    ReportTab.WEEKLY -> currentStoredDate.plus(7, DateTimeUnit.DAY) // 주간 탭일 때는 1주일 후로
-                    ReportTab.MONTHLY -> currentStoredDate.plus(1, DateTimeUnit.MONTH) // 월간 탭일 때는 1달 후로
-                }
-
-                val newEpochMs = nextDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
-
-                _state.update {
-                    it.copy(date = nextDate)
-                }
-
-                when(_state.value.selectedTab) {
-                    ReportTab.DAILY -> loadReportByDate(newEpochMs)
-                    ReportTab.WEEKLY -> loadReportByWeek(newEpochMs)
-                    ReportTab.MONTHLY -> loadReportByMonth(newEpochMs)
-                }
-            }
+            is ReportContract.Intent.PrevMonthClicked -> loadData(_state.value.date.minus(1, DateTimeUnit.MONTH))
+            is ReportContract.Intent.NextMonthClicked -> loadData(_state.value.date.plus(1, DateTimeUnit.MONTH))
         }
     }
 
@@ -175,43 +103,36 @@ class ReportViewModel(
             }
         }
     }
-
-    private fun handleSelectTab(tab: ReportTab) {
-        val epochMs = _state.value.date.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
-        _state.update {
-            it.copy(
-                selectedTab = tab
-            )
-        }
-        when (tab) {
-            ReportTab.DAILY -> loadReportByDate(epochMs)
-            ReportTab.WEEKLY -> loadReportByWeek(epochMs)
-            ReportTab.MONTHLY -> loadReportByMonth(epochMs)
-        }
+    private fun handleChartTab(tab: ChartTab) {
+        _state.update { it.copy(selectedChartTab = tab) }
     }
-
-
-
-
-    private fun loadReportByDate(dateMilliseconds: Long) {
+    private fun loadData(targetDate: LocalDate) {
+        val epochMs = targetDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
+        loadDailyReport(epochMs, targetDate)
+        loadWeeklyChart(targetDate)
+    }
+    private fun loadDailyReport(dateMilliseconds: Long, targetDate: LocalDate) {
         screenModelScope.launch {
             val session = sleepSessionRepository.getSessionByDate(dateMilliseconds)
-            val targetDate = Instant.fromEpochMilliseconds(dateMilliseconds).toLocalDateTime(TimeZone.currentSystemDefault()).date
             val sessionDates = getActiveSessionDatesInMonth(targetDate)
+            val monthSessionsMap = getMonthSessionsMap(targetDate)
+            val monthScores = monthSessionsMap.mapValues { (_, s) -> s.sleepEfficiency }
 
             _state.update {
                 if (session == null) {
                     it.copy(
+                        date = targetDate,
                         reportData = DemoReportFactory.createPreviewData(
                             currentUser?.userId ?: 0L, targetDate
-                        ),
+                        ).copy(dailyScores = monthScores),
                         isPreview = true,
                         sessionDates = sessionDates
                     )
                 } else {
                     it.copy(
+                        date = targetDate,
                         reportData = session.toReportData(targetDate).copy(
-                            dailyScores = mapOf(targetDate to session.sleepEfficiency),
+                            dailyScores = monthScores + mapOf(targetDate to session.sleepEfficiency),
                             dailyBedTimes = mapOf(
                                 targetDate to Instant.fromEpochMilliseconds(session.date)
                                     .toLocalDateTime(TimeZone.currentSystemDefault())
@@ -232,53 +153,44 @@ class ReportViewModel(
             }
         }
     }
-    private fun loadReportByWeek(anchorEpochms: Long) {
+    private fun loadWeeklyChart(targetDate: LocalDate) {
         screenModelScope.launch {
-            val anchor = Instant.fromEpochMilliseconds(anchorEpochms)
-                .toLocalDateTime(TimeZone.currentSystemDefault()).date
-            val monday = anchor.minus((anchor.dayOfWeek.isoDayNumber - 1).toLong(), DateTimeUnit.DAY)
-            val sessionDates = getActiveSessionDatesInMonth(anchor)
+            val monday = targetDate.minus((targetDate.dayOfWeek.isoDayNumber - 1).toLong(), DateTimeUnit.DAY)
 
             val (reportData, sessions) = loadPeriodReportData(monday, 7)
-
-
             val finalReportData = if (sessions.isEmpty()) {
-                buildPreviewPeriodData(monday, 7, currentUser?.userId ?: 0L)
+                buildPreviewPeriodData(monday, currentUser?.userId ?: 0L)
             } else reportData
 
             _state.update {
                 it.copy(
-                    reportData = finalReportData,
-                    isPreview = sessions.isEmpty(),
-                    sessionDates = sessionDates
+                    weeklyChartData = finalReportData
                 )
             }
         }
     }
-    private fun loadReportByMonth(anchorEpochms: Long) {
-        screenModelScope.launch {
-            val anchor = Instant.fromEpochMilliseconds(anchorEpochms).toLocalDateTime(TimeZone.currentSystemDefault()).date
-            val firstDay = LocalDate(anchor.year, anchor.monthNumber, 1)
-            val totalDays = firstDay.plus(1, DateTimeUnit.MONTH)
-                .minus(1, DateTimeUnit.DAY).dayOfMonth
-            val sessionDates = getActiveSessionDatesInMonth(anchor)
-
-            val (reportData, sessions) = loadPeriodReportData(firstDay, totalDays)
-
-            val finalReportData = if (sessions.isEmpty()) {
-                buildPreviewPeriodData(firstDay, totalDays, currentUser?.userId ?: 0L)
-            } else reportData
-
-            _state.update {
-                it.copy(
-                    reportData = finalReportData,
-                    isPreview = sessions.isEmpty(),
-                    sessionDates = sessionDates
-                )
-            }
+    private suspend fun getActiveSessionDatesInMonth(targetDate: LocalDate): Set<LocalDate> {
+        val firstDay = LocalDate(targetDate.year, targetDate.monthNumber, 1)
+        val lastDay = firstDay.plus(1, DateTimeUnit.MONTH)
+        val monthSessions = sleepSessionRepository.getSessionByDateRange(
+            firstDay.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds(),
+            lastDay.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
+        )
+        return monthSessions.map {
+            Instant.fromEpochMilliseconds(it.date).toLocalDateTime(TimeZone.currentSystemDefault()).date
+        }.toSet()
+    }
+    private suspend fun getMonthSessionsMap(targetDate: LocalDate): Map<LocalDate, SleepSession> {
+        val firstDay = LocalDate(targetDate.year, targetDate.monthNumber, 1)
+        val lastDay = firstDay.plus(1, DateTimeUnit.MONTH)
+        val tz = TimeZone.currentSystemDefault()
+        return sleepSessionRepository.getSessionByDateRange(
+            firstDay.atStartOfDayIn(tz).toEpochMilliseconds(),
+            lastDay.atStartOfDayIn(tz).toEpochMilliseconds()
+        ).associateBy {
+            Instant.fromEpochMilliseconds(it.date).toLocalDateTime(tz).date
         }
     }
-
     private suspend fun loadPeriodReportData(
         startDate: LocalDate,
         totalDays: Int
@@ -416,10 +328,9 @@ class ReportViewModel(
     }
     private fun buildPreviewPeriodData(
         startDate: LocalDate,
-        totalDays: Int,
         userId: Long
     ): ReportContract.ReportData {
-        val dailyDataList = (0 until totalDays).map { i ->
+        val dailyDataList = (0 until 7).map { i ->
             val date = startDate.plus(i, DateTimeUnit.DAY)
             date to DemoReportFactory.createPreviewData(userId, date)
         }
@@ -444,7 +355,6 @@ class ReportViewModel(
         val avgLightMinutes = dailyDataList.map { it.second.lightMinutes }.average()
         val avgDeepMinutes = dailyDataList.map { it.second.deepMinutes }.average()
         val avgRemMinutes = dailyDataList.map { it.second.remMinutes }.average()
-        val avgWakeCount = dailyDataList.map { it.second.wakeCount }.average().toInt()
 
         val avgWakeCountScore = dailyDataList.map { it.second.sleepMetrics.wakeCountScore }.average()
         val avgContinuityScore = dailyDataList.map { it.second.sleepMetrics.continuityScore }.average()
@@ -481,19 +391,5 @@ class ReportViewModel(
                 wakeCount = 0
             )
         )
-    }
-    private suspend fun getActiveSessionDatesInMonth(targetDate: LocalDate): Set<LocalDate> {
-        val firstDay = LocalDate(targetDate.year, targetDate.monthNumber, 1)
-        val lastDay = firstDay.plus(1, DateTimeUnit.MONTH)
-        val monthSessions = sleepSessionRepository.getSessionByDateRange(
-            firstDay.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds(),
-            lastDay.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
-        )
-        return monthSessions.map {
-            Instant.fromEpochMilliseconds(it.date).toLocalDateTime(TimeZone.currentSystemDefault()).date
-        }.toSet()
-    }
-    fun updateTrackingState(state: TrackingContract.State) {
-        _trackingState.value = state
     }
 }

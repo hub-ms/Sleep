@@ -55,7 +55,7 @@ class AuthViewModel(
     init {
         // 1. 온보딩 여부에 따른 초기 목적지 판단
         screenModelScope.launch {
-            _startDestination.value = if (settings.getBoolean(FIRST_LAUNCH, true)) OnboardingScreen else HomeScreen
+            _startDestination.value = if (settings.getBoolean(FIRST_LAUNCH, true)) OnboardingScreen else HomeScreen()
         }
 
         // 2. 단일 인텐트 파이프라인 collect

@@ -101,7 +101,7 @@ class SleepSessionRepositoryImpl(
             isSessionAnalyzing = false
         }
     }
-    private fun calculateEfficiency(metrics: SleepMetrics, features: List<EnvironmentFeature>): Int =
+    fun calculateEfficiency(metrics: SleepMetrics, features: List<EnvironmentFeature>): Int =
         metrics.toEfficiencyScore(
             isHeartRateAnomaly = features.any { it.flag.isHeartRateAnomaly },
             isNoiseDanger = features.any { it.flag.isNoiseDanger },

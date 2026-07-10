@@ -60,13 +60,14 @@ import com.sleepytime.shared.ui.report.ReportContract
 import com.sleepytime.shared.ui.report.ScoreDonutChart
 import com.sleepytime.shared.ui.report.SleepStageColors
 import com.sleepytime.shared.ui.report.StageBarChart
-import com.sleepytime.shared.ui.report.SummaryCard
 import com.sleepytime.shared.ui.report.rememberSleepTimeStyles
 import com.sleepytime.shared.ui.report.sleepStageColors
 import com.sleepytime.shared.ui.report.stageName
 import com.sleepytime.shared.ui.report.stageTypes
 import com.sleepytime.shared.ui.report.toAnnotatedString
 import com.sleepytime.shared.ui.alarm.AlarmTopStatusSection
+import com.sleepytime.shared.ui.component.EnvironmentDataRow
+import com.sleepytime.shared.ui.component.EnvironmentDisplayMode
 import com.sleepytime.shared.ui.theme.SleepAppTheme
 import com.sleepytime.shared.ui.theme.bodyText
 import com.sleepytime.shared.ui.theme.caption
@@ -88,7 +89,6 @@ data class TabItem(
 )
 
 data class EnvironmentStatus(
-    val statusText: String,
     val primaryColor: Color,
 )
 
@@ -167,28 +167,22 @@ fun SleepSummaryCard(
         Triple(SleepStageType.DEEP, finalReportData.deepMinutes.roundToLong(), sleepStageColors[SleepStageType.DEEP]!!),
         Triple(SleepStageType.REM, finalReportData.remMinutes.roundToLong(), sleepStageColors[SleepStageType.REM]!!),
     )
-    val latencyMinutes = if (reportState.isPreview) finalReportData.dailyLatencyMinutes[targetDate]?.toLong() ?: 0L
-    else finalReportData.sleepLatencyMinutes.toLong()
+    val rawScore = finalReportData.dailyScores[targetDate] ?: finalReportData.sleepScore
+    val bedTime = finalReportData.dailyBedTimes[targetDate] ?: finalReportData.bedTime
+    val wakeTime = finalReportData.dailyWakeTimes[targetDate] ?: finalReportData.wakeTime
+    val latencyMinutes = finalReportData.dailyLatencyMinutes[targetDate]?.toLong() ?: finalReportData.sleepLatencyMinutes.toLong()
 
-    val bedTime = if (reportState.isPreview) finalReportData.dailyBedTimes[targetDate]
-    else finalReportData.bedTime
+    val totalDurationText = formatSleepDuration(bedTime, wakeTime).toAnnotatedString(
+        baseSectionStyle.copy(color = Color.White), baseBodyStyle.copy(color = Color.White)
+    )
+    val latencyText = formatSleepDurationFromMillis(latencyMinutes).toAnnotatedString(
+        baseSectionStyle.copy(color = Color.White), baseBodyStyle.copy(color = Color.White)
+    )
+    val scoreText = "${rawScore}점".toAnnotatedString(
+        baseSectionStyle.copy(color = Color.White),
+        baseBodyStyle.copy(color = Color.White)
+    )
 
-    val wakeTime = if (reportState.isPreview) finalReportData.dailyWakeTimes[targetDate]
-    else finalReportData.wakeTime
-
-    val rawScore = if (reportState.isPreview) finalReportData.dailyScores[targetDate]
-    else finalReportData.sleepScore
-
-
-
-    val sleepLatencyAnnotatedText =
-        formatSleepDurationFromMillis(latencyMinutes).toAnnotatedString(
-            baseSectionStyle.copy(color = Color.White), baseBodyStyle.copy(color = Color.White)
-        )
-    val sleepDurationAnnotatedText =
-        formatSleepDuration(bedTime, wakeTime).toAnnotatedString(
-            baseSectionStyle.copy(color = Color.White), baseBodyStyle.copy(color = Color.White)
-        )
 
 
 
@@ -200,37 +194,18 @@ fun SleepSummaryCard(
             containerColor = MaterialTheme.colorScheme.primary.copy(0.2f)
         )
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
+        Box(
+            contentAlignment = Alignment.Center
         ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                SummaryCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    value = sleepLatencyAnnotatedText,
-                    label = "잠들기까지"
-                )
-                SummaryCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    value = sleepDurationAnnotatedText,
-                    label = "총 수면 시간"
-                )
-            }
-            Box(
-                modifier = Modifier.weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                ScoreDonutChart(
-                    rawScore = rawScore,
-                    baseSectionStyle = baseSectionStyle,
-                    baseBodyStyle = baseBodyStyle,
-                )
-            }
+            ScoreDonutChart(
+                rawScore = rawScore,
+                scoreText = scoreText,
+            )
         }
+        Text(
+            text = "잠들기까지 걸린 시간은 $latencyText,\n 총 수면 시간은 $totalDurationText",
+            color = Color.White,
+        )
         StageBarChart(
             sleepStageItems = sleepStageItems,
             selectedStage = selectedStage,
@@ -391,11 +366,11 @@ fun HomeScreenPreview() {
             musicState = MusicContract.State(),
             trackingState = TrackingContract.State(),
             reportState = ReportContract.State(
-                selectedTab = ReportTab.WEEKLY,
                 date = date,
                 isPreview = true,
                 sessionDates = emptySet(),
-                reportData = DemoReportFactory.createPreviewData(0L, date)
+                reportData = DemoReportFactory.createPreviewData(0L, date),
+                weeklyChartData = DemoReportFactory.createPreviewData(0L, date),
             ),
             elapsedSleepMusicSeconds = 0,
             onSleepSettingClicked = {},

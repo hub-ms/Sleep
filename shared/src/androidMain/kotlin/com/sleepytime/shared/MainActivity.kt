@@ -14,12 +14,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.UnstableApi
 import cafe.adriel.voyager.navigator.CurrentScreen
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.NavigatorDisposeBehavior
+import com.russhwolf.settings.ExperimentalSettingsApi
 import com.sleepytime.shared.ui.navigation.EmailAuthScreen
 import com.sleepytime.shared.ui.navigation.OnboardingScreen
 import com.sleepytime.shared.ui.navigation.TrackingScreen
@@ -40,7 +43,10 @@ import kotlin.random.Random
 import kotlin.time.ExperimentalTime
 
 @UnstableApi
-@OptIn(ExperimentalTime::class, ExperimentalMaterial3Api::class, ExperimentalCoroutinesApi::class)
+@ExperimentalTime
+@ExperimentalMaterial3Api
+@ExperimentalCoroutinesApi
+@ExperimentalSettingsApi
 class MainActivity : ComponentActivity() {
     companion object {
         var instance: WeakReference<Activity>? = null
@@ -54,12 +60,14 @@ class MainActivity : ComponentActivity() {
             generateAllSimulationFiles()
         }
         setContent {
+            val uiState by trackingViewModel.state.collectAsStateWithLifecycle()
             SleepAppTheme {
+
                 val startScreen = remember {
-                    if (trackingViewModel.state.value.isTracking) {
+                    if (uiState.isTracking) {
                         TrackingScreen(
-                            duration = trackingViewModel.state.value.duration,
-                            sessionId = trackingViewModel.state.value.sessionId
+                            duration = uiState.duration,
+                            sessionId = uiState.sessionId ?: ""
                         )
                     } else {
                         OnboardingScreen

@@ -43,6 +43,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import cafe.adriel.voyager.core.annotation.InternalVoyagerApi
+import cafe.adriel.voyager.navigator.internal.BackHandler
 import com.sleepytime.shared.domain.model.SleepMusic
 import com.sleepytime.shared.enum_.PredictionStageType
 import com.sleepytime.shared.enum_.SleepStageType
@@ -73,6 +75,7 @@ import kotlinx.datetime.LocalDateTime
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
+@OptIn(InternalVoyagerApi::class)
 @Composable
 @ExperimentalMaterial3Api
 fun TrackingContent(
@@ -88,9 +91,14 @@ fun TrackingContent(
 ) {
     val isAlarmTimePickerShow = remember { mutableStateOf(false) }
     val isShortTrackingWarningDialogShow = remember { mutableStateOf(false) }
+    val isBackPressDialogShow = remember { mutableStateOf(false) }
 
     val alarmHour = trackingState.trackingEndTime.hour
     val alarmMinute = trackingState.trackingEndTime.minute
+
+    BackHandler(enabled = true) {
+        isBackPressDialogShow.value = true
+    }
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
@@ -225,6 +233,58 @@ fun TrackingContent(
                             style = MaterialTheme.typography.caption,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            )
+        }
+        if (isBackPressDialogShow.value) {
+            AlertDialog(
+                onDismissRequest = { isBackPressDialogShow.value = false },
+                containerColor = MaterialTheme.colorScheme.background,
+                shape = RoundedCornerShape(24.dp),
+                title = {
+                    Text(
+                        text = "수면 측정 종료",
+                        style = MaterialTheme.typography.bodyText,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Text(
+                        text = "수면 측정을 종료하고 나가시겠습니까?",
+                        style = MaterialTheme.typography.caption,
+                        color = Color.White
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            isBackPressDialogShow.value = false
+                            // 여기서 시간을 체크하여 분기하거나 바로 종료 처리를 합니다.
+                            val elapsedMinutes = elapsedSleepTimeSeconds / 60
+                            if (elapsedMinutes < 5) {
+                                isShortTrackingWarningDialogShow.value = true
+                            } else {
+                                onFinishTracking()
+                            }
+                        }
+                    ) {
+                        Text(
+                            text = "종료하기",
+                            style = MaterialTheme.typography.caption,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { isBackPressDialogShow.value = false }) {
+                        Text(
+                            text = "취소",
+                            style = MaterialTheme.typography.caption,
+                            color = Color.White.copy(0.6f)
                         )
                     }
                 }

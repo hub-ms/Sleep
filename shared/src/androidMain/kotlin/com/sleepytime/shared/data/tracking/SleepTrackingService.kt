@@ -9,15 +9,23 @@ import android.content.Intent
 import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.core.app.NotificationCompat
 import androidx.media3.common.util.UnstableApi
+import com.russhwolf.settings.ExperimentalSettingsApi
 import com.sleepytime.shared.MainActivity
 import com.sleepytime.shared.R
 import com.sleepytime.shared.platform.AndroidTrackingManager
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import kotlin.time.ExperimentalTime
 
 @UnstableApi
+@ExperimentalMaterial3Api
+@ExperimentalTime
+@ExperimentalSettingsApi
+@ExperimentalCoroutinesApi
 class SleepTrackingService : Service(), KoinComponent {
     private val trackingManager: AndroidTrackingManager by inject()
     private val notificationManager by lazy {

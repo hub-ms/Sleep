@@ -2,6 +2,8 @@ package com.sleepytime.shared
 
 import android.app.Application
 import android.util.Log
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.media3.common.util.UnstableApi
 import com.kakao.sdk.common.KakaoSdk
 import com.russhwolf.settings.ExperimentalSettingsApi
 import com.sleepytime.shared.di.androidModule
@@ -15,10 +17,11 @@ import org.koin.core.annotation.KoinExperimentalAPI
 import org.koin.core.context.startKoin
 import kotlin.time.ExperimentalTime
 
+@UnstableApi
+@ExperimentalMaterial3Api
 @ExperimentalTime
 @ExperimentalSettingsApi
 @ExperimentalCoroutinesApi
-@KoinExperimentalAPI
 class SleepApp : Application() {
     override fun onCreate() {
         super.onCreate()

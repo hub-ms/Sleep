@@ -17,6 +17,9 @@ data class SleepSessionResponse(
     @SerialName("sleepEfficiency") val sleepEfficiency: Int,
     @SerialName("wakeCount") val wakeCount: Int,
 
+    @SerialName("heartRateStats") val heartRateStats: MetricStatsResponse? = null,
+    @SerialName("noiseStats") val noiseStats: MetricStatsResponse? = null,
+
     @SerialName("createdAt") val createdAt: Long,
     @SerialName("updatedAt") val updatedAt: Long
 )

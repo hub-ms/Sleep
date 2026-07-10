@@ -3,6 +3,7 @@ package com.sleepytime.shared.platform
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.media3.common.util.UnstableApi
@@ -13,19 +14,26 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.OAuthCredential
 import com.google.firebase.auth.OAuthProvider
 import com.kakao.sdk.user.UserApiClient
+import com.russhwolf.settings.ExperimentalSettingsApi
 import com.sleepytime.shared.BuildConfig
 import com.sleepytime.shared.MainActivity
 import io.github.aakira.napier.Napier
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlin.time.ExperimentalTime
 
 @UnstableApi
+@ExperimentalMaterial3Api
+@ExperimentalTime
+@ExperimentalSettingsApi
+@ExperimentalCoroutinesApi
 actual class SocialAuthManager(private val context: Context) {
     actual suspend fun getGoogleToken(): String? = runCatching {
         val activity = context.findActivity()
             ?: throw IllegalArgumentException("Activity context is required")
-        val credentialManager = CredentialManager.Companion.create(activity)
+        val credentialManager = CredentialManager.create(activity)
 
         val googleIdOption = GetGoogleIdOption.Builder()
             .setServerClientId(BuildConfig.GOOGLE_OAUTH_CLIENT_ID)
@@ -37,7 +45,7 @@ actual class SocialAuthManager(private val context: Context) {
             .build()
 
         val result = credentialManager.getCredential(activity, request)
-        GoogleIdTokenCredential.Companion.createFrom(result.credential.data).idToken
+        GoogleIdTokenCredential.createFrom(result.credential.data).idToken
     }.getOrNull()
 
     actual suspend fun getKakaoToken(): String? = suspendCancellableCoroutine { cont ->

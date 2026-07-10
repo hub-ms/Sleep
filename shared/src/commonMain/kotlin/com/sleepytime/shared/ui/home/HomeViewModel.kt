@@ -21,10 +21,8 @@ import com.sleepytime.shared.ui.environment.EnvironmentContract
 import com.sleepytime.shared.ui.report.DemoReportFactory
 import com.sleepytime.shared.ui.report.ReportContract
 import com.sleepytime.shared.util.SleepSessionUtil.toReportData
-import com.sleepytime.shared.domain.model.WeatherState
 import io.github.aakira.napier.Napier
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -43,7 +41,6 @@ import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.todayIn
-import org.jetbrains.compose.resources.stringResource
 
 @ExperimentalSettingsApi
 class HomeViewModel(
@@ -64,11 +61,11 @@ class HomeViewModel(
 
     private val _reportState = MutableStateFlow(
         ReportContract.State(
-            selectedTab = ReportTab.WEEKLY,
             date = yesterday,
             isPreview = true,
             sessionDates = emptySet(),
-            reportData = DemoReportFactory.createPreviewData(0L, yesterday)
+            reportData = DemoReportFactory.createPreviewData(0L, yesterday),
+            weeklyChartData = DemoReportFactory.createPreviewData(0L, yesterday)
         )
     )
 

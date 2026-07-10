@@ -57,7 +57,7 @@ object DateTimeUtil {
             else -> ""
         }
 
-        return "${year}년 ${month}월 ${day}일 ${weekDay}요일"
+        return "${year}.${month.pad()}.${day.pad()}(${weekDay})"
     }
     fun formatCalendarMonth(date: LocalDate): String {
         val year = date.year

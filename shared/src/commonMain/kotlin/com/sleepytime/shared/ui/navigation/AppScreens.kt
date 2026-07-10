@@ -2,7 +2,15 @@ package com.sleepytime.shared.ui.navigation// navigation/AppScreens.kt
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -13,10 +21,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.russhwolf.settings.ExperimentalSettingsApi
 import com.sleepytime.shared.domain.model.EnvironmentFeature
 import com.sleepytime.shared.platform.EmailLauncher
 import com.sleepytime.shared.enum_.AuthProvider
@@ -65,6 +75,7 @@ import kotlin.time.ExperimentalTime
 @ExperimentalTime
 @ExperimentalCoroutinesApi
 @ExperimentalMaterial3Api
+@ExperimentalSettingsApi
 object OnboardingScreen : Screen {
     @Composable
     override fun Content() {
@@ -82,7 +93,7 @@ object OnboardingScreen : Screen {
         LaunchedEffect(Unit) {
             authViewModel.effect.collect { effect ->
                 when (effect) {
-                    is AuthContract.Effect.NavigateToHome -> navigator.replaceAll(HomeScreen)
+                    is AuthContract.Effect.NavigateToHome -> navigator.replaceAll(HomeScreen())
 
                     is AuthContract.Effect.NavigateToEmailAuth -> navigator.push(
                         EmailAuthScreen(
@@ -100,6 +111,7 @@ object OnboardingScreen : Screen {
 @ExperimentalTime
 @ExperimentalCoroutinesApi
 @ExperimentalMaterial3Api
+@ExperimentalSettingsApi
 data class EmailAuthScreen(
     val token: String? = null, val from: String? = null
 ) : Screen {
@@ -110,7 +122,7 @@ data class EmailAuthScreen(
         val authState by authViewModel.state.collectAsState()
         LaunchedEffect(Unit) {
             authViewModel.navigateToHomeEffect.collect {
-                navigator.replaceAll(HomeScreen)
+                navigator.replaceAll(HomeScreen())
             }
         }
         EmailAuthContent(
@@ -126,6 +138,7 @@ data class EmailAuthScreen(
 @ExperimentalTime
 @ExperimentalCoroutinesApi
 @ExperimentalMaterial3Api
+@ExperimentalSettingsApi
 object LoginBenefitScreen : Screen {
     @Composable
     override fun Content() {
@@ -134,7 +147,7 @@ object LoginBenefitScreen : Screen {
         LaunchedEffect(Unit) {
             authViewModel.effect.collect { effect ->
                 when (effect) {
-                    is AuthContract.Effect.NavigateToHome -> navigator.replaceAll(HomeScreen)
+                    is AuthContract.Effect.NavigateToHome -> navigator.replaceAll(HomeScreen())
 
                     is AuthContract.Effect.NavigateToEmailAuth -> navigator.push(
                         EmailAuthScreen(
@@ -206,6 +219,7 @@ object EmailManageScreen : Screen {
 @ExperimentalTime
 @ExperimentalCoroutinesApi
 @ExperimentalMaterial3Api
+@ExperimentalSettingsApi
 object WithdrawConfirmScreen : Screen {
     @Composable
     override fun Content() {
@@ -230,6 +244,8 @@ object WithdrawConfirmScreen : Screen {
 @ExperimentalTime
 @ExperimentalCoroutinesApi
 @ExperimentalMaterial3Api
+@ExperimentalSettingsApi
+
 object WithdrawLoadingScreen : Screen {
     @Composable
     override fun Content() {
@@ -245,6 +261,7 @@ object WithdrawLoadingScreen : Screen {
 @ExperimentalTime
 @ExperimentalCoroutinesApi
 @ExperimentalMaterial3Api
+@ExperimentalSettingsApi
 object WithdrawCompleteScreen : Screen {
     @Composable
     override fun Content() {
@@ -257,7 +274,11 @@ object WithdrawCompleteScreen : Screen {
 @ExperimentalTime
 @ExperimentalCoroutinesApi
 @ExperimentalMaterial3Api
-object HomeScreen : Screen {
+@ExperimentalSettingsApi
+data class HomeScreen(
+    val initialTab: String? = null,
+    val sessionId: String? = null
+) : Screen {
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
@@ -269,17 +290,25 @@ object HomeScreen : Screen {
         val trackingState by trackingViewModel.state.collectAsState()
         val reportViewModel = koinScreenModel<ReportViewModel>()
         val homeState by homeViewModel.state.collectAsState()
-
-        var isCalendarShow by remember { mutableStateOf(false) }
-
+        val scrollState = rememberScrollState()
+        LaunchedEffect(initialTab, sessionId) {
+            if (initialTab != null) {
+                homeViewModel.sendIntent(HomeContract.Intent.SelectBottomTab(initialTab))
+            }
+            if (sessionId != null) {
+                reportViewModel.sendIntent(ReportContract.Intent.LoadFinishedSession(sessionId))
+            }
+        }
         LaunchedEffect(Unit) {
             homeViewModel.effect.collect { effect ->
                 when (effect) {
                     is HomeContract.Effect.NavigateToSleepSetting -> navigator.push(
                         SleepSettingScreen
                     )
-
-                    is HomeContract.Effect.NavigateToReport -> navigator.push(ReportScreen(effect.sessionId))
+                    is HomeContract.Effect.NavigateToReport -> {
+                        homeViewModel.sendIntent(HomeContract.Intent.SelectBottomTab("리포트"))
+                        reportViewModel.sendIntent(ReportContract.Intent.LoadFinishedSession(effect.sessionId))
+                    }
                     is HomeContract.Effect.NavigateToSleepMusicSelection -> navigator.push(
                         SleepMusicSelectionScreen
                     )
@@ -304,28 +333,24 @@ object HomeScreen : Screen {
         }
 
         Column(
-            verticalArrangement = Arrangement.SpaceBetween,
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .padding(8.dp)
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .windowInsetsPadding(WindowInsets.systemBars),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Box(modifier = Modifier.weight(1f)) {
                 when (homeState.selectedTab) {
                     "리포트" -> {
-                        LaunchedEffect(trackingState) {
-                            reportViewModel.updateTrackingState(trackingState)
-                        }
                         ReportContent(
-                            user = authViewModel.state.collectAsState().value.user,
-                            authState = authViewModel.state.collectAsState().value,
                             trackingState = trackingState,
                             reportState = reportViewModel.state.collectAsState().value,
-                            sleepStageHistory = reportViewModel.sleepStageHistory.collectAsState().value,
-                            isCalendarShow = isCalendarShow,
-                            onCalendarToggleClicked = {
-                                isCalendarShow = !isCalendarShow
-                            },
-                            onReportModeSelected = {
+                            onChartModeSelected = {
                                 reportViewModel.sendIntent(
-                                    ReportContract.Intent.SelectReportMode(it)
+                                    ReportContract.Intent.SelectChartMode(it)
                                 )
                             },
                             onDateSelected = {
@@ -339,12 +364,8 @@ object HomeScreen : Screen {
                             onNextMonthClicked = {
                                 reportViewModel.sendIntent(ReportContract.Intent.NextMonthClicked(it))
                             },
-                            onNavigateToSleepEnvironment = { history, hr, noise ->
-                                navigator.push(SleepEnvironmentScreen(history, hr, noise))
-                            }
                         )
                     }
-
                     "마이페이지" -> SettingContent(
                         authViewModel = authViewModel,
                         onNavigateToLoginBenefit = { navigator.push(LoginBenefitScreen) },
@@ -391,6 +412,7 @@ object HomeScreen : Screen {
 @ExperimentalTime
 @ExperimentalCoroutinesApi
 @ExperimentalMaterial3Api
+@ExperimentalSettingsApi
 data class TrackingScreen(
     val duration: Int, val sessionId: String
 ) : Screen {
@@ -399,9 +421,10 @@ data class TrackingScreen(
         val navigator = LocalNavigator.currentOrThrow
         val trackingViewModel = koinScreenModel<TrackingViewModel>()
         val trackingState by trackingViewModel.state.collectAsState()
+
+        val homeViewModel = koinScreenModel<TrackingViewModel>()
         val reportViewModel = koinScreenModel<ReportViewModel>()
         val musicViewModel = koinScreenModel<MusicViewModel>()
-        val alarmViewModel = koinScreenModel<AlarmViewModel>()
 
         LaunchedEffect(trackingState.isFinished, trackingState.finishedSessionId) {
             val sessionId = trackingState.finishedSessionId
@@ -414,16 +437,21 @@ data class TrackingScreen(
             trackingViewModel.effect.collect { effect ->
                 when (effect) {
                     is TrackingContract.Effect.NavigateToReport -> {
-                        Napier.d("NavigateToReport")
-                        navigator.replace(ReportScreen(effect.sessionId))
+                        navigator.replaceAll(
+                            HomeScreen(
+                                initialTab = "리포트",
+                                sessionId = effect.sessionId
+                            )
+                        )
                     }
 
-                    is TrackingContract.Effect.NavigateToSleepMusicSelection -> navigator.push(
-                        SleepMusicSelectionScreen
-                    )
-                    is TrackingContract.Effect.NavigateToHome -> navigator.push(
-                        HomeScreen
-                    )
+                    is TrackingContract.Effect.NavigateToSleepMusicSelection -> {
+                        navigator.push(SleepMusicSelectionScreen)
+                    }
+
+                    is TrackingContract.Effect.NavigateToHome -> {
+                        navigator.replaceAll(HomeScreen()) // 기본 홈으로 복귀
+                    }
                     else -> {}
                 }
             }
@@ -475,78 +503,6 @@ object SleepMusicSelectionScreen : Screen {
             onTabSelected = {},
             onMusicSelected = { musicViewModel.sendIntent(MusicContract.Intent.MusicSelected(it)) },
             onTogglePlay = { musicViewModel.sendIntent(MusicContract.Intent.ToggleSleepMusic) })
-    }
-}
-
-// ── 리포트 ────────────────────────────────────
-
-@ExperimentalTime
-@ExperimentalCoroutinesApi
-@ExperimentalMaterial3Api
-data class ReportScreen(val sessionId: String) : Screen {
-    @Composable
-    override fun Content() {
-        val navigator = LocalNavigator.currentOrThrow
-
-        val reportViewModel = koinScreenModel<ReportViewModel>()
-        val reportState by reportViewModel.state.collectAsState()
-
-        val trackingViewModel = koinScreenModel<TrackingViewModel>()
-        val trackingState by trackingViewModel.state.collectAsState()
-
-        val authViewModel = koinScreenModel<AuthViewModel>()
-        val authState by authViewModel.state.collectAsState()
-
-
-        val sleepStageHistory by reportViewModel.sleepStageHistory.collectAsState()
-
-        var isCalendarShow by remember { mutableStateOf(false) }
-
-        LaunchedEffect(Unit) {
-            reportViewModel.effect.collect { effect ->
-                when (effect) {
-                    is ReportContract.Effect.NavigateToSleepEnvironment -> {
-                        navigator.push(
-                            SleepEnvironmentScreen(
-                                reportState.reportData.environmentHistory,
-                                reportState.reportData.avgHeartRate,
-                                reportState.reportData.avgNoise,
-                            )
-                        )
-                    }
-                }
-            }
-        }
-        LaunchedEffect(trackingState) {
-            reportViewModel.updateTrackingState(trackingState)
-        }
-        ReportContent(
-            user = authViewModel.state.collectAsState().value.user,
-            trackingState = trackingState,
-            reportState = reportState,
-            authState = authState,
-            sleepStageHistory = sleepStageHistory,
-            isCalendarShow = isCalendarShow,
-            onCalendarToggleClicked = {
-                isCalendarShow = !isCalendarShow
-            },
-            onReportModeSelected = {
-                reportViewModel.sendIntent(ReportContract.Intent.SelectReportMode(it))
-            },
-            onDateSelected = {
-                reportViewModel.sendIntent(ReportContract.Intent.SelectDate(it))
-            },
-            onPrevMonthClicked = {
-                reportViewModel.sendIntent(ReportContract.Intent.PrevMonthClicked(it))
-            },
-            onNextMonthClicked = {
-                reportViewModel.sendIntent(ReportContract.Intent.NextMonthClicked(it))
-            },
-            onNavigateToSleepEnvironment = { history, hr, noise ->
-                navigator.push(SleepEnvironmentScreen(history, hr, noise))
-            },
-
-        )
     }
 }
 object SleepSettingScreen : Screen {
@@ -637,26 +593,6 @@ object AccountSettingScreen : Screen {
         )
     }
 }
-
-@ExperimentalTime
-@ExperimentalCoroutinesApi
-@ExperimentalMaterial3Api
-object SettingScreen : Screen {
-    @Composable
-    override fun Content() {
-        val navigator = LocalNavigator.currentOrThrow
-        val authViewModel = koinScreenModel<AuthViewModel>()
-        SettingContent(
-            authViewModel = authViewModel,
-            onNavigateToLoginBenefit = { navigator.push(LoginBenefitScreen) },
-            onNavigateToAccountSetting = { navigator.push(EmailManageScreen) },
-            onNavigateToNotification = { navigator.push(NotificationSettingScreen) },
-            onNavigateToSupport = { navigator.push(SupportScreen) },
-            onNavigateToAppInfo = { navigator.push(AppInfoScreen) },
-            onNavigateToLegalInfo = { navigator.push(DataSettingScreen) })
-    }
-}
-
 object NotificationSettingScreen : Screen {
     @Composable
     override fun Content() {

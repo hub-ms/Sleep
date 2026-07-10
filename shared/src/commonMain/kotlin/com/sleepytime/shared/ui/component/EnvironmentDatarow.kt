@@ -1,9 +1,11 @@
 package com.sleepytime.shared.ui.component
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -13,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -92,12 +95,6 @@ private fun EnvironmentDataRowContent(
 
     fun EnvironmentCategory.toStatus(): EnvironmentStatus = when (this) {
         EnvironmentCategory.HEART_RATE -> EnvironmentStatus(
-            statusText = when {
-                (values.heartRate==0f && mode is EnvironmentDisplayMode.Live) -> "측정 불가"
-                values.heartRate<40f -> "낮음"
-                values.heartRate in 40f..100f -> "정상"
-                else -> "높음"
-            },
             primaryColor = when {
                 values.heartRate == 0f -> Color.White.copy(0.4f)
                 values.isHeartRateAnomaly -> EnvironmentColors.ANOMALY
@@ -106,11 +103,6 @@ private fun EnvironmentDataRowContent(
         )
 
         EnvironmentCategory.NOISE -> EnvironmentStatus(
-            statusText = when {
-                values.noise == 0f -> "측정 불가"
-                values.noise < 40f -> "조용함"
-                else -> "시끄러움"
-            },
             primaryColor = when {
                 (values.noise == 0f && mode is EnvironmentDisplayMode.Live) -> Color.White.copy(0.4f)
                 values.isNoiseDanger -> EnvironmentColors.ANOMALY
@@ -118,86 +110,46 @@ private fun EnvironmentDataRowContent(
             }
         )
     }
-
-    val items = listOf(
-        Triple(
-            painterResource(Res.drawable.ic_heart_rate),
-            EnvironmentCategory.HEART_RATE,
-            buildAnnotatedString {
-                if (values.heartRate > 0f) {
-                    withStyle(baseSectionStyle) { append("${values.heartRate.toInt()}") }
-                    withStyle(baseBodyStyle) { append("bpm") }
-                } else {
-                    withStyle(baseBodyStyle) { append("--") }
-                }
-            }
-        ),
-        Triple(
-            painterResource(Res.drawable.ic_noise),
-            EnvironmentCategory.NOISE,
-            buildAnnotatedString {
-                if (values.noise > 0f) {
-                    withStyle(baseSectionStyle) { append("${values.noise.toInt()}") }
-                    withStyle(baseBodyStyle) { append("dB") }
-                } else {
-                    withStyle(baseBodyStyle) { append("--") }
-                }
-            }
-        )
+    val heartRateText = remember(values.heartRate) {
+        buildAnnotatedString {
+            withStyle(baseSectionStyle) { append("${values.heartRate.toInt()}") }
+            withStyle(baseBodyStyle) { append("bpm") }
+        }
+    }
+    val noiseText = remember(values.noise) {
+        buildAnnotatedString {
+            withStyle(baseSectionStyle) { append("${values.noise.toInt()}") }
+            withStyle(baseBodyStyle) { append("dB") }
+        }
+    }
+    val environmentItems = listOf(
+        Triple(painterResource(Res.drawable.ic_heart_rate), EnvironmentCategory.HEART_RATE, heartRateText),
+        Triple(painterResource(Res.drawable.ic_noise), EnvironmentCategory.NOISE, noiseText)
     )
-
     Column(
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier
+            .border(2.dp, Color.Green),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        items.forEach { (icon, label, value) ->
+        environmentItems.forEach { (icon, label, value) ->
             val status = label.toStatus()
             Row(
-                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        modifier = Modifier.size(24.dp),
-                        painter = icon,
-                        contentDescription = label.displayName,
-                        tint = status.primaryColor
-                    )
-                    Text(
-                        text = label.displayName,
-                        style = MaterialTheme.typography.caption,
-                        color = Color.White,
-                    )
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = value,
-                        style = MaterialTheme.typography.bodyHighlight,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Surface(
-                        shape = RoundedCornerShape(24.dp),
-                        color = status.primaryColor.copy(0.4f),
-                        border = BorderStroke(1.dp, status.primaryColor)
-                    ) {
-                        Text(
-                            modifier = Modifier.padding(4.dp),
-                            text = status.statusText,
-                            style = MaterialTheme.typography.caption,
-                            color = Color.White
-                        )
-                    }
-                }
+                Icon(
+                    modifier = Modifier.size(24.dp),
+                    painter = icon,
+                    contentDescription = label.displayName,
+                    tint = status.primaryColor
+                )
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodyHighlight,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                )
             }
         }
     }

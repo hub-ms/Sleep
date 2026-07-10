@@ -7,7 +7,6 @@ import com.sleepytime.shared.domain.repository.AuthRepository
 import com.sleepytime.shared.platform.SensorBridge
 import com.sleepytime.shared.platform.TrackingManager
 import com.sleepytime.shared.util.DateTimeUtil.tickerFlow
-import com.sleepytime.shared.util.IdGenerator
 import com.sleepytime.shared.util.IdGenerator.generateSessionId
 import io.github.aakira.napier.Napier
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -54,12 +53,11 @@ class TrackingViewModel(
         }
         screenModelScope.launch {
             trackingManager.trackingState
-                .map { it.isFinished }
+                .map { state -> if (state.isFinished) state.sessionId else null }
                 .distinctUntilChanged()
-                .filter { it }
-                .collect {
+                .filterNotNull()
+                .collect { sessionId ->
                     stopAllSensors()
-                    val sessionId = trackingManager.trackingState.value.sessionId
                     _effect.emit(TrackingContract.Effect.NavigateToReport(sessionId))
                 }
         }
@@ -88,14 +86,25 @@ class TrackingViewModel(
                     val currentUserType = authRepository.getUserContext()
                     val sessionId = generateSessionId(currentUserType)
 
+                    _state.update {
+                        it.copy(
+                            sessionId = sessionId
+                        )
+                    }
+
                     startAllSensors()
                     trackingManager.start(sessionId, intent.duration, intent.musicTitle)
                     _effect.emit(TrackingContract.Effect.NavigateToTracking(intent.duration, sessionId))
                 }
             }
             is TrackingContract.Intent.FinishTracking -> {
-                stopAllSensors()
-                trackingManager.finish()
+                screenModelScope.launch {
+                    stopAllSensors()
+                    trackingManager.finish()
+
+                    val currentSessionId = state.value.sessionId ?: ""
+                    _effect.emit(TrackingContract.Effect.NavigateToReport(sessionId = currentSessionId))
+                }
             }
             is TrackingContract.Intent.DiscardTracking -> {
                 screenModelScope.launch {

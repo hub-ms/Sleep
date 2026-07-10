@@ -3,8 +3,10 @@ package com.sleepytime.shared.platform
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.core.content.ContextCompat
 import androidx.media3.common.util.UnstableApi
+import com.russhwolf.settings.ExperimentalSettingsApi
 import com.sleepytime.shared.data.tracking.SleepTrackingService
 import com.sleepytime.shared.domain.model.EnvironmentFeature
 import com.sleepytime.shared.domain.model.SleepMetrics
@@ -15,6 +17,7 @@ import com.sleepytime.shared.ui.tracking.TrackingContract
 import io.github.aakira.napier.Napier
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -33,9 +36,14 @@ import kotlinx.datetime.toLocalDateTime
 import javax.inject.Inject
 import kotlin.onSuccess
 import kotlin.time.Duration.Companion.days
+import kotlin.time.ExperimentalTime
 
 
 @UnstableApi
+@ExperimentalMaterial3Api
+@ExperimentalTime
+@ExperimentalSettingsApi
+@ExperimentalCoroutinesApi
 class AndroidTrackingManager @Inject constructor(
     private val context: Context,
     private val classifier: SleepStageClassifier,
@@ -226,7 +234,7 @@ class AndroidTrackingManager @Inject constructor(
     }
     fun performDiscard() {
         scope.launch {
-            val sessionId = _trackingState.value.sessionId
+            val sessionId = _trackingState.value.sessionId ?: return@launch
 
             clear()
             if (sessionId.isNotEmpty()) {
@@ -321,7 +329,7 @@ class AndroidTrackingManager @Inject constructor(
         )
     }
     private suspend fun analyzeAndSave(capture: CaptureResult) {
-        val sessionId = _trackingState.value.sessionId
+        val sessionId = _trackingState.value.sessionId ?: return
 
         withContext(Dispatchers.Default) {
             sleepSessionRepository.analyzeSleepSession(

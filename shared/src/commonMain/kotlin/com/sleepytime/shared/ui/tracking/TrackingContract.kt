@@ -17,7 +17,7 @@ object TrackingContract {
 
         val elapsedSeconds: Int = 0,
         val duration: Int = 0,
-        val sessionId: String = "",
+        val sessionId: String? = null,
         val currentSleepStageType: PredictionStageType = PredictionStageType.AWAKE,
 
         val avgHeartRate: Float = 62f,

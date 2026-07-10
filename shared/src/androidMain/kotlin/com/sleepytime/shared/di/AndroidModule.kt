@@ -1,6 +1,7 @@
 package com.sleepytime.shared.di
 
 import android.content.Context
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.media3.common.util.UnstableApi
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
@@ -54,15 +55,20 @@ import io.ktor.client.plugins.logging.Logging
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.bind
 import org.koin.dsl.module
 import java.util.concurrent.TimeUnit
+import kotlin.time.ExperimentalTime
 
-@ExperimentalSettingsApi
 @UnstableApi
+@ExperimentalTime
+@ExperimentalMaterial3Api
+@ExperimentalCoroutinesApi
+@ExperimentalSettingsApi
 val androidModule = module {
 
     // ── 인프라 ──────────────────────────────────────────────

@@ -65,6 +65,7 @@ class AndroidSleepMeasureManager @Inject constructor(
     private val minuteNoise = mutableListOf<RawNoise>()
     private var lastBucketTimestamp: Long = 0
 
+    private val capturedSensorWindows = CopyOnWriteArrayList<List<FloatArray>>()
     private val capturedAggregates = CopyOnWriteArrayList<SleepMinuteAggregate>()
     private val capturedEnvironmentFeatures = CopyOnWriteArrayList<EnvironmentFeature>()
 
@@ -80,6 +81,7 @@ class AndroidSleepMeasureManager @Inject constructor(
         private const val HEART_RATE_ANOMALY_LOW_THRESHOLD = 40f
         private const val HEART_RATE_ANOMALY_HIGH_THRESHOLD = 110f
         private const val NOISE_DANGER_THRESHOLD = 60f
+        private const val WINDOW_BUCKET_MS = 30_000L
     }
     override var onWindowReady: ((List<FloatArray>) -> Unit)? = null
     override var onEnvironmentReady: ((EnvironmentFeature) -> Unit)? = null
@@ -101,7 +103,7 @@ class AndroidSleepMeasureManager @Inject constructor(
 
         measureScope?.launch {
             clearAllBuffers()
-            lastBucketTimestamp = (System.currentTimeMillis() / 60000) * 60000
+            lastBucketTimestamp = (System.currentTimeMillis() / WINDOW_BUCKET_MS) * WINDOW_BUCKET_MS
             registerAccelerometerListener()
             scheduleWindowUpdate()
         }
@@ -131,6 +133,7 @@ class AndroidSleepMeasureManager @Inject constructor(
             minuteNoise.clear()
             minuteHeartRate.clear()
 
+            capturedSensorWindows.clear()
             capturedAggregates.clear()
             capturedEnvironmentFeatures.clear()
         }
@@ -141,7 +144,7 @@ class AndroidSleepMeasureManager @Inject constructor(
                 delay(500) // 배터리 절약을 위한 500ms 폴링 주기
 
                 val now = System.currentTimeMillis()
-                val currentBucket = (now / 60000) * 60000
+                val currentBucket = (now / WINDOW_BUCKET_MS) * WINDOW_BUCKET_MS
 
                 // 1. Thread-safe 큐에서 임시로 데이터를 안전하게 먼저 꺼냄 (락 범위 최소화)
                 val newAccels = accelQueue.pollAll()
@@ -153,9 +156,7 @@ class AndroidSleepMeasureManager @Inject constructor(
                     minuteNoise.addAll(newNoises)
                     minuteHeartRate.addAll(newHeartRates)
 
-                    // 1분이 지나 버킷 타임스탬프가 변경되었을 때 압축 수행
                     if (currentBucket > lastBucketTimestamp) {
-                        // 내부에서 minute* 버퍼를 읽고 clear하므로 반드시 락 내부에서 실행되어야 함
                         processMinuteAggregate(lastBucketTimestamp)
                         lastBucketTimestamp = currentBucket
                     }
@@ -165,6 +166,12 @@ class AndroidSleepMeasureManager @Inject constructor(
     }
     private fun processMinuteAggregate(bucketTimestamp: Long) {
         if (minuteAccel.isEmpty() && minuteHeartRate.isEmpty() && minuteNoise.isEmpty()) return
+
+        val windowData = minuteAccel.map { it.values }
+        if (windowData.isNotEmpty()) {
+            capturedSensorWindows.add(windowData)
+            onWindowReady?.invoke(windowData)
+        }
 
         val hrStats = StatsUtil.computeStats(minuteHeartRate.map { it.bpm })
         val noiseStats = StatsUtil.computeStats(minuteNoise.map { it.db })
@@ -228,8 +235,16 @@ class AndroidSleepMeasureManager @Inject constructor(
     }
     private fun Float.ifEmpty(count: Int, default: Float): Float = if (count == 0) default else this
 
-    override fun getCapturedAggregates(): List<SleepMinuteAggregate> = capturedAggregates.toList()
-    override fun getCapturedSensorData(): List<List<FloatArray>> = emptyList()
+    override fun getCapturedSensorData(): List<List<FloatArray>> = capturedSensorWindows.toList()
     override fun getCapturedEnvironmentFeatures(): List<EnvironmentFeature> = capturedEnvironmentFeatures.toList()
     override fun getCapturedTimestamps(): List<Long> = capturedAggregates.map { it.timestampBucket }
+    override fun submitHeartRate(bpm: Float, timestamp: Long) {
+        if (!isMeasuring) return
+        heartRateQueue.addLast(RawHeartRate(bpm, timestamp))
+    }
+
+    override fun submitNoise(db: Float, timestamp: Long) {
+        if (!isMeasuring) return
+        noiseQueue.addLast(RawNoise(db, timestamp))
+    }
 }

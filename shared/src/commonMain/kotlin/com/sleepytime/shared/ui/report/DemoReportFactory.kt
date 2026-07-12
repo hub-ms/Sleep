@@ -9,9 +9,11 @@ import com.sleepytime.shared.domain.model.SleepStage
 import com.sleepytime.shared.domain.model.User
 import com.sleepytime.shared.enum_.SleepStageType
 import com.sleepytime.shared.util.IdGenerator.generateSessionId
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.minus
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlin.random.Random
@@ -251,6 +253,42 @@ object DemoReportFactory {
             dailyAvgHeartRates = mapOf(targetDate to avgHeartRate),
             dailyAvgNoises = mapOf(targetDate to avgNoise),
 
+        )
+    }
+    fun createWeeklyPreviewData(userId: Long = 0L, endDate: LocalDate): ReportContract.ReportData {
+        val dates = (0..6).map { offset -> endDate.minus(offset, DateTimeUnit.DAY) }.reversed()
+        return createRangePreviewData(userId = userId, dates = dates)
+    }
+    fun createRangePreviewData(userId: Long, dates: List<LocalDate>): ReportContract.ReportData {
+        require(dates.isNotEmpty()) { "dates는 비어있을 수 없습니다." }
+
+        val combinedDailyScores = mutableMapOf<LocalDate, Int>()
+        val combinedDailyBedTimes = mutableMapOf<LocalDate, LocalDateTime>()
+        val combinedDailyWakeTimes = mutableMapOf<LocalDate, LocalDateTime>()
+        val combinedDailyLatency = mutableMapOf<LocalDate, Double>()
+        val combinedDailyHeartRates = mutableMapOf<LocalDate, Float>()
+        val combinedDailyNoises = mutableMapOf<LocalDate, Float>()
+
+        for (date in dates) {
+            val singleDayData = createPreviewData(userId = userId, targetDate = date)
+            combinedDailyScores[date] = singleDayData.sleepScore
+            combinedDailyBedTimes[date] = singleDayData.bedTime
+            combinedDailyWakeTimes[date] = singleDayData.wakeTime
+            combinedDailyLatency[date] = singleDayData.sleepLatencyMinutes
+            combinedDailyHeartRates[date] = singleDayData.avgHeartRate
+            combinedDailyNoises[date] = singleDayData.avgNoise
+        }
+
+        // 대표 리포트는 range의 마지막 날짜(=오늘에 가장 가까운 날) 기준으로 삼음
+        val baseReport = createPreviewData(userId = userId, targetDate = dates.last())
+
+        return baseReport.copy(
+            dailyScores = combinedDailyScores,
+            dailyBedTimes = combinedDailyBedTimes,
+            dailyWakeTimes = combinedDailyWakeTimes,
+            dailyLatencyMinutes = combinedDailyLatency,
+            dailyAvgHeartRates = combinedDailyHeartRates,
+            dailyAvgNoises = combinedDailyNoises,
         )
     }
     private fun generateTimelineMatchedWithDurations(

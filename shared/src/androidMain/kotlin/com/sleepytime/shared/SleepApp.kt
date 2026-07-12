@@ -9,6 +9,7 @@ import com.russhwolf.settings.ExperimentalSettingsApi
 import com.sleepytime.shared.di.androidModule
 import com.sleepytime.shared.di.sharedModule
 import com.sleepytime.shared.platform.AndroidContextProvider
+import com.sleepytime.shared.util.AppLogger
 import io.github.aakira.napier.DebugAntilog
 import io.github.aakira.napier.Napier
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -25,6 +26,7 @@ import kotlin.time.ExperimentalTime
 class SleepApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        AppLogger.plant()
         Log.d("SleepApp", "onCreate 호출됨, pid=${android.os.Process.myPid()}")
         AndroidContextProvider.context = this
         KakaoSdk.init(this, BuildConfig.KAKAO_NATIVE_APP_KEY)

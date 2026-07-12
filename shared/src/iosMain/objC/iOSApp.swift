@@ -1,13 +1,19 @@
 import SwiftUI
 import ComposeApp
 
+import SwiftUI
+import shared
+
 @main
 struct iOSApp: App {
-	var body: some Scene {
-		WindowGroup {
-			ContentView()
-		}
-	}
+    init() {
+        AppLogger.shared.plant()   // Kotlin object의 init()은 Swift에서 예약어라 doInit 등으로 노출될 수 있음
+    }
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+        }
+    }
 }
 
 struct ContentView: View {

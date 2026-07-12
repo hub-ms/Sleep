@@ -67,7 +67,7 @@ class ReportViewModel(
                     it.copy(user = user)
                 }
             }
-            loadData(_state.value.date)
+            _intentChannel.send(ReportContract.Intent.SelectDate(_state.value.date))
         }
     }
 
@@ -94,13 +94,30 @@ class ReportViewModel(
             val targetDate = Instant.fromEpochMilliseconds(session.date)
                 .toLocalDateTime(TimeZone.currentSystemDefault()).date
 
+            val bedTime = Instant.fromEpochMilliseconds(session.date)
+                .toLocalDateTime(TimeZone.currentSystemDefault())
+            val totalMin = session.duration.awakeMinutes + session.duration.lightMinutes +
+                    session.duration.deepMinutes + session.duration.remMinutes
+            val wakeTime = Instant.fromEpochMilliseconds(session.date)
+                .plus(totalMin.toLong(), DateTimeUnit.MINUTE)
+                .toLocalDateTime(TimeZone.currentSystemDefault())
+
             _state.update {
                 it.copy(
-                    date       = targetDate,
-                    isPreview  = false,
-                    reportData = session.toReportData(targetDate),
+                    date = targetDate,
+                    isPreview = false,
+                    reportData = session.toReportData(targetDate).copy(
+                        dailyScores = mapOf(targetDate to session.sleepEfficiency),
+                        dailyBedTimes = mapOf(targetDate to bedTime),
+                        dailyWakeTimes = mapOf(targetDate to wakeTime),
+                        dailyLatencyMinutes = mapOf(targetDate to session.duration.sleepLatencyMinutes),
+                        dailyAvgHeartRates = mapOf(targetDate to session.environment.stats.heartRate.avg),
+                        dailyAvgNoises = mapOf(targetDate to session.environment.stats.noise.avg),
+                    ),
+                    sessionDates = it.sessionDates + targetDate,
                 )
             }
+            loadWeeklyChart(targetDate)
         }
     }
     private fun handleChartTab(tab: ChartTab) {
@@ -144,6 +161,15 @@ class ReportViewModel(
                                                 session.duration.deepMinutes + session.duration.remMinutes).toLong(),
                                         DateTimeUnit.MINUTE
                                     ).toLocalDateTime(TimeZone.currentSystemDefault())
+                            ),
+                            dailyLatencyMinutes = mapOf(
+                                targetDate to session.duration.sleepLatencyMinutes
+                            ),
+                            dailyAvgHeartRates = mapOf(
+                                targetDate to session.environment.stats.heartRate.avg
+                            ),
+                            dailyAvgNoises = mapOf(
+                                targetDate to session.environment.stats.noise.avg
                             )
                         ),
                         isPreview = false,

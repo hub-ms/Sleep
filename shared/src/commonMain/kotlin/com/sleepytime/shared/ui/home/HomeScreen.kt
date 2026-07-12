@@ -35,6 +35,7 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -59,7 +60,6 @@ import com.sleepytime.shared.ui.report.LegendItem
 import com.sleepytime.shared.ui.report.ReportContract
 import com.sleepytime.shared.ui.report.ScoreDonutChart
 import com.sleepytime.shared.ui.report.SleepStageColors
-import com.sleepytime.shared.ui.report.StageBarChart
 import com.sleepytime.shared.ui.report.rememberSleepTimeStyles
 import com.sleepytime.shared.ui.report.sleepStageColors
 import com.sleepytime.shared.ui.report.stageName
@@ -76,6 +76,7 @@ import com.sleepytime.shared.ui.tracking.MusicSection
 import com.sleepytime.shared.ui.tracking.TrackingContract
 import com.sleepytime.shared.util.DateTimeUtil.formatSleepDuration
 import com.sleepytime.shared.util.DateTimeUtil.formatSleepDurationFromMillis
+import com.sleepytime.shared.util.DateTimeUtil.to24TimeString
 import kotlinx.datetime.LocalDate
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
@@ -156,87 +157,53 @@ fun SleepSummaryCard(
     var activeTooltipDate by remember { mutableStateOf<LocalDate?>(null) }
     val (baseSectionStyle, baseBodyStyle) = rememberSleepTimeStyles()
 
-    var selectedStage by remember { mutableStateOf<SleepStageType?>(null) }
     val targetDate = activeTooltipDate ?: reportState.date
-    val finalReportData = reportState.reportData
+    val dailyReportData = reportState.reportData
 
-
-    val sleepStageItems = listOf(
-        Triple(SleepStageType.AWAKE, finalReportData.awakeMinutes.roundToLong(), sleepStageColors[SleepStageType.AWAKE]!!),
-        Triple(SleepStageType.LIGHT, finalReportData.lightMinutes.roundToLong(), sleepStageColors[SleepStageType.LIGHT]!!),
-        Triple(SleepStageType.DEEP, finalReportData.deepMinutes.roundToLong(), sleepStageColors[SleepStageType.DEEP]!!),
-        Triple(SleepStageType.REM, finalReportData.remMinutes.roundToLong(), sleepStageColors[SleepStageType.REM]!!),
-    )
-    val rawScore = finalReportData.dailyScores[targetDate] ?: finalReportData.sleepScore
-    val bedTime = finalReportData.dailyBedTimes[targetDate] ?: finalReportData.bedTime
-    val wakeTime = finalReportData.dailyWakeTimes[targetDate] ?: finalReportData.wakeTime
-    val latencyMinutes = finalReportData.dailyLatencyMinutes[targetDate]?.toLong() ?: finalReportData.sleepLatencyMinutes.toLong()
+    val rawScore = dailyReportData.dailyScores[targetDate] ?: dailyReportData.sleepScore
+    val bedTime = dailyReportData.dailyBedTimes[targetDate] ?: dailyReportData.bedTime
+    val wakeTime = dailyReportData.dailyWakeTimes[targetDate] ?: dailyReportData.wakeTime
+    val latencyMinutes = dailyReportData.dailyLatencyMinutes[targetDate]?.toLong() ?: dailyReportData.sleepLatencyMinutes.toLong()
 
     val totalDurationText = formatSleepDuration(bedTime, wakeTime).toAnnotatedString(
-        baseSectionStyle.copy(color = Color.White), baseBodyStyle.copy(color = Color.White)
+        baseSectionStyle, baseBodyStyle
     )
     val latencyText = formatSleepDurationFromMillis(latencyMinutes).toAnnotatedString(
-        baseSectionStyle.copy(color = Color.White), baseBodyStyle.copy(color = Color.White)
+        baseSectionStyle, baseBodyStyle
     )
-    val scoreText = "${rawScore}점".toAnnotatedString(
-        baseSectionStyle.copy(color = Color.White),
-        baseBodyStyle.copy(color = Color.White)
+    val scoreText = "$rawScore".toAnnotatedString(
+        baseSectionStyle, baseBodyStyle
     )
-
-
-
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primary.copy(0.2f)
-        )
+    Box(
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            contentAlignment = Alignment.Center
-        ) {
-            ScoreDonutChart(
-                rawScore = rawScore,
-                scoreText = scoreText,
-            )
-        }
+        ScoreDonutChart(
+            rawScore = rawScore,
+            scoreText = scoreText,
+        )
+    }
+    Column(
+        verticalArrangement = Arrangement.SpaceBetween,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         Text(
-            text = "잠들기까지 걸린 시간은 $latencyText,\n 총 수면 시간은 $totalDurationText",
-            color = Color.White,
+            text = buildAnnotatedString {
+                append("잠들기까지 ")
+                append(latencyText)
+            },
+            style = MaterialTheme.typography.caption,
+            color = Color.White
         )
-        StageBarChart(
-            sleepStageItems = sleepStageItems,
-            selectedStage = selectedStage,
-            onSelected = { stage ->
-                selectedStage = if (selectedStage == stage) null else stage
-            }
+        Text(
+            text = buildAnnotatedString {
+                append("수면시간 ")
+                append(totalDurationText)
+            },
+            style = MaterialTheme.typography.caption,
+            color = Color.White
         )
-        ChartLegend(
-            items = listOf(
-                LegendItem(
-                    label = stageTypes[0].stageName,
-                    color = SleepStageColors.AWAKE
-                ),
-                LegendItem(
-                    label = stageTypes[1].stageName,
-                    color = SleepStageColors.LIGHT
-                ),
-                LegendItem(
-                    label = stageTypes[2].stageName,
-                    color = SleepStageColors.REM
-                ),
-                LegendItem(
-                    label = stageTypes[3].stageName,
-                    color = SleepStageColors.DEEP
-                )
-            ),
-            selectedIndex = stageTypes.indexOf(selectedStage),
-            onSelected = { index ->
-                val clickedStage = stageTypes[index]
-                selectedStage = if (selectedStage == clickedStage) null else clickedStage
-            }
+        EnvironmentDataRow(
+            mode = EnvironmentDisplayMode.Report(reportData = dailyReportData)
         )
     }
 }

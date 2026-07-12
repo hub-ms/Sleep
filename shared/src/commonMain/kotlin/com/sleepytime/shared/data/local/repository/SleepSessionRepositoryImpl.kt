@@ -62,6 +62,7 @@ class SleepSessionRepositoryImpl(
             val efficiency = calculateEfficiency(metrics, environmentFeatures)
             val stageTimeline = generateStageTimeLine(analysisList)
             val stagesDistribution = calculateStagesDistribution(metrics)
+            Napier.d("efficiency:$efficiency, stageTimeline:$stageTimeline, stageDistribution:$stagesDistribution")
 
             val latestFeature = environmentFeatures.lastOrNull()
             val now = Clock.System.now().toEpochMilliseconds()

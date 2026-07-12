@@ -6,11 +6,10 @@ import com.sleepytime.shared.domain.model.SleepStage
 import com.sleepytime.shared.enum_.ChartTab
 import com.sleepytime.shared.enum_.ReportTab
 import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.todayIn
 
@@ -70,18 +69,71 @@ object ReportContract {
         val dailyAvgHeartRates: Map<LocalDate, Float>,
         val dailyAvgNoises: Map<LocalDate, Float>,
     ) {
+        private val BASE_HOUR = 18
+
         val averageBedTime: LocalDateTime? get() {
             if (dailyBedTimes.isEmpty()) return null
-            val avgSeconds = dailyBedTimes.values.map { it.toInstant(TimeZone.currentSystemDefault()).epochSeconds }.average()
-            return Instant.fromEpochSeconds(avgSeconds.toLong()).toLocalDateTime(TimeZone.currentSystemDefault())
+
+            // 1. 기준점(18:00)으로부터 지나간 총 분(Minute) 수로 변환하여 평균 계산
+            val avgMinutesFromBase = dailyBedTimes.values.map { time ->
+                if (time.hour >= BASE_HOUR) {
+                    (time.hour - BASE_HOUR) * 60 + time.minute
+                } else {
+                    (time.hour + (24 - BASE_HOUR)) * 60 + time.minute
+                }
+            }.average()
+
+            // 2. 평균 분을 복원하여 시(Hour), 분(Minute) 계산
+            val totalMinutes = avgMinutesFromBase.toInt()
+            val rawHour = (BASE_HOUR + totalMinutes / 60) % 24
+            val minute = totalMinutes % 60
+
+            // 3. LocalDateTime 생성을 위해 현재 오늘 날짜를 가져옵니다.
+            val todayDate = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+
+            // 4. 오늘 날짜와 계산된 시/분을 결합하여 LocalDateTime 반환
+            return LocalDateTime(
+                year = todayDate.year,
+                monthNumber = todayDate.monthNumber,
+                dayOfMonth = todayDate.dayOfMonth,
+                hour = rawHour,
+                minute = minute,
+                second = 0,
+                nanosecond = 0
+            )
         }
+
         val averageWakeTime: LocalDateTime? get() {
             if (dailyWakeTimes.isEmpty()) return null
-            val avgSeconds = dailyWakeTimes.values.map { it.toInstant(TimeZone.currentSystemDefault()).epochSeconds }.average()
-            return Instant.fromEpochSeconds(avgSeconds.toLong()).toLocalDateTime(TimeZone.currentSystemDefault())
+
+            val avgMinutesFromBase = dailyWakeTimes.values.map { time ->
+                if (time.hour >= BASE_HOUR) {
+                    (time.hour - BASE_HOUR) * 60 + time.minute
+                } else {
+                    (time.hour + (24 - BASE_HOUR)) * 60 + time.minute
+                }
+            }.average()
+
+            val totalMinutes = avgMinutesFromBase.toInt()
+            val rawHour = (BASE_HOUR + totalMinutes / 60) % 24
+            val minute = totalMinutes % 60
+
+            val todayDate = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+
+            return LocalDateTime(
+                year = todayDate.year,
+                monthNumber = todayDate.monthNumber,
+                dayOfMonth = todayDate.dayOfMonth,
+                hour = rawHour,
+                minute = minute,
+                second = 0,
+                nanosecond = 0
+            )
         }
+
         val averageScore: Int? get() {
-            if(dailyScores.isEmpty()) return null
+            if (dailyScores.isEmpty()) return null
+            // 점수는 단순 산술 평균으로도 정확합니다.
             return dailyScores.values.average().toInt()
         }
     }

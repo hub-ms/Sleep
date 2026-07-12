@@ -21,6 +21,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -64,7 +65,7 @@ class AndroidTrackingManager @Inject constructor(
    @Volatile private var isCleanedUp = false
 
     companion object {
-        private const val MIN_TRACKING_MINUTES = 30
+        private const val MIN_TRACKING_MINUTES = 5
         private const val WINDOW_DURATION_SECONDS = 30
 
         private const val MIN_WINDOWS = (MIN_TRACKING_MINUTES * 60) / WINDOW_DURATION_SECONDS
@@ -93,6 +94,7 @@ class AndroidTrackingManager @Inject constructor(
     }
 
     override fun start(sessionId: String, duration: Int, musicTitle: String?) {
+        Log.d("AndroidTrackingManager","start()")
         val serviceIntent = Intent(context, SleepTrackingService::class.java).apply {
             action = SleepTrackingService.ACTION_START
             putExtra(SleepTrackingService.EXTRA_SESSION_ID, sessionId)
@@ -132,7 +134,7 @@ class AndroidTrackingManager @Inject constructor(
         }
         measureManager.onWindowReady = { windowData ->
             scope.launch {
-                Napier.d("onWindowReady called, isReady=${sleepSessionRepository.isReady()}")
+                Log.d("AndroidTrackingManager","onWindowReady called, isReady=${sleepSessionRepository.isReady()}")
                 if (!sleepSessionRepository.isReady()) return@launch
 
                 sleepSessionRepository.analyzeSleepData(sensorData = windowData, environmentFeature = null)
@@ -147,7 +149,7 @@ class AndroidTrackingManager @Inject constructor(
             }
         }
         measureManager.onEnvironmentReady = { envFeature ->
-            Napier.d("envFeature 수신 = $envFeature")
+            Log.d("AndroidTrackingManager","envFeature 수신 = $envFeature")
             scope.launch {
                 sleepSessionRepository.updateEnvironmentContext(envFeature)
                 _trackingState.update { current ->
@@ -165,6 +167,18 @@ class AndroidTrackingManager @Inject constructor(
         measureManager.start()
         sensorBridge.startHeartRateSensor(scope)
         sensorBridge.startNoiseSensor(scope)
+    }
+    private fun startSensorBridgeSync() {
+        scope.launch {
+            while (isActive && _trackingState.value.isTracking) {
+                val hr = sensorBridge.latestHeartRateStats.last
+                val noise = sensorBridge.latestNoiseStats.last
+                val now = System.currentTimeMillis()
+                if (hr > 0f) measureManager.submitHeartRate(hr, now)
+                if (noise > 0f) measureManager.submitNoise(noise, now)
+                delay(1000L)
+            }
+        }
     }
     private fun startElapsedTimeUpdater() {
         scope.launch {
@@ -191,12 +205,14 @@ class AndroidTrackingManager @Inject constructor(
     }
 
     override fun finish() {
+        Log.d("AndroidTrackingManager","finish()")
         val serviceIntent = Intent(context, SleepTrackingService::class.java).apply {
             action = SleepTrackingService.ACTION_FINISH
         }
         context.startService(serviceIntent)
     }
     fun performStart(sessionId: String, duration: Int, musicTitle: String?) {
+        Log.d("AndroidTrackingManager","performStart()")
         if (scope.coroutineContext[Job]?.isActive != true) {
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         }
@@ -213,6 +229,7 @@ class AndroidTrackingManager @Inject constructor(
             playMusic(musicTitle)
             setupSensorCallbacks()
             startAllSensors()
+            startSensorBridgeSync()
 
             val startTime = Clock.System.now()
             _trackingState.update {
@@ -240,9 +257,9 @@ class AndroidTrackingManager @Inject constructor(
             if (sessionId.isNotEmpty()) {
                 runCatching {
                     sleepSessionRepository.deleteSession(sessionId)
-                    Napier.d("discard: 세션 삭제 완료 sessionId=$sessionId")
+                    Log.d("AndroidTrackingManager","discard: 세션 삭제 완료 sessionId=$sessionId")
                 }.onFailure {
-                    Napier.e("discard: 세션 삭제 실패", it)
+                    Log.e("AndroidTrackingManager","discard: 세션 삭제 실패", it)
                 }
             }
             activeSessionStore.clear()
@@ -250,6 +267,7 @@ class AndroidTrackingManager @Inject constructor(
         }
     }
     fun performFinish() {
+        Log.d("AndroidTrackingManager","performFinish()")
         scope.launch {
             _trackingState.update {
                 it.copy(
@@ -329,6 +347,7 @@ class AndroidTrackingManager @Inject constructor(
         )
     }
     private suspend fun analyzeAndSave(capture: CaptureResult) {
+        Log.d("AndroidTrackingManager","analyzeAndSave()")
         val sessionId = _trackingState.value.sessionId ?: return
 
         withContext(Dispatchers.Default) {

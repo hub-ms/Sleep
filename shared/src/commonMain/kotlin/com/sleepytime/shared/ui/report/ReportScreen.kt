@@ -23,6 +23,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,9 +35,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -51,6 +51,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -67,14 +68,14 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sleepytime.shared.domain.model.SleepMetrics
-import com.sleepytime.shared.enum_.ChartTab
 import com.sleepytime.shared.enum_.MetricType
 import com.sleepytime.shared.enum_.SleepScoreLevel
 import com.sleepytime.shared.enum_.SleepStageType
 import com.sleepytime.shared.resources.Res
+import com.sleepytime.shared.resources.ic_calendar
 import com.sleepytime.shared.resources.ic_caret_left
 import com.sleepytime.shared.resources.ic_caret_right
-import com.sleepytime.shared.resources.ic_smart_watch
+import com.sleepytime.shared.resources.ic_report
 import com.sleepytime.shared.resources.report_analysis_deep_duration
 import com.sleepytime.shared.resources.report_analysis_rem_duration
 import com.sleepytime.shared.resources.report_analysis_sleep_continuity
@@ -90,11 +91,11 @@ import com.sleepytime.shared.ui.theme.caption
 import com.sleepytime.shared.ui.theme.sectionTitle
 import com.sleepytime.shared.ui.tracking.TrackingContract
 import com.sleepytime.shared.util.DateTimeUtil.formatCalendarMonth
+import com.sleepytime.shared.util.DateTimeUtil.formatCalendarWeek
 import com.sleepytime.shared.util.DateTimeUtil.formatDate
 import com.sleepytime.shared.util.DateTimeUtil.formatDateLabel
 import com.sleepytime.shared.util.DateTimeUtil.formatSleepDuration
 import com.sleepytime.shared.util.DateTimeUtil.formatSleepDurationFromMillis
-import com.sleepytime.shared.util.DateTimeUtil.formatWeekDayLabel
 import com.sleepytime.shared.util.DateTimeUtil.to24TimeString
 import com.sleepytime.shared.util.toSleepScoreStatus
 import io.github.aakira.napier.Napier
@@ -113,7 +114,6 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import kotlin.math.PI
-import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.roundToLong
 import kotlin.math.sin
@@ -224,19 +224,13 @@ fun String.toAnnotatedString(
 fun ReportContent(
     trackingState: TrackingContract.State,
     reportState: ReportContract.State,
-    onChartModeSelected: (ChartTab) -> Unit,
     onDateSelected: (LocalDate) -> Unit,
     onPrevMonthClicked: (LocalDate) -> Unit,
     onNextMonthClicked: (LocalDate) -> Unit
 ) {
-    var activeTooltipDate by remember { mutableStateOf<LocalDate?>(null) }
-    var selectedDate by remember { mutableStateOf(reportState.date) }
-    var selectedIndex by remember { mutableStateOf(0) }
-
     val (baseSectionStyle, baseBodyStyle) = rememberSleepTimeStyles()
 
     val scrollState = rememberScrollState()
-    val textMeasurer = rememberTextMeasurer()
     val labelStyle = TextStyle(fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
     val calendarRange =
         remember(reportState.date) {
@@ -256,8 +250,9 @@ fun ReportContent(
         buildCalendarLabels(startDate = weekStartDate)
     }
     val today = System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-    val hasSession =
-        if (reportState.isPreview) true else reportState.sessionDates.contains(reportState.date)
+    val hasSession = reportState.sessionDates.contains(reportState.date)
+
+    var isCalendarExpanded by remember { mutableStateOf(false) }
 
 
     Box(
@@ -275,38 +270,29 @@ fun ReportContent(
         ) {
             ReportHeader(
                 today = today,
-                selectedIndex = selectedIndex,
-                onCalendarReportToggle = {
-                    selectedIndex = it
-                }
+                isCalendarExpanded = isCalendarExpanded,
+                onToggleCalendarExpanded = {
+                    isCalendarExpanded = !isCalendarExpanded
+                },
             )
-            when (selectedIndex) {
-                0 -> Calendar(
+            Calendar(
+                reportState = reportState,
+                isCalendarExpanded = isCalendarExpanded,
+                selectedDate = reportState.date,
+                onDateSelected = { date ->
+                    onDateSelected(date)
+                },
+                onPrevMonthClicked = { onPrevMonthClicked(reportState.date) },
+                onNextMonthClicked = { onNextMonthClicked(reportState.date) },
+            )
+            if (!isCalendarExpanded) {
+                DailyContent(
                     reportState = reportState,
-                    hasSession = hasSession,
-                    today = today,
-                    selectedDate = selectedDate,
-                    onDateSelected = { date ->
-                        onDateSelected(date)
-                        activeTooltipDate = date
-                        selectedDate = date
-                    },
-                    onPrevMonthClicked = { onPrevMonthClicked(reportState.date) },
-                    onNextMonthClicked = { onNextMonthClicked(reportState.date) },
+                    xLabels = xLabels,
+                    baseSectionStyle = baseSectionStyle,
+                    baseBodyStyle = baseBodyStyle,
+                    labelStyle = labelStyle,
                 )
-
-                else -> {
-                    DailyContent(
-                        trackingState = trackingState,
-                        reportState = reportState,
-                        xLabels = xLabels,
-                        activeTooltipDate = activeTooltipDate,
-                        baseSectionStyle = baseSectionStyle,
-                        baseBodyStyle = baseBodyStyle,
-                        labelStyle = labelStyle,
-                        onChartModeSelected = onChartModeSelected,
-                    )
-                }
             }
         }
 //        if (reportState.isPreview) {
@@ -351,18 +337,28 @@ fun PreviewOverlay() {
 @Composable
 fun Calendar(
     reportState: ReportContract.State,
-    hasSession: Boolean,
-    today: LocalDate,
+    isCalendarExpanded: Boolean,
     selectedDate: LocalDate,
     onDateSelected: (LocalDate) -> Unit,
     onPrevMonthClicked: () -> Unit,
     onNextMonthClicked: () -> Unit
 ) {
+    val currentDayOfWeekNum = selectedDate.dayOfWeek.isoDayNumber
+    val weekStartDate = selectedDate.minus((currentDayOfWeekNum - 1).toLong(), DateTimeUnit.DAY)
+    val weekDates = (0 until 7).map { weekStartDate.plus(it.toLong(), DateTimeUnit.DAY) }
+
+
     val firstDayOfMonth = LocalDate(selectedDate.year, selectedDate.month, 1)
     val firstDayOfWeekNum = firstDayOfMonth.dayOfWeek.isoDayNumber
     val calendarStartDate =
         firstDayOfMonth.minus((firstDayOfWeekNum - 1).toLong(), DateTimeUnit.DAY)
     val monthDates = (0 until 42).map { calendarStartDate.plus(it.toLong(), DateTimeUnit.DAY) }
+
+
+    val calendarTitleText =
+        if (isCalendarExpanded) formatCalendarMonth(reportState.date) else formatCalendarWeek(
+            reportState.date
+        )
 
     val weeks = monthDates.chunked(7)
     Column(
@@ -387,7 +383,7 @@ fun Calendar(
                 )
             }
             Text(
-                text = formatCalendarMonth(reportState.date),
+                text = calendarTitleText,
                 style = MaterialTheme.typography.bodyText,
                 color = Color.White,
                 fontWeight = FontWeight.Bold
@@ -418,22 +414,40 @@ fun Calendar(
                 }
             }
         }
-        weeks.forEach { week ->
+        if (isCalendarExpanded) {
+            LazyVerticalGrid(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(360.dp),
+                columns = GridCells.Fixed(7),
+            ) {
+                items(monthDates) { date ->
+                    CalendarDayCell(
+                        modifier = Modifier
+                            .height(60.dp)
+                            .weight(1f),
+                        reportState = reportState,
+                        date = date,
+                        hasSession = reportState.sessionDates.contains(date),
+                        isCurrentMonth = (date.month == selectedDate.month),
+                        onDateSelected = onDateSelected
+                    )
+                }
+            }
+        } else {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                week.forEach { date ->
+                weekDates.forEach { date ->
                     CalendarDayCell(
                         modifier = Modifier
                             .height(60.dp)
                             .weight(1f),
-                        date = date,
-                        selectedDate = selectedDate,
-                        today = today,
                         reportState = reportState,
-                        hasSession = hasSession,
+                        date = date,
+                        hasSession = reportState.sessionDates.contains(date),
                         isCurrentMonth = (date.month == selectedDate.month),
                         onDateSelected = onDateSelected
                     )
@@ -445,96 +459,56 @@ fun Calendar(
 
 @Composable
 fun CalendarDayCell(
-    modifier: Modifier = Modifier,
+    modifier: Modifier,
     date: LocalDate,
-    selectedDate: LocalDate,
-    today: LocalDate,
     reportState: ReportContract.State,
     hasSession: Boolean,
     isCurrentMonth: Boolean = true,
     onDateSelected: (LocalDate) -> Unit
 ) {
-    val isSelected = date == selectedDate
-    val isToday = date == today
-
-
-    val currentDayScore = if (reportState.isPreview) reportState.reportData.dailyScores[date]
-        ?: 0 else reportState.reportData.sleepScore
+    val currentDayScore = if (hasSession) {
+        reportState.reportData.dailyScores[date] ?: reportState.reportData.sleepScore
+    } else {
+        if (hasSession) reportState.reportData.sleepScore else 0
+    }
+    val shouldShowDonut = reportState.isPreview || hasSession
     if (reportState.isPreview) {
         currentDayScore.toSleepScoreStatus().primaryColor
     } else {
         if (hasSession) currentDayScore.toSleepScoreStatus().primaryColor
         else Color.Transparent
     }
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .then(
-                    if (isSelected) Modifier.border(
-                        2.dp, MaterialTheme.colorScheme.primary, CircleShape
-                    ) else Modifier
-                )
-                .background(
-                    color = if (isToday) MaterialTheme.colorScheme.primary else Color.Transparent,
-                    shape = CircleShape
-                )
+        Column(
+            modifier = modifier
                 .clickable(
                     enabled = reportState.isPreview || hasSession,
                     onClick = { onDateSelected(date) }
                 ),
-            contentAlignment = Alignment.Center
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = date.dayOfMonth.toString(),
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (isCurrentMonth || hasSession) Color.White else Color.White.copy(0.2f)
             )
-        }
-        val starCount = when (currentDayScore) {
-            in 1..60 -> 1
-            in 61..80 -> 2
-            in 81..100 -> 3
-            else -> 0
-        }
-        if (hasSession) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                repeat(3) { index ->
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            modifier = Modifier.size(48.dp),
-                            painter = painterResource(Res.drawable.ic_smart_watch),
-                            contentDescription = null,
-                            tint = Color.LightGray.copy(alpha = 0.4f)
-                        )
-                        if (index < starCount) {
-                            Icon(
-                                modifier = Modifier.size(48.dp),
-                                painter = painterResource(Res.drawable.ic_smart_watch),
-                                contentDescription = "star",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                }
+            if (shouldShowDonut) {
+                val scoreColor = currentDayScore.toSleepScoreStatus().primaryColor
+                Box(
+                    modifier = Modifier
+                        .padding(4.dp)
+                        .size(12.dp)
+                        .background(scoreColor, CircleShape)
+                )
             }
         }
-    }
 }
 
 @Composable
 private fun ReportHeader(
     today: LocalDate,
-    selectedIndex: Int,
-    onCalendarReportToggle: (Int) -> Unit
+    isCalendarExpanded: Boolean,
+    onToggleCalendarExpanded: (Boolean) -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -547,77 +521,98 @@ private fun ReportHeader(
             color = Color.White,
             fontWeight = FontWeight.Bold
         )
-        CalendarReportToggle(
-            selectedIndex = selectedIndex,
-            onCalendarReportToggle = onCalendarReportToggle
-        )
+
+        IconButton(
+            modifier = Modifier.size(36.dp),
+            onClick = { onToggleCalendarExpanded(isCalendarExpanded) }
+        ) {
+            Icon(
+                modifier = Modifier.size(24.dp),
+                painter = if (isCalendarExpanded) painterResource(Res.drawable.ic_report) else painterResource(
+                    Res.drawable.ic_calendar
+                ),
+                contentDescription = "달력 토글",
+                tint = Color.White
+            )
+        }
     }
 }
 
 @Composable
 fun DailyContent(
-    trackingState: TrackingContract.State,
     reportState: ReportContract.State,
     xLabels: List<ChartDataEntity>,
-    activeTooltipDate: LocalDate?,
     baseSectionStyle: SpanStyle,
     baseBodyStyle: SpanStyle,
     labelStyle: TextStyle,
-    onChartModeSelected: (ChartTab) -> Unit
 ) {
 
-    val finalReportData = reportState.reportData
-    val targetDate = activeTooltipDate ?: reportState.date
+    val dailyReportData = reportState.reportData
+    val weeklyChartData = reportState.weeklyChartData
+    val targetDate = reportState.date
 
     val hasData = if (reportState.isPreview) {
         true
     } else {
-        finalReportData.dailyScores.containsKey(targetDate)
+        dailyReportData.dailyScores.containsKey(targetDate)
     }
     if (!hasData) {
         NoSleepDataForDatePlaceholder()
         return
     }
 
-    val rawScore = finalReportData.dailyScores[targetDate] ?: finalReportData.sleepScore
-    val bedTime = finalReportData.dailyBedTimes[targetDate] ?: finalReportData.bedTime
-    val wakeTime = finalReportData.dailyWakeTimes[targetDate] ?: finalReportData.wakeTime
-    val latencyMinutes = finalReportData.dailyLatencyMinutes[targetDate]?.toLong()
-        ?: finalReportData.sleepLatencyMinutes.toLong()
-
-    val avgBedTime = reportState.reportData.averageBedTime ?: trackingState.trackingStartTime
-    val avgWakeTime = reportState.reportData.averageWakeTime ?: trackingState.trackingEndTime
-    val avgScore = reportState.reportData.averageScore ?: reportState.reportData.sleepScore
+    val demoDay by lazy {
+        if (reportState.isPreview) DemoReportFactory.createPreviewData(0L, targetDate) else null
+    }
+    val rawScore = if(reportState.isPreview) dailyReportData.dailyScores[targetDate] ?: demoDay?.sleepScore
+        else dailyReportData.dailyScores[targetDate] ?: dailyReportData.sleepScore
+    val bedTime = if(reportState.isPreview) dailyReportData.dailyBedTimes[targetDate] ?: demoDay?.bedTime
+        else dailyReportData.dailyBedTimes[targetDate] ?: dailyReportData.bedTime
+    val wakeTime = if(reportState.isPreview) dailyReportData.dailyWakeTimes[targetDate] ?: demoDay?.wakeTime
+        else dailyReportData.dailyWakeTimes[targetDate] ?: dailyReportData.wakeTime
+    val latencyMinutes = if(reportState.isPreview) dailyReportData.dailyLatencyMinutes[targetDate] ?: demoDay?.sleepLatencyMinutes
+        else dailyReportData.dailyLatencyMinutes[targetDate] ?: dailyReportData.sleepLatencyMinutes
+    val demoWeekly by lazy {
+        if (reportState.isPreview) DemoReportFactory.createWeeklyPreviewData(0L, targetDate) else null
+    }
+    val avgBedTime: LocalDateTime? = if (reportState.isPreview) weeklyChartData.averageBedTime ?: demoWeekly?.averageBedTime
+        else weeklyChartData.averageBedTime
+    val avgWakeTime: LocalDateTime? = if (reportState.isPreview) weeklyChartData.averageWakeTime ?: demoWeekly?.averageWakeTime
+        else weeklyChartData.averageWakeTime
+    val avgScore: Int? = if (reportState.isPreview)
+        weeklyChartData.averageScore ?: demoWeekly?.averageScore
+    else
+        weeklyChartData.averageScore
 
 
     val sleepStageItems = listOf(
         Triple(
             SleepStageType.AWAKE,
-            finalReportData.awakeMinutes.roundToLong(),
+            dailyReportData.awakeMinutes.roundToLong(),
             sleepStageColors[SleepStageType.AWAKE]!!
         ),
         Triple(
             SleepStageType.LIGHT,
-            finalReportData.lightMinutes.roundToLong(),
+            dailyReportData.lightMinutes.roundToLong(),
             sleepStageColors[SleepStageType.LIGHT]!!
         ),
         Triple(
             SleepStageType.DEEP,
-            finalReportData.deepMinutes.roundToLong(),
+            dailyReportData.deepMinutes.roundToLong(),
             sleepStageColors[SleepStageType.DEEP]!!
         ),
         Triple(
             SleepStageType.REM,
-            finalReportData.remMinutes.roundToLong(),
+            dailyReportData.remMinutes.roundToLong(),
             sleepStageColors[SleepStageType.REM]!!
         )
     )
     Napier.d(
         """
-            awake raw: ${finalReportData.awakeMinutes}
-            light raw: ${finalReportData.lightMinutes}
-            deep raw:  ${finalReportData.deepMinutes}
-            rem raw:   ${finalReportData.remMinutes}
+            awake raw: ${dailyReportData.awakeMinutes}
+            light raw: ${dailyReportData.lightMinutes}
+            deep raw:  ${dailyReportData.deepMinutes}
+            rem raw:   ${dailyReportData.remMinutes}
         """.trimIndent()
     )
     Napier.d("sleepStageItems:$sleepStageItems")
@@ -625,10 +620,16 @@ fun DailyContent(
     val totalDurationText = formatSleepDuration(bedTime, wakeTime).toAnnotatedString(
         baseSectionStyle, baseBodyStyle
     )
-    val latencyText = formatSleepDurationFromMillis(latencyMinutes).toAnnotatedString(
+    val latencyText = formatSleepDurationFromMillis(latencyMinutes?.toLong()).toAnnotatedString(
         baseSectionStyle, baseBodyStyle
     )
-    val scoreText = "${rawScore}점".toAnnotatedString(
+    val scoreText = "$rawScore".toAnnotatedString(
+        baseSectionStyle, baseBodyStyle
+    )
+    val averageBedTimeText = (avgBedTime?.to24TimeString() ?: "--:--").toAnnotatedString(
+        baseSectionStyle, baseBodyStyle
+    )
+    val averageWakeTimeText = (avgWakeTime?.to24TimeString() ?: "--:--").toAnnotatedString(
         baseSectionStyle, baseBodyStyle
     )
     val averageDurationText = formatSleepDuration(avgBedTime, avgWakeTime).toAnnotatedString(
@@ -637,46 +638,38 @@ fun DailyContent(
     val averageScoreText = "${avgScore}점".toAnnotatedString(
         baseSectionStyle, baseBodyStyle
     )
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+    Box(
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            contentAlignment = Alignment.Center
-        ) {
-            ScoreDonutChart(
-                rawScore = rawScore,
-                scoreText = scoreText,
-            )
-        }
-        Column(
-            verticalArrangement = Arrangement.SpaceBetween,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = buildAnnotatedString {
-                    append("잠들기까지 ")
-                    append(latencyText)
-                },
-                style = MaterialTheme.typography.caption,
-                color = Color.White
-            )
-            Text(
-                text = buildAnnotatedString {
-                    append("수면시간 ")
-                    append(totalDurationText)
-                },
-                style = MaterialTheme.typography.caption,
-                color = Color.White
-            )
-            EnvironmentDataRow(
-                mode = EnvironmentDisplayMode.Report(reportData = finalReportData)
-            )
-        }
+        ScoreDonutChart(
+            rawScore = rawScore,
+            scoreText = scoreText,
+        )
     }
-
-
+    Column(
+        verticalArrangement = Arrangement.SpaceBetween,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = buildAnnotatedString {
+                append("잠들기까지 ")
+                append(latencyText)
+            },
+            style = MaterialTheme.typography.caption,
+            color = Color.White
+        )
+        Text(
+            text = buildAnnotatedString {
+                append("수면시간 ")
+                append(totalDurationText)
+            },
+            style = MaterialTheme.typography.caption,
+            color = Color.White
+        )
+        EnvironmentDataRow(
+            mode = EnvironmentDisplayMode.Report(reportData = dailyReportData)
+        )
+    }
     InsightCard(
         reportState = reportState,
     )
@@ -685,32 +678,12 @@ fun DailyContent(
         labelStyle = labelStyle,
         startTime = bedTime,
         endTime = wakeTime,
-        activeTooltipDate = activeTooltipDate,
         xLabels = xLabels,
+        averageBedTimeText = averageBedTimeText,
+        averageWakeTimeText = averageWakeTimeText,
         averageDurationText = averageDurationText,
         averageScoreText = averageScoreText,
-        onChartModeSelected = onChartModeSelected
     )
-}
-@Composable
-fun CalendarReportToggle(
-    selectedIndex: Int,
-    onCalendarReportToggle: (Int) -> Unit
-) {
-    val options = listOf("달력", "리포트")
-    SingleChoiceSegmentedButtonRow(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        options.forEachIndexed { index, label ->
-            SegmentedButton(
-                shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
-                onClick = { onCalendarReportToggle(index) },
-                selected = index == selectedIndex
-            ) {
-                Text(label)
-            }
-        }
-    }
 }
 
 @Composable
@@ -758,111 +731,109 @@ fun ScoreDonutChart(
         }
         Text(
             text = buildAnnotatedString {
-                append("수면점수")
                 append(scoreText)
+                append("/100")
             },
             style = MaterialTheme.typography.caption,
             color = Color.White
         )
     }
 }
-
-@Composable
-fun StageBarChart(
-    sleepStageItems: List<Triple<SleepStageType, Long, Color>>,
-    selectedStage: SleepStageType?,
-    onSelected: (SleepStageType?) -> Unit
-) {
-    val totalMinutes = sleepStageItems.sumOf { it.second }.coerceAtLeast(1L)
-    Napier.d("totalMinutes:$totalMinutes")
-    val barHeight = 24.dp
-
-    val animatedOffsets = sleepStageItems.map { (stageType, _, _) ->
-        val isSelected = stageType == selectedStage
-
-        animateFloatAsState(
-            targetValue = if (isSelected) -30f else 0f,
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessLow
-            ),
-            label = "BounceAnimation"
-        )
-    }
-
-    Canvas(
-        modifier = Modifier
-            .clickable { onSelected(selectedStage) }
-            .fillMaxWidth()
-            .height(barHeight * 2)
-    ) {
-        var curX = 0f
-        val baseLineY = barHeight.toPx()
-        sleepStageItems.forEachIndexed { i, (_, minutes, color) ->
-            val segW = (minutes.toFloat() / totalMinutes.toFloat()) * size.width
-            val isFirst = i == 0
-            val isLast = i == sleepStageItems.lastIndex
-
-            val yOffset = animatedOffsets[i].value
-
-            val path = Path().apply {
-                val x = curX
-                val y = baseLineY + yOffset
-                val h = barHeight.toPx()
-                val r = minOf(h / 2f, segW / 2f)
-
-                if (isFirst) moveTo(x + r, y) else moveTo(x, y)
-                if (isLast) {
-                    lineTo(x + segW - r, y)
-                    arcTo(
-                        rect = Rect(x + segW - 2 * r, y, x + segW, y + h),
-                        startAngleDegrees = -90f,
-                        sweepAngleDegrees = 180f,
-                        forceMoveTo = false
-                    )
-                } else {
-                    lineTo(x + segW, y)
-                    lineTo(x + segW, y + h)
-                }
-
-                if (isFirst) {
-                    lineTo(x + r, y + h)
-                    arcTo(
-                        rect = Rect(x, y, x + 2 * r, y + h),
-                        startAngleDegrees = 90f,
-                        sweepAngleDegrees = 180f,
-                        forceMoveTo = false
-                    )
-                } else {
-                    lineTo(x, y + h)
-                    lineTo(x, y)
-                }
-                close()
-            }
-
-
-            drawPath(path = path, color = color)
-
-            curX += segW
-        }
-    }
-}
-
-
+//
+//@Composable
+//fun StageBarChart(
+//    sleepStageItems: List<Triple<SleepStageType, Long, Color>>,
+//    selectedStage: SleepStageType?,
+//    onSelected: (SleepStageType?) -> Unit
+//) {
+//    val totalMinutes = sleepStageItems.sumOf { it.second }.coerceAtLeast(1L)
+//    Napier.d("totalMinutes:$totalMinutes")
+//    val barHeight = 24.dp
+//
+//    val animatedOffsets = sleepStageItems.map { (stageType, _, _) ->
+//        val isSelected = stageType == selectedStage
+//
+//        animateFloatAsState(
+//            targetValue = if (isSelected) -30f else 0f,
+//            animationSpec = spring(
+//                dampingRatio = Spring.DampingRatioMediumBouncy,
+//                stiffness = Spring.StiffnessLow
+//            ),
+//            label = "BounceAnimation"
+//        )
+//    }
+//
+//    Canvas(
+//        modifier = Modifier
+//            .clickable { onSelected(selectedStage) }
+//            .fillMaxWidth()
+//            .height(barHeight * 2)
+//    ) {
+//        var curX = 0f
+//        val baseLineY = barHeight.toPx()
+//        sleepStageItems.forEachIndexed { i, (_, minutes, color) ->
+//            val segW = (minutes.toFloat() / totalMinutes.toFloat()) * size.width
+//            val isFirst = i == 0
+//            val isLast = i == sleepStageItems.lastIndex
+//
+//            val yOffset = animatedOffsets[i].value
+//
+//            val path = Path().apply {
+//                val x = curX
+//                val y = baseLineY + yOffset
+//                val h = barHeight.toPx()
+//                val r = minOf(h / 2f, segW / 2f)
+//
+//                if (isFirst) moveTo(x + r, y) else moveTo(x, y)
+//                if (isLast) {
+//                    lineTo(x + segW - r, y)
+//                    arcTo(
+//                        rect = Rect(x + segW - 2 * r, y, x + segW, y + h),
+//                        startAngleDegrees = -90f,
+//                        sweepAngleDegrees = 180f,
+//                        forceMoveTo = false
+//                    )
+//                } else {
+//                    lineTo(x + segW, y)
+//                    lineTo(x + segW, y + h)
+//                }
+//
+//                if (isFirst) {
+//                    lineTo(x + r, y + h)
+//                    arcTo(
+//                        rect = Rect(x, y, x + 2 * r, y + h),
+//                        startAngleDegrees = 90f,
+//                        sweepAngleDegrees = 180f,
+//                        forceMoveTo = false
+//                    )
+//                } else {
+//                    lineTo(x, y + h)
+//                    lineTo(x, y)
+//                }
+//                close()
+//            }
+//
+//
+//            drawPath(path = path, color = color)
+//
+//            curX += segW
+//        }
+//    }
+//}
 @Composable
 fun GraphCard(
     reportState: ReportContract.State,
     labelStyle: TextStyle,
     startTime: LocalDateTime?,
     endTime: LocalDateTime?,
-    activeTooltipDate: LocalDate? = null,
     xLabels: List<ChartDataEntity>,
+    averageBedTimeText: AnnotatedString,
+    averageWakeTimeText: AnnotatedString,
     averageDurationText: AnnotatedString,
     averageScoreText: AnnotatedString,
-    onChartModeSelected: (ChartTab) -> Unit
 ) {
     val textMeasurer = rememberTextMeasurer()
-    val targetDate = activeTooltipDate ?: reportState.date
+    val targetDate = reportState.date
 
     val currentMetrics = remember(reportState.isPreview, targetDate, reportState.reportData) {
         if (reportState.isPreview) DemoReportFactory.createPreviewData(0L, targetDate).sleepMetrics
@@ -902,7 +873,6 @@ fun GraphCard(
                 startTime = startTime,
                 endTime = endTime,
                 targetDate = targetDate,
-                activeTooltipDate = activeTooltipDate,
                 textMeasurer = textMeasurer,
                 labelStyle = labelStyle
             )
@@ -931,31 +901,66 @@ fun GraphCard(
                     selectedStage = if (selectedStage == clickedStage) null else clickedStage
                 }
             )
-            ChartTabRow(
-                menus = listOf(ChartTab.SLEEP_DURATION, ChartTab.SLEEP_EFFICIENCY),
-                selectedIndex = reportState.selectedChartTab.ordinal,
-                onChartModeSelected = onChartModeSelected
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(
+                    verticalArrangement = Arrangement.SpaceBetween,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "평균 취침시각",
+                        style = MaterialTheme.typography.caption,
+                        color = Color.White
+                    )
+                    Text(
+                        text = averageBedTimeText,
+                        color = Color.White
+                    )
+                }
+                Column(
+                    verticalArrangement = Arrangement.SpaceBetween,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "평균 기상시각",
+                        style = MaterialTheme.typography.caption,
+                        color = Color.White
+                    )
+                    Text(
+                        text = averageWakeTimeText,
+                        color = Color.White
+                    )
+                }
+            }
+            TimeChart(
+                reportState,
+                xLabels,
+                textMeasurer,
+                labelStyle,
             )
-            when (reportState.selectedChartTab) {
-                ChartTab.SLEEP_DURATION -> TimeChart(
-                    reportState,
-                    activeTooltipDate,
-                    xLabels,
-                    textMeasurer,
-                    labelStyle,
-                    averageDurationText
+            ScoreChart(
+                reportState,
+                xLabels,
+                textMeasurer,
+                labelStyle,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                AverageSummary(
+                    averageLabel = "평균 수면시간",
+                    averageText = averageDurationText
                 )
-
-                else -> ScoreChart(
-                    reportState,
-                    activeTooltipDate,
-                    xLabels,
-                    textMeasurer,
-                    labelStyle,
-                    averageScoreText
+                AverageSummary(
+                    averageLabel = "평균 수면점수",
+                    averageText = averageScoreText
                 )
             }
-
         }
     }
 }
@@ -998,8 +1003,7 @@ fun SleepRadarChart(
             val cx = size.width / 2f
             val cy = size.height / 2f
 
-            val metrics = reportState.reportData.sleepMetrics.scoreList()
-            val count = metrics.size
+            val count = scoreList.size
             if (count == 0) return@Canvas
 
             val levels = listOf(0.2f, 0.4f, 0.6f, 0.8f, 1.0f)
@@ -1023,7 +1027,7 @@ fun SleepRadarChart(
                     style = Stroke(width = 1.dp.toPx())
                 )
             }
-            metrics.forEachIndexed { i, (_, _) ->
+            scoreList.forEachIndexed { i, (_, _) ->
                 val angle = -90f + i * (360f / count)
                 val angleRad = angle * (PI / 180f)
 
@@ -1068,7 +1072,7 @@ fun SleepRadarChart(
             val polyPath = Path()
             val points = mutableListOf<Offset>()
 
-            metrics.forEachIndexed { i, (_, score) ->
+            scoreList.forEachIndexed { i, (_, score) ->
                 val angle = -90f + i * (360f / count)
                 val angleRad = angle * PI / 180f
 
@@ -1110,14 +1114,13 @@ fun SleepTimeLineChart(
     startTime: LocalDateTime?,
     endTime: LocalDateTime?,
     targetDate: LocalDate?,
-    activeTooltipDate: LocalDate?,
     textMeasurer: TextMeasurer,
     labelStyle: TextStyle
 ) {
     val sMeasured = textMeasurer.measure(startTime?.to24TimeString() ?: "--:--", labelStyle)
     val eMeasured = textMeasurer.measure(endTime?.to24TimeString() ?: "--:--", labelStyle)
 
-    val stageTimeLine = if (reportState.isPreview && activeTooltipDate != null) {
+    val stageTimeLine = if (reportState.isPreview) {
         val bedTime = reportState.reportData.dailyBedTimes[targetDate]
         val wakeTime = reportState.reportData.dailyWakeTimes[targetDate]
         if (bedTime != null && wakeTime != null) {
@@ -1180,7 +1183,7 @@ fun SleepTimeLineChart(
             drawText(
                 sMeasured,
                 topLeft = Offset(
-                    TIME_LABEL_WIDTH.toPx()/2,
+                    TIME_LABEL_WIDTH.toPx() / 2,
                     bgY + Y_AXIS_PADDING.toPx() + TIME_LABEL_HEIGHT.toPx() / 2
                 )
             )
@@ -1190,14 +1193,14 @@ fun SleepTimeLineChart(
                     chartWidth - eMeasured.size.width - 12.dp.toPx(), bgY + Y_AXIS_PADDING.toPx()
                 ),
                 size = Size(
-                    eMeasured.size.width+ TIME_LABEL_WIDTH.toPx(),
+                    eMeasured.size.width + TIME_LABEL_WIDTH.toPx(),
                     eMeasured.size.height + TIME_LABEL_HEIGHT.toPx(),
                 ),
                 cornerRadius = CornerRadius(16.dp.toPx())
             )
             drawText(
                 eMeasured, topLeft = Offset(
-                    chartWidth - eMeasured.size.width - TIME_LABEL_WIDTH.toPx()/2,
+                    chartWidth - eMeasured.size.width - TIME_LABEL_WIDTH.toPx() / 2,
                     bgY + Y_AXIS_PADDING.toPx() + TIME_LABEL_HEIGHT.toPx() / 2
                 )
             )
@@ -1230,56 +1233,14 @@ fun InsightCard(
         }
     }
 }
-@Composable
-fun ChartTabRow(
-    menus: List<ChartTab>,
-    selectedIndex: Int,
-    onChartModeSelected: (ChartTab) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(36.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        menus.forEachIndexed { index, menu ->
-            val isSelected = index == selectedIndex
-            val menuName = when (menu) {
-                ChartTab.SLEEP_DURATION -> "수면 시간"
-                ChartTab.SLEEP_EFFICIENCY -> "수면 점수"
-            }
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable { onChartModeSelected(menu) }
-                    .background(
-                        if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                        RoundedCornerShape(50.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    modifier = Modifier.padding(4.dp),
-                    text = menuName,
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.bodyText,
-                    color = Color.White
-                )
-            }
-        }
-    }
-}
+
 @Composable
 fun TimeChart(
     reportState: ReportContract.State,
-    activeTooltipDate: LocalDate?,
     xLabels: List<ChartDataEntity>,
     textMeasurer: TextMeasurer,
     labelStyle: TextStyle,
-    averageDurationAnnotatedText: AnnotatedString
 ) {
-    val timechartColor = MaterialTheme.colorScheme.primary
     val finalReportData = reportState.weeklyChartData   // 항상 일주일 데이터 참조
 
     fun timeToY(chartHeight: Float, t: LocalDateTime): Float {
@@ -1291,25 +1252,14 @@ fun TimeChart(
     WeeklyBarChart(
         yAxisLabels = listOf("21:00", "00:00", "03:00", "06:00", "09:00", "12:00"),
         xLabels = xLabels,
-        activeTooltipDate = activeTooltipDate,
+        activeTooltipDate = reportState.date,
         textMeasurer = textMeasurer,
         labelStyle = labelStyle,
-        averageLabel = "평균 수면 시간",
-        averageText = averageDurationAnnotatedText,
-        drawBar = { chartHeight, x, date ->
-            val bedTime = finalReportData.dailyBedTimes[date]
-            val wakeTime = finalReportData.dailyWakeTimes[date]
-            if (bedTime != null && wakeTime != null) {
-                val bY = timeToY(chartHeight, bedTime)
-                val wY = timeToY(chartHeight, wakeTime)
-                drawRoundRect(
-                    color = timechartColor,
-                    topLeft = Offset(x - BAR_WIDTH.toPx() / 2f, minOf(bY, wY)),
-                    size = Size(BAR_WIDTH.toPx(), abs(bY - wY)),
-                    cornerRadius = CornerRadius(16.dp.toPx())
-                )
-            }
+        calculateY = { chartHeight, date, isBedTime ->
+            if (isBedTime) finalReportData.dailyBedTimes[date]?.let { timeToY(chartHeight, it) }
+            else finalReportData.dailyWakeTimes[date]?.let { timeToY(chartHeight, it) }
         },
+        drawBar = null,
         drawTooltip = { chartWidth, chartHeight, x, date ->
             val bedTime = finalReportData.dailyBedTimes[date]
             val wakeTime = finalReportData.dailyWakeTimes[date]
@@ -1372,14 +1322,13 @@ private fun DrawScope.drawTimeTooltip(
         topLeft = Offset(tooltipX + LABEL_PADDING.toPx(), tooltipY + LABEL_PADDING.toPx())
     )
 }
+
 @Composable
 private fun ScoreChart(
     reportState: ReportContract.State,
-    activeTooltipDate: LocalDate?,
     xLabels: List<ChartDataEntity>,
     textMeasurer: TextMeasurer,
     labelStyle: TextStyle,
-    averageScoreText: AnnotatedString
 ) {
     val finalReportData = reportState.weeklyChartData   // 항상 일주일 데이터 참조
 
@@ -1391,11 +1340,10 @@ private fun ScoreChart(
     WeeklyBarChart(
         yAxisLabels = listOf("0", "20", "40", "60", "80", "100"),
         xLabels = xLabels,
-        activeTooltipDate = activeTooltipDate,
+        activeTooltipDate = reportState.date,
         textMeasurer = textMeasurer,
         labelStyle = labelStyle,
-        averageLabel = "평균 수면점수",
-        averageText = averageScoreText,
+        calculateY = null,
         drawBar = { chartHeight, x, date ->
             val score = finalReportData.dailyScores[date]
             if (score != null) {
@@ -1460,93 +1408,182 @@ fun DrawScope.drawScoreTooltip(
         topLeft = Offset(tooltipX + LABEL_PADDING.toPx(), tooltipY + LABEL_PADDING.toPx())
     )
 }
+
 @Composable
 private fun WeeklyBarChart(
     yAxisLabels: List<String>,
     xLabels: List<ChartDataEntity>,
-    activeTooltipDate: LocalDate?,
+    activeTooltipDate: LocalDate,
     textMeasurer: TextMeasurer,
     labelStyle: TextStyle,
-    averageLabel: String,
-    averageText: AnnotatedString,
-    drawBar: DrawScope.(chartHeight: Float, x: Float, date: LocalDate) -> Unit,
+    calculateY: ((chartHeight: Float, date: LocalDate, isBedTime: Boolean) -> Float?)? = null,
+    drawBar: (DrawScope.(chartHeight: Float, x: Float, date: LocalDate) -> Unit)?,
     drawTooltip: DrawScope.(chartWidth: Float, chartHeight: Float, x: Float, date: LocalDate) -> Unit
 ) {
-    Column(
+    val bedTimeLineColor = MaterialTheme.colorScheme.primary
+    val wakeTimeLineColor = MaterialTheme.colorScheme.secondary
+    Canvas(
         modifier = Modifier
             .fillMaxWidth()
-            .height(360.dp)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .height(120.dp + X_AXIS_PADDING)
     ) {
-        Canvas(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(240.dp + X_AXIS_PADDING)
-        ) {
-            val chartHeight = size.height - X_AXIS_PADDING.toPx()
-            val stepY = chartHeight / (yAxisLabels.size - 1)
+        val chartHeight = size.height - X_AXIS_PADDING.toPx()
+        val stepY = chartHeight / (yAxisLabels.size - 1)
 
-            // 1. Y축 가이드라인 + 라벨
-            yAxisLabels.forEachIndexed { i, label ->
-                val y = chartHeight - i * stepY
-                drawLine(
-                    color = Color.White.copy(0.4f),
-                    start = Offset(Y_AXIS_WIDTH.toPx(), y),
-                    end = Offset(size.width, y)
+        // 1. Y축 가이드라인 + 라벨
+        yAxisLabels.forEachIndexed { i, label ->
+            val y = chartHeight - i * stepY
+            drawLine(
+                color = Color.White.copy(0.4f),
+                start = Offset(Y_AXIS_WIDTH.toPx(), y),
+                end = Offset(size.width, y)
+            )
+            val measured = textMeasurer.measure(label, labelStyle)
+            drawText(
+                measured,
+                topLeft = Offset(
+                    Y_AXIS_WIDTH.toPx() - measured.size.width - Y_AXIS_PADDING.toPx(),
+                    y - measured.size.height / 2f
                 )
-                val measured = textMeasurer.measure(label, labelStyle)
-                drawText(
-                    measured,
-                    topLeft = Offset(
-                        Y_AXIS_WIDTH.toPx() - measured.size.width - Y_AXIS_PADDING.toPx(),
-                        y - measured.size.height / 2f
-                    )
-                )
-            }
+            )
+        }
 
-            val denominator = (xLabels.size - 1).coerceAtLeast(1)
-            val stepX = (size.width - Y_AXIS_WIDTH.toPx()) / denominator
+        val denominator = (xLabels.size - 1).coerceAtLeast(1)
+        val stepX = (size.width - Y_AXIS_WIDTH.toPx()) / denominator
 
-            // 2. X축 반복: 막대 + 날짜 라벨
-            xLabels.forEachIndexed { i, entity ->
-                val x = Y_AXIS_WIDTH.toPx() + (i * stepX)
-                drawBar(chartHeight, x, entity.date)
+        val bedTimePath = Path()
+        val averageBedTimeLine = Path()
+        val wakeTimePath = Path()
+        val averageWakeTimeLine = Path()
 
-                val labelMeasured = textMeasurer.measure(entity.labelText, labelStyle)
-                drawText(
-                    labelMeasured,
-                    topLeft = Offset(
-                        x - labelMeasured.size.width / 2f,
-                        chartHeight + 4.dp.toPx()
-                    )
-                )
-            }
-            activeTooltipDate?.let { tooltipDate ->
-                val targetIndex = xLabels.indexOfFirst { it.date == tooltipDate }
-                if (targetIndex != -1) {
-                    val x = Y_AXIS_WIDTH.toPx() + (targetIndex * stepX)
-                    drawTooltip(size.width, chartHeight, x, tooltipDate)
+        var isFirstBedPoint = true
+        var isFirstWakePoint = true
+
+        var totalBedTimeY = 0f
+        var bedTimeCount = 0
+        var totalWakeTimeY = 0f
+        var wakeTimeCount = 0
+
+        val firstX = Y_AXIS_WIDTH.toPx()
+        val lastX = Y_AXIS_WIDTH.toPx() + ((xLabels.size - 1) * stepX)
+
+        xLabels.forEachIndexed { i, entity ->
+            val x = Y_AXIS_WIDTH.toPx() + (i * stepX)
+
+            calculateY?.let { getY ->
+                val bedTimeY = getY(chartHeight, entity.date, true)
+                val wakeTimeY = getY(chartHeight, entity.date, false)
+                val averageBedTimeY = 0f
+                val averageWakeTimeY = 0f
+
+
+                if (bedTimeY != null) {
+                    totalBedTimeY += bedTimeY
+                    bedTimeCount++
+
+                    if (isFirstBedPoint) {
+                        bedTimePath.moveTo(x, bedTimeY)
+                        averageBedTimeLine.moveTo(x, averageBedTimeY)
+                        isFirstBedPoint = false
+                    } else {
+                        bedTimePath.lineTo(x, bedTimeY)
+                        averageBedTimeLine.lineTo(x, averageBedTimeY)
+                    }
+                }
+                if (wakeTimeY != null) {
+                    totalWakeTimeY += wakeTimeY
+                    wakeTimeCount++
+
+                    if (isFirstWakePoint) {
+                        wakeTimePath.moveTo(x, wakeTimeY)
+                        averageWakeTimeLine.moveTo(x, averageWakeTimeY)
+                        isFirstWakePoint = false
+                    } else {
+                        wakeTimePath.lineTo(x, wakeTimeY)
+                        averageWakeTimeLine.lineTo(x, averageWakeTimeY)
+                    }
                 }
             }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = averageLabel,
-                    style = MaterialTheme.typography.caption,
-                    color = Color.White
+            drawBar?.let { getBar ->
+                getBar(chartHeight, x, entity.date)
+            }
+            val labelMeasured = textMeasurer.measure(entity.labelText, labelStyle)
+            drawText(
+                labelMeasured,
+                topLeft = Offset(
+                    x - labelMeasured.size.width / 2f,
+                    chartHeight + 4.dp.toPx()
                 )
-                Text(text = averageText)
+            )
+        }
+        drawPath(
+            path = bedTimePath,
+            color = bedTimeLineColor,
+            style = Stroke(width = 1.dp.toPx(), cap = StrokeCap.Round)
+        )
+        drawPath(
+            path = wakeTimePath,
+            color = wakeTimeLineColor,
+            style = Stroke(width = 1.dp.toPx(), cap = StrokeCap.Round)
+        )
+        if (bedTimeCount > 0) {
+            val finalAverageBedY = totalBedTimeY / bedTimeCount
+            val averageBedTimeLine = Path().apply {
+                moveTo(firstX, finalAverageBedY)
+                lineTo(lastX, finalAverageBedY)
+            }
+            drawPath(
+                path = averageBedTimeLine,
+                color = bedTimeLineColor,
+                style = Stroke(
+                    width = 1.dp.toPx(),
+                    cap = StrokeCap.Round,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+                )
+            )
+        }
+        if (wakeTimeCount > 0) {
+            val finalAverageWakeY = totalWakeTimeY / wakeTimeCount
+            val averageWakeTimeLine = Path().apply {
+                moveTo(firstX, finalAverageWakeY)
+                lineTo(lastX, finalAverageWakeY)
+            }
+            drawPath(
+                path = averageWakeTimeLine,
+                color = wakeTimeLineColor,
+                style = Stroke(
+                    width = 1.dp.toPx(),
+                    cap = StrokeCap.Round,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+                )
+            )
+        }
+        activeTooltipDate?.let { tooltipDate ->
+            val targetIndex = xLabels.indexOfFirst { it.date == tooltipDate }
+            if (targetIndex != -1) {
+                val x = Y_AXIS_WIDTH.toPx() + (targetIndex * stepX)
+                drawTooltip(size.width, chartHeight, x, tooltipDate)
             }
         }
+    }
+}
+
+@Composable
+fun AverageSummary(
+    averageLabel: String,
+    averageText: AnnotatedString
+) {
+    Column(
+        modifier = Modifier.padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = averageLabel,
+            style = MaterialTheme.typography.caption,
+            color = Color.White
+        )
+        Text(text = averageText)
     }
 }
 
@@ -1602,7 +1639,6 @@ fun ReportScreenPreview() {
                 reportData = DemoReportFactory.createPreviewData(0L, date),
                 weeklyChartData = DemoReportFactory.createPreviewData(0L, date),
             ),
-            onChartModeSelected = {},
             onDateSelected = {},
             onPrevMonthClicked = {},
             onNextMonthClicked = {}

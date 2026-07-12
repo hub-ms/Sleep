@@ -348,11 +348,6 @@ data class HomeScreen(
                         ReportContent(
                             trackingState = trackingState,
                             reportState = reportViewModel.state.collectAsState().value,
-                            onChartModeSelected = {
-                                reportViewModel.sendIntent(
-                                    ReportContract.Intent.SelectChartMode(it)
-                                )
-                            },
                             onDateSelected = {
                                 reportViewModel.sendIntent(
                                     ReportContract.Intent.SelectDate(it)
@@ -422,16 +417,8 @@ data class TrackingScreen(
         val trackingViewModel = koinScreenModel<TrackingViewModel>()
         val trackingState by trackingViewModel.state.collectAsState()
 
-        val homeViewModel = koinScreenModel<TrackingViewModel>()
         val reportViewModel = koinScreenModel<ReportViewModel>()
         val musicViewModel = koinScreenModel<MusicViewModel>()
-
-        LaunchedEffect(trackingState.isFinished, trackingState.finishedSessionId) {
-            val sessionId = trackingState.finishedSessionId
-            if (trackingState.isFinished && sessionId != null) {
-                reportViewModel.sendIntent(ReportContract.Intent.LoadFinishedSession(sessionId))
-            }
-        }
 
         LaunchedEffect(Unit) {
             trackingViewModel.effect.collect { effect ->

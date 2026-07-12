@@ -10,6 +10,8 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.isoDayNumber
+import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
@@ -64,6 +66,13 @@ object DateTimeUtil {
         val month = date.monthNumber
 
         return "${year}.${month.pad()}"
+    }
+    fun formatCalendarWeek(date: LocalDate): String {
+        val monday = date.minus(date.dayOfWeek.isoDayNumber - 1, DateTimeUnit.DAY)
+        val sunday = monday.plus(6, DateTimeUnit.DAY)
+
+        return "${monday.year}.${monday.monthNumber.pad()}.${monday.dayOfMonth.pad()}~" +
+                "${sunday.year}.${sunday.monthNumber.pad()}.${sunday.dayOfMonth.pad()}"
     }
     fun formatWeekLabel(startDate: LocalDate, endDate: LocalDate): String {
         val startYear = startDate.year

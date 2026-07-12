@@ -122,7 +122,7 @@ fun TrackingContent(
             ) {
                 Column(
                     modifier = Modifier.align(Alignment.TopCenter),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.SpaceEvenly,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     TopStatusSection(
@@ -335,8 +335,6 @@ fun TopStatusSection(
                 color = Color.White
             )
             Row(
-                modifier = Modifier
-                    .border(2.dp, Color.Green),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {

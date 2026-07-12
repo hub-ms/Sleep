@@ -9,6 +9,7 @@ import kotlinx.datetime.Clock
 import kotlin.math.abs
 
 private const val TAG = "SleepAnalyzer"
+private const val TARGET_SAMPLE_COUNT = 1500
 
 class SleepAnalyzer(private val classifier: SleepStageClassifier) {
     
@@ -33,11 +34,13 @@ class SleepAnalyzer(private val classifier: SleepStageClassifier) {
             val elapsedMs = (currentTimeMs - sessionStartTimeMs).coerceAtLeast(0L)
             val timeFeature = (elapsedMs.toDouble() / 28_800_000.0).coerceAtMost(1.0).toFloat()
 
-            val avgX = sensorData.map { it.getOrElse(SleepStageClassifier.CH_ACCEL_X) { 0f } }.average().toFloat()
-            val avgY = sensorData.map { it.getOrElse(SleepStageClassifier.CH_ACCEL_Y) { 0f } }.average().toFloat()
-            val avgZ = sensorData.map { it.getOrElse(SleepStageClassifier.CH_ACCEL_Z) { 1f } }.average().toFloat()
+            val resampled = resampleTo(sensorData, TARGET_SAMPLE_COUNT)
 
-            val expanded: List<FloatArray> = sensorData.map { sample ->
+            val avgX = resampled.map { it.getOrElse(SleepStageClassifier.CH_ACCEL_X) { 0f } }.average().toFloat()
+            val avgY = resampled.map { it.getOrElse(SleepStageClassifier.CH_ACCEL_Y) { 0f } }.average().toFloat()
+            val avgZ = resampled.map { it.getOrElse(SleepStageClassifier.CH_ACCEL_Z) { 1f } }.average().toFloat()
+
+            val expanded: List<FloatArray> = resampled.map { sample ->
                 val x = sample.getOrElse(SleepStageClassifier.CH_ACCEL_X) { 0f }
                 val y = sample.getOrElse(SleepStageClassifier.CH_ACCEL_Y) { 0f }
                 val z = sample.getOrElse(SleepStageClassifier.CH_ACCEL_Z) { 1f }
@@ -88,6 +91,29 @@ class SleepAnalyzer(private val classifier: SleepStageClassifier) {
     }
 
     fun isReady(): Boolean = classifier.isReady()
+    private fun resampleTo(samples: List<FloatArray>, targetCount: Int): List<FloatArray> {
+        if (samples.size == targetCount) return samples
+        if (samples.size == 1) return List(targetCount) { samples[0].copyOf() }
+
+        val result = ArrayList<FloatArray>(targetCount)
+        val ratio = (samples.size - 1).toFloat() / (targetCount - 1).toFloat()
+        val channelCount = samples[0].size
+
+        for (i in 0 until targetCount) {
+            val srcIndex = i * ratio
+            val lo = srcIndex.toInt().coerceIn(0, samples.size - 1)
+            val hi = (lo + 1).coerceAtMost(samples.size - 1)
+            val frac = srcIndex - lo
+
+            val interpolated = FloatArray(channelCount) { ch ->
+                val a = samples[lo].getOrElse(ch) { 0f }
+                val b = samples[hi].getOrElse(ch) { 0f }
+                a + (b - a) * frac
+            }
+            result.add(interpolated)
+        }
+        return result
+    }
 
     private fun indexToStage(index: Int): PredictionStageType = when (index) {
         0 -> PredictionStageType.AWAKE

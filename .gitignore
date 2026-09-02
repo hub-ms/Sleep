@@ -17,3 +17,22 @@ spring/.env
 spring/src/main/resources/application.yml
 ml/data/weather_simulation/*.json
 ml/output/train_log.csv
+
+# ── ML 데이터셋 (대용량, 로컬 전용) ─────────────────────
+ml/data/bidsleep/
+ml/data/sleep_accel/
+ml/data/sleep_edf/
+ml/data/combined/
+ml/data/desktop.ini
+ml/output/
+ml/dataset-metadata.json
+ml/__pycache__/
+ml/script/__pycache__/
+sleep-dataset.zip
+
+# ── OS 잡파일 (Windows) ──────────────────────────────
+desktop.ini
+Thumbs.db
+
+# ── 오디오/이미지 대용량 리소스 (필요시) ─────────────
+# 프로젝트 정책에 따라 조정 — 앱에 실제로 포함되는 리소스라면 이 줄들은 넣지 마세요

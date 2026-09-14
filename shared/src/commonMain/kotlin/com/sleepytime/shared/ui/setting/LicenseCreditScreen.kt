@@ -3,7 +3,6 @@ package com.sleepytime.shared.ui.setting
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,8 +26,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.mikepenz.aboutlibraries.ui.compose.m3.LibrariesContainer
-import com.mikepenz.aboutlibraries.ui.compose.m3.LibraryDefaults
 import com.sleepytime.shared.ui.theme.sectionTitle
 
 private val sleepMusicCredits = listOf(
@@ -94,20 +91,13 @@ fun LicenseCreditContent(
     }
 }
 
+// 오픈소스 라이브러리 목록을 실제로 불러와 표시하는 부분은 플랫폼마다 구현이 다르다.
+// (안드로이드: AboutLibraries가 빌드 시 생성한 res/raw/aboutlibraries.json을 Context로 자동 탐색해 읽어온다.)
+// 이전에는 LibrariesContainer(null, ...)을 직접 호출했는데, 이 시그니처는 아무 데이터도 자동으로
+// 불러오지 않고 항상 빈 목록을 그리는 공통(commonMain) 오버로드로 연결되어, 탭을 눌러도 빈 화면만
+// 보이는 원인이었다.
 @Composable
-fun LibraryListSection() {
-    LibrariesContainer(
-        null,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        colors = LibraryDefaults.libraryColors(
-            backgroundColor = Color.Transparent,
-            contentColor = Color.White,
-            badgeBackgroundColor = MaterialTheme.colorScheme.primary.copy(0.4f),
-            badgeContentColor = MaterialTheme.colorScheme.primary,
-        )
-    )
-}
+expect fun LibraryListSection()
 
 @Composable
 fun SoundCreditSection(

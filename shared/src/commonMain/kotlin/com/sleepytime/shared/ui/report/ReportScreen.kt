@@ -54,6 +54,8 @@ import androidx.compose.ui.graphics.drawscope.DrawStyle
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextMeasurer
@@ -347,6 +349,18 @@ fun ReportContent(
         baseBodyStyle
     )
 
+    // "평균 소음"은 TimeScoreCard에서 표시하는 값으로, 소음 그래프 헤더 옆에 중복 표시하던 텍스트를
+    // 이곳으로 옮긴 것이다. GraphHeader의 unit="dB"와 마찬가지로 단위를 값 뒤에 작게 붙인다.
+    val noiseAvgText = buildAnnotatedString {
+        withStyle(baseSectionStyle) { append(values.noiseAvg.roundToInt().toString()) }
+        withStyle(baseBodyStyle) { append("dB") }
+    }
+    val weeklyNoiseAvg = reportState.weeklyChartData?.avgNoise ?: values.noiseAvg
+    val weeklyNoiseAvgText = buildAnnotatedString {
+        withStyle(baseSectionStyle) { append(weeklyNoiseAvg.roundToInt().toString()) }
+        withStyle(baseBodyStyle) { append("dB") }
+    }
+
     val dailyItems = listOf(
         ComparisonItem(
             label = "수면시간",
@@ -362,6 +376,10 @@ fun ReportContent(
             label = "잠들기까지",
             valueText = latencyText,
             isIncrease = latencyMillis > prevLatencyMillis
+        ),
+        ComparisonItem(
+            label = "평균 소음",
+            valueText = noiseAvgText,
         ),
     )
     val weeklyItems = listOf(
@@ -379,7 +397,11 @@ fun ReportContent(
             label = "잠들기까지",
             valueText = avgLatencyText,
             isIncrease = avgLatencyMillis > prevAvgLatencyMillis
-        )
+        ),
+        ComparisonItem(
+            label = "평균 소음",
+            valueText = weeklyNoiseAvgText,
+        ),
     )
     val textMeasurer = rememberTextMeasurer()
     Box(
@@ -456,7 +478,6 @@ fun ReportContent(
                             bedTimeText = bedTimeText,
                             wakeTimeText = wakeTimeText,
                             values = values,
-                            baseSectionStyle = baseSectionStyle,
                             labelStyle = labelStyle,
                         )
 
@@ -863,7 +884,6 @@ fun SleepTimeLineEnvironmentCard(
     bedTimeText: String,
     wakeTimeText: String,
     values: EnvironmentValues,
-    baseSectionStyle: SpanStyle,
     labelStyle: TextStyle,
 ) {
     if (reportData == null) return
@@ -895,10 +915,14 @@ fun SleepTimeLineEnvironmentCard(
         if (it.isNaN() || it.isInfinite()) 0 else it.roundToInt()
     }.toMutableList()
 
-    val noiseText = buildAnnotatedString {
-        withStyle(baseSectionStyle) { append(values.noiseAvg.roundToInt().toString()) }
-    }
-
+    // ChartLegend가 SleepTimeLineChart 옆으로 이동하면서 그만큼 SleepTimeLineChart의 플롯 폭이 줄어든다.
+    // EnvironmentChart와 취침/기상 시각 텍스트는 그 줄어든 만큼(범례 폭 + 둘 사이 8dp 간격)을 오른쪽에
+    // 동일하게 비워두어야 세 영역의 가로 길이가 실제로 일치한다.
+    var legendWidthPx by remember { mutableFloatStateOf(0f) }
+    val density = LocalDensity.current
+    val legendReserve = if (legendWidthPx > 0f) {
+        with(density) { (legendWidthPx + 8.dp.toPx()).toDp() }
+    } else 0.dp
 
     Surface(
         modifier = Modifier
@@ -922,15 +946,20 @@ fun SleepTimeLineEnvironmentCard(
                 title = "수면 단계",
                 categoryColor = MaterialTheme.colorScheme.primary,
             )
-            SleepTimeLineChart(
-                reportState = reportState,
-                targetDate = targetDate,
-            )
+            // 수면 단계 그래프 옆에 범례를 세로로 나란히 배치한다. ChartLegend는 각 항목을 그래프와
+            // 동일한 16dp 높이 행으로 위에서부터 쌓으므로, 각 수면 단계(깨어남/얕은수면/렘수면/깊은수면)
+            // 범례가 그래프의 해당 단계 행과 같은 높이에 정렬된다.
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                SleepTimeLineChart(
+                    modifier = Modifier.weight(1f),
+                    reportState = reportState,
+                    targetDate = targetDate,
+                )
                 ChartLegend(
+                    modifier = Modifier.onSizeChanged { legendWidthPx = it.width.toFloat() },
                     items = listOf(
                         LegendItem(
                             label = stageTypes[0].stageName,
@@ -959,36 +988,31 @@ fun SleepTimeLineEnvironmentCard(
                     )
                 )
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+            // "평균 [값]" 텍스트는 TimeScoreCard로 이동했으므로 여기서는 헤더만 표시한다.
+            GraphHeader(
+                icon = Res.drawable.ic_noise,
+                title = "소음",
+                categoryColor = MaterialTheme.colorScheme.primary,
+                unit = "dB"
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(end = legendReserve)
             ) {
-                GraphHeader(
-                    icon = Res.drawable.ic_noise,
-                    title = "소음",
-                    categoryColor = MaterialTheme.colorScheme.primary,
-                    unit = "dB"
-                )
-                Text(
-                    text = "평균",
-                    style = MaterialTheme.typography.caption,
-                    color = SleepTheme.textColors.primary
-                )
-                Text(
-                    text = noiseText,
-                    style = MaterialTheme.typography.bodyHighlight,
-                    color = SleepTheme.textColors.primary
+                EnvironmentChart(
+                    category = EnvironmentCategory.NOISE,
+                    values = values,
+                    color = EnvironmentCategory.NOISE.toStatus(values).primaryColor,
+                    labelStyle = labelStyle
                 )
             }
-            EnvironmentChart(
-                category = EnvironmentCategory.NOISE,
-                values = values,
-                color = EnvironmentCategory.NOISE.toStatus(values).primaryColor,
-                labelStyle = labelStyle
-            )
+            // EnvironmentChart의 실제 플롯 영역(왼쪽 LABEL_WIDTH+Y_AXIS_PADDING, 오른쪽 Y_AXIS_PADDING
+            // 만큼 여백)과 가로 길이를 맞춰, 취침/기상 시각 텍스트가 그래프의 시작/끝 x좌표와 정렬되게 한다.
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = LABEL_WIDTH + Y_AXIS_PADDING, end = Y_AXIS_PADDING + legendReserve),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {

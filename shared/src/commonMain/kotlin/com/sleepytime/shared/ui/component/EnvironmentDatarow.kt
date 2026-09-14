@@ -116,8 +116,10 @@ fun EnvironmentChart(
             .onSizeChanged { size -> viewportWidthPx = size.width.toFloat() }
     ) {
         if (viewportWidthPx > 0f && dataPoints.isNotEmpty()) {
+            // SleepTimeLineChart(수면 단계 그래프)와 플롯 가로 길이를 맞추기 위해, 왼쪽 라벨 폭(LABEL_WIDTH)
+            // 뒤에 Y_AXIS_PADDING만큼의 간격을, 오른쪽 끝에도 동일하게 Y_AXIS_PADDING만큼의 여백을 둔다.
             val usableWidthPx =
-                (viewportWidthPx - with(density) { LABEL_WIDTH.toPx() }).coerceAtLeast(1f)
+                (viewportWidthPx - with(density) { LABEL_WIDTH.toPx() + Y_AXIS_PADDING.toPx() * 2 }).coerceAtLeast(1f)
             val stepX = if (dataPoints.size > 1) usableWidthPx / (dataPoints.size - 1) else 0f
 
             val maxVal = when (category) {
@@ -151,7 +153,13 @@ fun EnvironmentChart(
                         )
                     }
                 }
-                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                Spacer(modifier = Modifier.width(Y_AXIS_PADDING))
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .padding(end = Y_AXIS_PADDING)
+                ) {
                     Canvas(
                         modifier = Modifier.fillMaxSize()
                     ) {

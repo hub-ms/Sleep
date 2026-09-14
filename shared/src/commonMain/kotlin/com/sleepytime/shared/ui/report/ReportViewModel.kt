@@ -120,7 +120,7 @@ class ReportViewModel(
                 loadData(intent.date)
             }
             is ReportContract.Intent.ToggleCalendar -> {
-                _state.update { it.copy(isCalendarExpanded = !intent.isExpanded) }
+                _state.update { it.copy(isCalendarExpanded = intent.isExpanded) }
             }
             is ReportContract.Intent.PrevClicked -> handleNavigation(isNext = false, unit = intent.unit)
             is ReportContract.Intent.NextClicked -> handleNavigation(isNext = true, unit = intent.unit)

@@ -1,0 +1,18 @@
+import com.sleepytime.shared.enum_.AuthProvider;
+
+CREATE TABLE AuthInfoEntity (
+    authId TEXT NOT NULL PRIMARY KEY,
+    provider TEXT AS AuthProvider
+);
+
+selectByAuthId:
+SELECT * FROM AuthInfoEntity WHERE authId = :authId;
+
+selectByProvider:
+SELECT * FROM AuthInfoEntity WHERE provider = :provider;
+
+insert:
+INSERT OR REPLACE INTO AuthInfoEntity VALUES ?;
+
+deleteAuthInfo:
+DELETE FROM AuthInfoEntity;

@@ -14,6 +14,9 @@ spring/.env
 *.edf
 *.keras
 *.tflite
+*.mp4
+*.html
+*.md
 spring/src/main/resources/application.yml
 ml/data/weather_simulation/*.json
 ml/output/train_log.csv

@@ -1,13 +1,20 @@
 # Task Management
 
-- [/] Refine Profile and Account Settings UX
-    - [ ] Update Backend (Spring Boot) with profile update API
-    - [ ] Update Shared Module (Common) with API, Repository, and ViewModel logic
-    - [/] Improve UI Components (Compose) in `AccountSettingScreen.kt`
-        - [ ] Implement clipboard copy with Snackbar
-        - [ ] Revamp `AccountConnectItem` with buttons and chips
-        - [ ] Fix `ProfileEditContent` with local state and Save button
-        - [ ] Implement camera options tooltip/dropdown
-        - [ ] Implement multi-step withdrawal flow
-    - [ ] Wire up navigation in `AppScreens.kt`
-    - [ ] Verify implementation
+- [ ] Refine Profile and Account Settings UX
+    - [ ] **Backend (Spring Boot)**
+        - [ ] Add profile update API (`PATCH /auth/me`)
+        - [ ] Support withdrawal reason in delete API
+    - [ ] **Shared Module (Common)**
+        - [ ] Update `AuthApi` and `AuthRepository` for profile updates
+        - [ ] Implement `SaveProfile` and `WithdrawalReason` intents in `AuthViewModel`
+    - [ ] **UI Components (Compose)**
+        - [ ] Fix `ProfileEditContent`:
+            - [ ] Connect form to ViewModel `SaveProfile` intent
+            - [ ] Implement camera menu (Default/Album/Camera)
+        - [ ] Standardize Snackbar design for clipboard copy
+        - [ ] Style `AccountConnectItem` buttons/badges to match system
+        - [ ] Implement 3-step withdrawal flow screens
+    - [ ] **Navigation**
+        - [ ] Update `AppScreens.kt` for the new flow
+    - [ ] **Verification**
+        - [ ] Build and test all flows

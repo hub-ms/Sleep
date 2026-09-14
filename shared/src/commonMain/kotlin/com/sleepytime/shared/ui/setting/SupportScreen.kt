@@ -82,7 +82,7 @@ fun SupportContent(
 
 @Composable
 fun FaqSection(allItems: List<FaqItem>) {
-    var selectedCategory by remember { mutableStateOf<FaqCategory>(FaqCategory.ALARM) }
+    var selectedCategory by remember { mutableStateOf<FaqCategory>(FaqCategory.SLEEP) }
 
     val filteredItems = remember(selectedCategory) {
         allItems.filter { item ->

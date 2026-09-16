@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import tensorflow as tf
 import keras
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, confusion_matrix
 from model import build_dual_domain_model
 
 tf.keras.mixed_precision.set_global_policy("mixed_bfloat16")
@@ -37,7 +37,8 @@ VAL_STEPS = 40
 ACCEL_LOSS_WEIGHT = 0.5  # 0.8 -> 0.5 (백본 안정화)
 FOCAL_GAMMA = 1.0
 LABEL_SMOOTHING = 0.1
-SELF_TRANSITION_BOOST = 1.5
+
+CLASS_NAMES = ["Wake", "Light", "Deep", "REM"]
 
 _MEM_CACHE = {}
 
@@ -108,6 +109,41 @@ def compute_class_weights_multi(directories, subject_ids_by_dir, min_weight=0.5,
     weights = np.clip(weights / np.mean(weights), min_weight, max_weight)
     return weights.astype(np.float32).tolist()
 
+def count_context_windows(directories, subject_ids_by_dir, stride):
+    """주어진 subject 목록에서 stride 간격으로 뽑을 수 있는 CONTEXT_LEN 길이 윈도우 총 개수."""
+    total = 0
+    for d in directories:
+        for sid in subject_ids_by_dir.get(d, []):
+            cached = _MEM_CACHE.get((str(d), sid))
+            if not cached:
+                continue
+            n = len(cached[0])
+            if n >= CONTEXT_LEN:
+                total += (n - CONTEXT_LEN) // stride + 1
+    return total
+
+
+def save_class_distribution(directories, subject_ids_by_dir, out_path):
+    """클래스 분포를 stdout 출력으로 흘려보내지 않고 파일로 남겨 재현/비교 가능하게 합니다."""
+    counts = np.zeros(N_CLASSES, dtype=np.int64)
+    for d in directories:
+        for sid in subject_ids_by_dir.get(d, []):
+            cached = _MEM_CACHE.get((str(d), sid))
+            if cached:
+                u, c = np.unique(cached[1], return_counts=True)
+                for uu, cc in zip(u, c):
+                    if uu < N_CLASSES:
+                        counts[uu] += cc
+    total = counts.sum()
+    lines = [
+        f"{name}: {count} ({(count / total * 100 if total else 0):.2f}%)"
+        for name, count in zip(CLASS_NAMES, counts)
+    ]
+    out_path.write_text("\n".join(lines), encoding="utf-8")
+    print(f"클래스 분포 저장: {out_path}\n" + "\n".join(lines))
+    return counts
+
+
 def augment_accel(x_slice):
     # Light augmentation for Accel domain
     # Scaling (±10%)
@@ -147,6 +183,40 @@ def build_dataset(directories, subject_ids_by_dir, mean, std, window, channels, 
         )
     ).batch(BATCH_SIZE, drop_remainder=True)
 
+def evaluate_domain(infer_model, dataset, steps, label):
+    """테스트셋에서 실제로 classification_report/confusion matrix를 계산해 파일로 저장합니다.
+    (기존에는 edf_te/bid_te/acc_te가 계산만 되고 어디서도 쓰이지 않아 baseline F1을 측정할 방법이 없었습니다.)"""
+    y_true_all, y_pred_all = [], []
+    it = iter(dataset)
+    for _ in range(steps):
+        x_batch, y_batch = next(it)
+        logits = infer_model.predict(x_batch, verbose=0)
+        preds = np.argmax(logits, axis=-1)
+        y_true_all.append(y_batch.numpy().reshape(-1))
+        y_pred_all.append(preds.reshape(-1))
+
+    y_true = np.concatenate(y_true_all)
+    y_pred = np.concatenate(y_pred_all)
+
+    report = classification_report(
+        y_true, y_pred,
+        labels=list(range(N_CLASSES)),
+        target_names=CLASS_NAMES,
+        digits=4,
+        zero_division=0,
+    )
+    cm = confusion_matrix(y_true, y_pred, labels=list(range(N_CLASSES)))
+
+    print(f"\n=== {label} 테스트셋 평가 (n={len(y_true)} epochs) ===")
+    print(report)
+    print("Confusion matrix (rows=true, cols=pred):")
+    print(cm)
+
+    (OUTPUT_DIR / f"{label}_classification_report.txt").write_text(report, encoding="utf-8")
+    np.save(OUTPUT_DIR / f"{label}_confusion_matrix.npy", cm)
+    return report, cm
+
+
 def _combine_with_weights(psg_batch, accel_batch, psg_w, accel_w):
     psg_x, psg_y = psg_batch
     accel_x, accel_y = accel_batch
@@ -177,13 +247,18 @@ def main():
     bid_tr, bid_vl, bid_te = split(bid_sids)
     acc_tr, acc_vl, acc_te = split(acc_sids)
 
-    load_subjects_lazy(EDF_DIR, edf_tr + edf_vl)
-    load_subjects_lazy(BID_DIR, bid_tr + bid_vl)
-    load_subjects_lazy(ACCEL_DIR, acc_tr + acc_vl)
+    load_subjects_lazy(EDF_DIR, edf_tr + edf_vl + edf_te)
+    load_subjects_lazy(BID_DIR, bid_tr + bid_vl + bid_te)
+    load_subjects_lazy(ACCEL_DIR, acc_tr + acc_vl + acc_te)
 
     psg_w = compute_class_weights_multi([EDF_DIR], {EDF_DIR: edf_tr})
     acc_w = compute_class_weights_multi([BID_DIR, ACCEL_DIR], {BID_DIR: bid_tr, ACCEL_DIR: acc_tr})
     print(f"Weights - PSG: {psg_w}, Accel: {acc_w}")
+
+    # 클래스 분포는 이전에는 stdout에만 찍히고 사라졌습니다. 이후 개선(불균형 처리 등) 전후
+    # 비교를 위해 파일로 남깁니다.
+    save_class_distribution([EDF_DIR], {EDF_DIR: edf_tr}, OUTPUT_DIR / "psg_train_class_distribution.txt")
+    save_class_distribution([BID_DIR, ACCEL_DIR], {BID_DIR: bid_tr, ACCEL_DIR: acc_tr}, OUTPUT_DIR / "accel_train_class_distribution.txt")
 
     # Datasets
     train_ds = tf.data.Dataset.zip((
@@ -212,7 +287,9 @@ def main():
 
     cbs = [
         tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=12, restore_best_weights=True),
-        tf.keras.callbacks.ModelCheckpoint(str(OUTPUT_DIR / "best_model.keras"), save_best_only=True)
+        tf.keras.callbacks.ModelCheckpoint(str(OUTPUT_DIR / "best_model.keras"), save_best_only=True),
+        # .gitignore가 이 경로를 이미 기대하고 있었지만 실제로 기록하는 콜백이 없었습니다.
+        tf.keras.callbacks.CSVLogger(str(OUTPUT_DIR / "train_log.csv")),
     ]
 
     train_model.fit(train_ds, validation_data=val_ds, epochs=EPOCHS, steps_per_epoch=STEPS_PER_EPOCH, validation_steps=VAL_STEPS, callbacks=cbs)
@@ -220,6 +297,24 @@ def main():
     # Save
     models["psg_infer_model"].save(OUTPUT_DIR / "psg_inference_model.keras")
     models["accel_infer_model"].save(OUTPUT_DIR / "accel_inference_model.keras")
+
+    # 💡 Phase 0: edf_te/bid_te/acc_te는 이전에는 계산만 되고 한 번도 쓰이지 않아
+    # baseline F1을 측정할 방법이 없었습니다. 학습 종료 후 held-out 테스트셋으로 실제 평가합니다.
+    test_psg_ds = build_dataset(
+        [EDF_DIR], {EDF_DIR: edf_te}, psg_m, psg_s, PSG_WINDOW, PSG_CHANNELS, PSG_STRIDE, shuffle=False
+    )
+    test_accel_ds = build_dataset(
+        [BID_DIR, ACCEL_DIR], {BID_DIR: bid_te, ACCEL_DIR: acc_te}, accel_m, accel_s,
+        ACCEL_WINDOW, ACCEL_CHANNELS, ACCEL_STRIDE, shuffle=False
+    )
+    psg_test_steps = max(1, count_context_windows([EDF_DIR], {EDF_DIR: edf_te}, PSG_STRIDE) // BATCH_SIZE)
+    accel_test_steps = max(
+        1,
+        count_context_windows([BID_DIR, ACCEL_DIR], {BID_DIR: bid_te, ACCEL_DIR: acc_te}, ACCEL_STRIDE) // BATCH_SIZE
+    )
+
+    evaluate_domain(models["psg_infer_model"], test_psg_ds, psg_test_steps, "psg")
+    evaluate_domain(models["accel_infer_model"], test_accel_ds, accel_test_steps, "accel")
 
 if __name__ == "__main__":
     main()

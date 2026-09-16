@@ -76,11 +76,25 @@ class AndroidSleepMeasureManager @Inject constructor(
     private var isMeasuring = false
     private var measureScope: CoroutineScope? = null
 
+    // 💡 소음측정 정확도 개선: 세션마다 침실의 배경소음 수준이 다르므로, 고정 임계값 하나로
+    // 모든 사용자를 판단하지 않고 세션 초반 몇 분을 "이 밤의 개인 배경소음 기준선"으로 삼아
+    // 위험 판정 임계값을 개인화합니다. 기준선이 원래 임계값보다 낮을 때는 절대 임계값보다
+    // 민감해지지 않도록 max()로 하한을 둡니다(회귀 방지).
+    private var sessionAmbientBaselineDb: Float? = null
+    private val calibrationBucketNoiseAvgs = mutableListOf<Float>()
+
+    // 💡 소음측정 정확도 개선: 단발성 스파이크(알림음, 한 번의 기침 등)에 과민 반응하지 않도록
+    // 연속된 버킷에서 임계값을 넘을 때만 "소음 위험"으로 판정합니다.
+    private var consecutiveDangerBuckets = 0
+
     companion object {
         private const val MOVEMENT_THRESHOLD_MS2 = 12.0f
         private const val DEFAULT_NOISE_DB = 30f
         private const val NOISE_DANGER_THRESHOLD = 60f
         private const val WINDOW_BUCKET_MS = 30_000L
+        private const val CALIBRATION_BUCKET_COUNT = 4 // 첫 2분(4×30초)을 세션 배경소음 기준선으로 사용
+        private const val DANGER_BASELINE_DELTA_DB = 30f // 개인 기준선 대비 이만큼 이상 올라야 위험으로 판단
+        private const val MIN_CONSECUTIVE_DANGER_BUCKETS = 2 // 연속 2버킷(60초) 이상 지속되어야 위험으로 판단
     }
     override var onWindowReady: ((List<FloatArray>) -> Unit)? = null
     override var onEnvironmentReady: ((EnvironmentFeature) -> Unit)? = null
@@ -144,6 +158,10 @@ class AndroidSleepMeasureManager @Inject constructor(
             capturedSensorWindows.clear()
             capturedAggregates.clear()
             capturedEnvironmentFeatures.clear()
+
+            sessionAmbientBaselineDb = null
+            calibrationBucketNoiseAvgs.clear()
+            consecutiveDangerBuckets = 0
         }
     }
     private fun scheduleWindowUpdate() {
@@ -244,6 +262,39 @@ class AndroidSleepMeasureManager @Inject constructor(
                 isNoiseDanger = noiseStats.avg > NOISE_DANGER_THRESHOLD,
             )
         )
+    }
+
+    /**
+     * 이번 버킷이 "소음 위험"인지 판정합니다.
+     * 1) 세션 초반 [CALIBRATION_BUCKET_COUNT]개 버킷 평균으로 이 밤의 개인 배경소음 기준선을
+     *    추정하고, 절대 임계값([NOISE_DANGER_THRESHOLD])보다 낮아지지는 않게 하한을 둔 채
+     *    기준선 대비 상대적으로 판단합니다.
+     * 2) 연속 [MIN_CONSECUTIVE_DANGER_BUCKETS]개 버킷 이상 임계값을 넘어야 위험으로 확정해
+     *    단발성 스파이크에 의한 오탐을 줄입니다.
+     */
+    private fun resolveNoiseDanger(noiseStats: StatsUtil.RollingStats): Boolean {
+        if (noiseStats.count == 0) {
+            consecutiveDangerBuckets = 0
+            return false
+        }
+
+        if (sessionAmbientBaselineDb == null) {
+            calibrationBucketNoiseAvgs.add(noiseStats.avg)
+            if (calibrationBucketNoiseAvgs.size >= CALIBRATION_BUCKET_COUNT) {
+                sessionAmbientBaselineDb = calibrationBucketNoiseAvgs.average().toFloat()
+            }
+        }
+
+        val effectiveThreshold = sessionAmbientBaselineDb?.let { baseline ->
+            maxOf(NOISE_DANGER_THRESHOLD, baseline + DANGER_BASELINE_DELTA_DB)
+        } ?: NOISE_DANGER_THRESHOLD
+
+        consecutiveDangerBuckets = if (noiseStats.avg > effectiveThreshold) {
+            consecutiveDangerBuckets + 1
+        } else {
+            0
+        }
+        return consecutiveDangerBuckets >= MIN_CONSECUTIVE_DANGER_BUCKETS
     }
     private fun <T> ConcurrentLinkedDeque<T & Any>.pollAll(): List<T> {
         val result = mutableListOf<T>()

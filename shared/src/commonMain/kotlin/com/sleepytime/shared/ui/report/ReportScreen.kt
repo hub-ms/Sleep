@@ -1088,10 +1088,19 @@ private fun SummaryItem(item: ComparisonItem?) {
 private const val NOISE_CHART_MIN = 0f
 private const val NOISE_CHART_MAX = 90f
 
+private const val NOISE_SPIKE_RATIO = 1.5f
+
+// 💡 소음측정 정확도 개선: environmentHistory의 한 원소는 30초 버킷 하나에 해당합니다.
+// 단발성 스파이크(알림음, 한 번의 뒤척임 등) 하나만으로 "소음 상승"이라 단정하지 않도록,
+// 깨어난 구간에 30초 버킷이 2개 이상 있을 때는 임계값을 넘는 버킷이 연속으로 이어질 때만
+// 원인으로 인정합니다. 구간이 버킷 1개뿐이라면(짧은 각성) 더 잘게 쪼갤 해상도가 없으므로
+// 해당 버킷 단독 값으로 판단합니다.
+private const val MIN_SUSTAINED_SPIKE_BUCKETS = 2
+
 /**
  * 수면 중 깨어난 구간의 발생 원인을 추정합니다.
  * environmentHistory에서 해당 구간(startRatio~endRatio, 전체 수면시간 대비 비율)에 해당하는
- * 구간의 소음 최고값이 평균 대비 크게 튀었는지를 보고 원인 텍스트를 만듭니다.
+ * 구간의 소음이 평균 대비 크게 튀고, 일정 시간 이상 지속되었는지를 보고 원인 텍스트를 만듭니다.
  * (5번 요청: 중간에 깬 지점에 원인을 알 수 있는 툴팁 추가)
  */
 private fun <T> resolveWakeCause(
@@ -1109,10 +1118,25 @@ private fun <T> resolveWakeCause(
     val window = environmentHistory.subList(startIdx, endIdx + 1)
     if (window.isEmpty()) return "잠깐 깨어남"
 
-    val peakNoise = window.maxOf { noiseOf(it) }
+    val spikeThreshold = if (avgNoise > 0f) avgNoise * NOISE_SPIKE_RATIO else null
 
-    // 평균 대비 일정 비율 이상 튀는 경우를 원인으로 판단합니다.
-    val noiseSpike = avgNoise > 0f && peakNoise >= avgNoise * 1.5f
+    val noiseSpike = if (spikeThreshold == null) {
+        false
+    } else if (window.size == 1) {
+        noiseOf(window[0]) >= spikeThreshold
+    } else {
+        var currentRun = 0
+        var maxRun = 0
+        for (item in window) {
+            if (noiseOf(item) >= spikeThreshold) {
+                currentRun++
+                maxRun = maxOf(maxRun, currentRun)
+            } else {
+                currentRun = 0
+            }
+        }
+        maxRun >= MIN_SUSTAINED_SPIKE_BUCKETS
+    }
 
     return if (noiseSpike) "소음 상승 · 잠깐 깨어남" else "잠깐 깨어남"
 }

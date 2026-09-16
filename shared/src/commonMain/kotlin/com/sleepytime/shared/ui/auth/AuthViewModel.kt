@@ -17,14 +17,7 @@ import com.sleepytime.shared.enum_.AuthProvider
 import com.sleepytime.shared.platform.SocialAuthService
 import com.sleepytime.shared.ui.navigation.HomeScreen
 import com.sleepytime.shared.ui.navigation.OnboardingScreen
-import com.sleepytime.shared.util.PreferencesKeys.App.FIRST_LAUNCH
 import com.sleepytime.shared.util.PreferencesKeys.Settings.KEY_PUSH_ENABLED
-import com.sleepytime.shared.util.PreferencesKeys.Settings.KEY_REMINDER_ENABLED
-import com.sleepytime.shared.util.PreferencesKeys.Settings.KEY_REMINDER_HOUR
-import com.sleepytime.shared.util.PreferencesKeys.Settings.KEY_REMINDER_MINUTE
-import com.sleepytime.shared.util.PreferencesKeys.Settings.KEY_REPORT_DELIVERY_METHOD
-import com.sleepytime.shared.util.PreferencesKeys.Settings.KEY_UPDATE_ENABLED
-import com.sleepytime.shared.util.PreferencesKeys.Settings.KEY_WEEKLY_REPORT_ENABLED
 import io.github.aakira.napier.Napier
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
@@ -61,28 +54,26 @@ class AuthViewModel(
     val navigateToHomeEffect = effect.filterIsInstance<AuthContract.Effect.NavigateToHome>()
 
     init {
-        // 1. 온보딩 여부 및 알림 초기값 로드
-        screenModelScope.launch {
-            val isFirstLaunch = settings.getBoolean(FIRST_LAUNCH, true)
-            _state.update {
-                it.copy(
-                    isPushEnabled = settings.getBoolean(KEY_PUSH_ENABLED, true),
-                    isReminderEnabled = settings.getBoolean(KEY_REMINDER_ENABLED, true),
-                    isWeeklyReportEnabled = settings.getBoolean(KEY_WEEKLY_REPORT_ENABLED, true),
-                    isUpdateEnabled = settings.getBoolean(KEY_UPDATE_ENABLED, true),
-                    reminderHour = settings.getInt(KEY_REMINDER_HOUR, 23),
-                    reminderMinute = settings.getInt(KEY_REMINDER_MINUTE, 0),
-                    reportDeliveryMethod = runCatching {
-                        AuthContract.ReportDeliveryMethod.valueOf(
-                            settings.getString(KEY_REPORT_DELIVERY_METHOD, AuthContract.ReportDeliveryMethod.PUSH.name)
-                        )
-                    }.getOrDefault(AuthContract.ReportDeliveryMethod.PUSH)
-                )
-            }
-            _startDestination.value = if (isFirstLaunch) OnboardingScreen else checkAndRestoreSession()
-        }
+//        screenModelScope.launch {
+//            val isFirstLaunch = settings.getBoolean(FIRST_LAUNCH, true)
+//            _state.update {
+//                it.copy(
+//                    isPushEnabled = settings.getBoolean(KEY_PUSH_ENABLED, true),
+//                    isReminderEnabled = settings.getBoolean(KEY_REMINDER_ENABLED, true),
+//                    isWeeklyReportEnabled = settings.getBoolean(KEY_WEEKLY_REPORT_ENABLED, true),
+//                    isUpdateEnabled = settings.getBoolean(KEY_UPDATE_ENABLED, true),
+//                    reminderHour = settings.getInt(KEY_REMINDER_HOUR, 23),
+//                    reminderMinute = settings.getInt(KEY_REMINDER_MINUTE, 0),
+//                    reportDeliveryMethod = runCatching {
+//                        AuthContract.ReportDeliveryMethod.valueOf(
+//                            settings.getString(KEY_REPORT_DELIVERY_METHOD, AuthContract.ReportDeliveryMethod.PUSH.name)
+//                        )
+//                    }.getOrDefault(AuthContract.ReportDeliveryMethod.PUSH)
+//                )
+//            }
+//            _startDestination.value = if (isFirstLaunch) OnboardingScreen else checkAndRestoreSession()
+//        }
 
-        // 2. 단일 인텐트 파이프라인 collect
         _intentChannel.receiveAsFlow()
             .onEach { processIntent(it) }
             .launchIn(screenModelScope)
@@ -105,6 +96,7 @@ class AuthViewModel(
                         }
                     )
             }
+
             else -> OnboardingScreen
         }
     }
@@ -116,6 +108,7 @@ class AuthViewModel(
                     is AuthStatus.Loading -> {
                         _state.update { it.copy(isLoading = true) }
                     }
+
                     is AuthStatus.LoggedIn -> {
                         _state.update {
                             it.copy(
@@ -134,6 +127,7 @@ class AuthViewModel(
                         }
                         _effect.emit(AuthContract.Effect.NavigateToHome)
                     }
+
                     is AuthStatus.NotLoggedIn, AuthStatus.LoggedOut, AuthStatus.FirstLaunch -> {
                         _state.update {
                             it.copy(
@@ -143,6 +137,7 @@ class AuthViewModel(
                             )
                         }
                     }
+
                     is AuthStatus.TokenExpired -> {
                         _state.update {
                             it.copy(
@@ -186,22 +181,27 @@ class AuthViewModel(
         is AuthContract.Intent.EmailLoginClicked -> {
             _effect.emit(AuthContract.Effect.NavigateToEmailAuth(null, null))
         }
+
         is AuthContract.Intent.EmailConnectClicked -> _effect.emit(
             AuthContract.Effect.NavigateToEmailAuth(null, "connect")
         )
+
         is AuthContract.Intent.EmailDisconnectClicked -> {
             val jwt = tokenRepository.getAccessToken()
             if (jwt != null) {
                 authRepository.disconnectEmail(jwt)
                     .onSuccess { _state.update { it.copy(isEmailConnected = false) } }
-                    .onFailure { error -> _state.update { it.copy(message = error.message ?: "이메일 연결 해제 실패") } }
+                    .onFailure { error ->
+                        _state.update {
+                            it.copy(
+                                message = error.message ?: "이메일 연결 해제 실패"
+                            )
+                        }
+                    }
             } else {
                 _state.update { it.copy(message = "이메일 연결을 해제할 수 없습니다. 로그인 상태를 확인해주세요.") }
             }
         }
-
-
-
 
 
         is AuthContract.Intent.SendAuthCodeClicked -> sendAuthCode(intent.email)
@@ -210,17 +210,21 @@ class AuthViewModel(
                 if (intent.from == "connect") connectEmail(it) else verifyToken(it)
             }
         }
+
         is AuthContract.Intent.DeepLinkAuthSuccess -> {
             _state.update { it.copy(message = "인증이 완료되었습니다.") }
         }
+
         is AuthContract.Intent.EmailLoginSubmitted -> _effect.emit(AuthContract.Effect.NavigateToHome)
         is AuthContract.Intent.GuestLoginClicked -> _effect.emit(AuthContract.Effect.NavigateToHome)
         is AuthContract.Intent.UpdateNickname -> {
             _state.update { it.copy(user = it.user?.copy(nickname = intent.nickname)) }
         }
+
         is AuthContract.Intent.UpdateEmail -> {
             _state.update { it.copy(user = it.user?.copy(email = intent.email)) }
         }
+
         is AuthContract.Intent.SaveProfile -> {
             screenModelScope.launch {
                 authRepository.updateProfile(intent.nickname, intent.email, null)
@@ -232,15 +236,17 @@ class AuthViewModel(
                     }
             }
         }
+
         is AuthContract.Intent.ResetProfileImage -> {
             screenModelScope.launch {
                 // 💡 여기서 null을 보내면 서버에서 기본 이미지로 처리하도록 규약 (필요시 수정)
-                authRepository.updateProfile(null, null, null) 
+                authRepository.updateProfile(null, null, null)
                     .onSuccess {
                         _state.update { it.copy(message = "기본 이미지로 설정되었습니다.") }
                     }
             }
         }
+
         is AuthContract.Intent.UpdateProfileImage -> {
             screenModelScope.launch {
                 authRepository.updateProfile(null, null, intent.imageBytes)
@@ -256,9 +262,11 @@ class AuthViewModel(
         is AuthContract.Intent.WithdrawClicked -> {
             _state.update { it.copy(withdrawStep = WithdrawStep.WARNING) }
         }
+
         is AuthContract.Intent.SelectWithdrawReason -> {
             _state.update { it.copy(withdrawReason = intent.reason) }
         }
+
         is AuthContract.Intent.WithdrawContinue -> {
             _state.update { it.copy(withdrawStep = WithdrawStep.CONFIRM_INPUT) }
         }
@@ -267,14 +275,17 @@ class AuthViewModel(
         is AuthContract.Intent.WithdrawInputChanged -> {
             _state.update { it.copy(withdrawInput = intent.input) }
         }
+
         is AuthContract.Intent.WithdrawPause -> {
             settings.putBoolean("is_session_paused", true) // SessionManager 대체 로컬 동기화
             _effect.emit(AuthContract.Effect.NavigateToHome)
         }
+
         is AuthContract.Intent.WithdrawDisableNotification -> {
             settings.putBoolean(KEY_PUSH_ENABLED, false) // SessionManager 대체 로컬 동기화
             _effect.emit(AuthContract.Effect.NavigateToHome)
         }
+
         is AuthContract.Intent.WithdrawToGuest -> {
             tokenRepository.clearAccessToken()
             tokenRepository.clearRefreshToken()
@@ -286,13 +297,16 @@ class AuthViewModel(
             }
             _effect.emit(AuthContract.Effect.NavigateToHome)
         }
+
         is AuthContract.Intent.WithdrawConfirmed -> {
             _state.update { it.copy(withdrawStep = WithdrawStep.LOADING) }
             withdraw()
         }
+
         is AuthContract.Intent.WithdrawCancelled -> {
             _state.update { it.copy(withdrawStep = WithdrawStep.NONE, withdrawInput = "") }
         }
+
         is AuthContract.Intent.ResetDataClicked -> resetUserData()
 
         is AuthContract.Intent.ChangePrimaryProvider -> {
@@ -300,7 +314,13 @@ class AuthViewModel(
             if (jwt != null && intent.provider != null) {
                 authRepository.changePrimaryProvider(jwt = jwt, provider = intent.provider)
                     .onSuccess { _effect.emit(AuthContract.Effect.NavigateToHome) }
-                    .onFailure { error -> _state.update { it.copy(message = error.message ?: "변경 실패") } }
+                    .onFailure { error ->
+                        _state.update {
+                            it.copy(
+                                message = error.message ?: "변경 실패"
+                            )
+                        }
+                    }
             } else {
                 // FIX: 이전엔 jwt 또는 provider가 없을 때 아무 피드백 없이 조용히 무시됐습니다.
                 // 최소한 원인을 알 수 있도록 메시지를 남깁니다.
@@ -310,42 +330,19 @@ class AuthViewModel(
 
         is AuthContract.Intent.LoginBenefitClicked -> _effect.emit(AuthContract.Effect.NavigateToLoginBenefit)
 
-        is AuthContract.Intent.TogglePushNotification -> {
-            settings.putBoolean(KEY_PUSH_ENABLED, intent.enabled)
-            _state.update { it.copy(isPushEnabled = intent.enabled) }
-        }
-        is AuthContract.Intent.ToggleSleepReminder -> {
-            settings.putBoolean(KEY_REMINDER_ENABLED, intent.enabled)
-            _state.update { it.copy(isReminderEnabled = intent.enabled) }
-        }
-        is AuthContract.Intent.ToggleWeeklyReport -> {
-            settings.putBoolean(KEY_WEEKLY_REPORT_ENABLED, intent.enabled)
-            _state.update { it.copy(isWeeklyReportEnabled = intent.enabled) }
-        }
-        is AuthContract.Intent.ToggleUpdate -> {
-            settings.putBoolean(KEY_UPDATE_ENABLED, intent.enabled)
-            _state.update { it.copy(isUpdateEnabled = intent.enabled) }
-        }
-        is AuthContract.Intent.ChangeReminderTime -> {
-            settings.putInt(KEY_REMINDER_HOUR, intent.hour)
-            settings.putInt(KEY_REMINDER_MINUTE, intent.minute)
-            _state.update { it.copy(reminderHour = intent.hour, reminderMinute = intent.minute) }
-        }
-        is AuthContract.Intent.ChangeReportDeliveryMethod -> {
-            settings.putString(KEY_REPORT_DELIVERY_METHOD, intent.method.name)
-            _state.update { it.copy(reportDeliveryMethod = intent.method) }
-        }
 
         is AuthContract.Intent.LogoutClicked -> {
             screenModelScope.launch {
                 authRepository.logout()
             }
         }
+
         is AuthContract.Intent.LogoutConfirmed -> {
             screenModelScope.launch {
                 authRepository.logout()
             }
         }
+
         is AuthContract.Intent.LogoutCancelled -> {}
     }
 
@@ -368,7 +365,12 @@ class AuthViewModel(
             }
             .onFailure { error ->
                 Napier.e("소셜 로그인 최종 실패 ($provider): ${error.message}", error)
-                _state.update { it.copy(isLoading = false, message = error.message ?: "로그인에 실패했습니다.") }
+                _state.update {
+                    it.copy(
+                        isLoading = false,
+                        message = error.message ?: "로그인에 실패했습니다."
+                    )
+                }
             }
     }
 
@@ -381,7 +383,10 @@ class AuthViewModel(
                     authRepository.connectSocial(provider, jwt, socialToken)
                         .onSuccess {
                             _state.update {
-                                it.copy(isLoading = false, connectedProviders = it.connectedProviders + provider)
+                                it.copy(
+                                    isLoading = false,
+                                    connectedProviders = it.connectedProviders + provider
+                                )
                             }
                         }
                         .onFailure { error ->
@@ -452,7 +457,12 @@ class AuthViewModel(
                 }
             }
             .onFailure { error ->
-                _state.update { it.copy(withdrawStep = WithdrawStep.NONE, message = error.message ?: "탈퇴 실패") }
+                _state.update {
+                    it.copy(
+                        withdrawStep = WithdrawStep.NONE,
+                        message = error.message ?: "탈퇴 실패"
+                    )
+                }
             }
     }
 
@@ -463,9 +473,11 @@ class AuthViewModel(
                 .onFailure { _state.update { it.copy(message = "데이터 초기화 실패") } }
         }
     }
+
     fun refreshSocialProfile() {
         screenModelScope.launch {
-            val provider = state.value.userType.let { (it as? User.AuthInfo.Member)?.authProvider } ?: return@launch
+            val provider = state.value.userType.let { (it as? User.AuthInfo.Member)?.authProvider }
+                ?: return@launch
             if (!provider.isSocial) return@launch // 이메일 유저는 건너뜀
 
             socialAuthService.getSocialToken(provider)
@@ -483,6 +495,7 @@ class AuthViewModel(
                 }
         }
     }
+
     private suspend fun handleSessionExpired() {
         tokenRepository.clearAccessToken()
         tokenRepository.clearRefreshToken()

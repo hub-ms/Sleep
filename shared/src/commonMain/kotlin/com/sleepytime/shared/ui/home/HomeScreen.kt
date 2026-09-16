@@ -156,20 +156,21 @@ fun HomeContent(
     ) {
         AlarmStatusCard(
             alarmState = alarmState,
-            onNavigateToSleepSetting = onNavigateToSleepSetting,
         )
-        SuggestionChip(
-            onClick = onNavigateToSleepSetting,
-            label = { Text("수면 설정", style = MaterialTheme.typography.labelSmall) },
-            icon = { Icon(painterResource(Res.drawable.ic_pencil), contentDescription = null, modifier = Modifier.size(16.dp)) },
-            colors = SuggestionChipDefaults.suggestionChipColors(
-                containerColor = Color.White.copy(0.1f),
-                labelColor = Color.White,
-                iconContentColor = MaterialTheme.colorScheme.primary
-            ),
-            border = BorderStroke(1.dp, Color.White.copy(0.2f)),
-            shape = RoundedCornerShape(16.dp)
-        )
+        Surface(
+            modifier = Modifier
+                .clickable { onNavigateToSleepSetting() },
+            shape = RoundedCornerShape(50.dp),
+            color = Color.White.copy(0.1f),
+            border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(0.4f))
+        ) {
+            Text(
+                modifier = Modifier.padding(8.dp),
+                text = "수면 설정",
+                style = MaterialTheme.typography.caption,
+                color = SleepTheme.textColors.primary
+            )
+        }
         CurrentMusicCard(
             musicState = musicState,
             elapsedSleepMusicSeconds = elapsedSleepMusicSeconds,
@@ -210,17 +211,17 @@ fun MusicBrowserSection(
     fun getDisplayMusicCategoryName(category: MusicCategory): String = when (category) {
         MusicCategory.FAVORITE -> "즐겨찾기"
         MusicCategory.NATURE -> "자연"
-        MusicCategory.AMBIENT -> "앰비언트"
+        MusicCategory.AMBIENT -> "멜로디"
         MusicCategory.WAVE -> "뇌파"
     }
 
     Column(
         modifier = modifier
+
             .fillMaxWidth()
-            .height(260.dp),
+            .height(240.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 디자인 통일: Home 전용으로 따로 구현했던 칩 스타일을 공용 SelectableChipGroup으로 교체
         SelectableChipGroup(
             items = categories,
             selectedItem = selectedCategory,
@@ -281,10 +282,6 @@ fun MusicCompactCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable {
-                // 🐛 버그 수정: 이전에는 여기서 onTogglePlaying()을 항상 같이 호출해서,
-                // 새 음악을 선택하자마자(MusicSelected가 자동재생을 시작한 직후) 곧바로
-                // 재생/일시정지를 토글해버려 방금 재생을 시작한 음악이 바로 멈추는 문제가
-                // 있었습니다. 선택/해제는 onMusicSelected만으로 재생 상태까지 처리합니다.
                 if (isSelected) {
                     onMusicSelected(null)
                 } else {
@@ -301,7 +298,7 @@ fun MusicCompactCard(
                 painter = painterResource(image),
                 contentDescription = music.title,
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .fillMaxWidth(0.8f)
                     .aspectRatio(1.0f)
                     .clip(RoundedCornerShape(16.dp))
                     .then(
@@ -347,8 +344,6 @@ fun SleepStartButton(
 ) {
     var showShortSleepDialog by remember { mutableStateOf(false) }
 
-    fun startTracking() = onStartTracking(musicState.selectedMusic?.title)
-
     Button(
         modifier = Modifier
             .fillMaxWidth()
@@ -359,13 +354,11 @@ fun SleepStartButton(
             contentColor = Color.White
         ),
         onClick = {
-            // 💡 측정 시작 전 30분 미만 안내: 알람이 켜져 있고 지금 시작하면 기상 시각까지
-            // 30분도 남지 않은 경우, 곧바로 측정을 시작하는 대신 한번 더 확인합니다.
             val expectedMinutes = expectedSleepMinutesUntilAlarm(alarmState)
             if (expectedMinutes != null && expectedMinutes < 30) {
                 showShortSleepDialog = true
             } else {
-                startTracking()
+                onStartTracking(musicState.selectedMusic?.title)
             }
         },
     ) {
@@ -406,7 +399,7 @@ fun SleepStartButton(
                 TextButton(
                     onClick = {
                         showShortSleepDialog = false
-                        startTracking()
+                        onStartTracking(musicState.selectedMusic?.title)
                     }
                 ) {
                     Text(
@@ -471,7 +464,7 @@ fun CustomBottomTabBar(
             .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .height(60.dp)
+            .height(48.dp)
             .background(MaterialTheme.colorScheme.primary.copy(0.4f)),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
@@ -487,7 +480,7 @@ fun CustomBottomTabBar(
                 verticalArrangement = Arrangement.Center
             ) {
                 Box(
-                    modifier = Modifier.clickable { onBottomTabSelected(tab.title) }.size(36.dp),
+                    modifier = Modifier.clickable { onBottomTabSelected(tab.title) }.size(32.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     if (homeState.selectedTab == tab.title) {

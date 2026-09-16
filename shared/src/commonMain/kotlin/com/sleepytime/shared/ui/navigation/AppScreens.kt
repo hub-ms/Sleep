@@ -15,9 +15,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import cafe.adriel.voyager.core.annotation.InternalVoyagerApi
@@ -49,7 +46,6 @@ import com.sleepytime.shared.ui.report.ReportContent
 import com.sleepytime.shared.ui.report.ReportContract
 import com.sleepytime.shared.ui.report.ReportViewModel
 import com.sleepytime.shared.ui.setting.AppInfoContent
-import com.sleepytime.shared.ui.setting.NotificationSettingContent
 import com.sleepytime.shared.ui.alarm.SleepSettingContent
 import com.sleepytime.shared.ui.home.CustomBottomTabBar
 import com.sleepytime.shared.ui.setting.ProfileEditContent
@@ -64,8 +60,7 @@ import com.sleepytime.shared.ui.tracking.TrackingContent
 import com.sleepytime.shared.ui.tracking.TrackingContract
 import com.sleepytime.shared.ui.tracking.TrackingViewModel
 import com.sleepytime.shared.platform.rememberProfileImageLauncher
-import com.sleepytime.shared.ui.PermissonContent
-import com.sleepytime.shared.ui.onboarding.PermissionContract
+import com.sleepytime.shared.ui.PermissionGuideContent
 import com.sleepytime.shared.ui.onboarding.PermissionViewModel
 import com.sleepytime.shared.ui.setting.LicenseCreditContent
 import com.sleepytime.shared.ui.setting.PrivacyPolicyContent
@@ -107,29 +102,7 @@ object OnboardingScreen : Screen {
         }
     }
 }
-@ExperimentalTime
-@ExperimentalCoroutinesApi
-@ExperimentalMaterial3Api
-@ExperimentalSettingsApi
-@InternalVoyagerApi
-object PermissionScreen : Screen {
-    @Composable
-    override fun Content() {
-        val navigator = LocalNavigator.currentOrThrow
-        val permissionViewModel = koinScreenModel<PermissionViewModel>()
-        val permissionState by permissionViewModel.state.collectAsState()
-        PermissonContent(
-            permissionState = permissionState,
-            onAllGranted = {
-                permissionViewModel.markOnboardingDone()
-                navigator.pop()
-            },
-            onUpdatePermission = { type, granted ->
-                permissionViewModel.updatePermission(type, granted)
-            }
-        )
-    }
-}
+
 
 @ExperimentalTime
 @ExperimentalCoroutinesApi
@@ -247,9 +220,6 @@ data class HomeScreen(
                 homeViewModel.sendIntent(HomeContract.Intent.SelectBottomTab(initialTab))
             }
         }
-        // 🐛 버그 수정: 리포트 탭에 진입할 때마다 최신 세션을 다시 불러옵니다.
-        // ReportViewModel은 싱글톤 ScreenModel이라 init{}은 앱 생애주기 중 한 번만 실행되므로,
-        // 수면 측정을 마치고 리포트 탭으로 넘어오는 시점마다 이 effect가 최신 데이터를 반영합니다.
         LaunchedEffect(homeState.selectedTab) {
             if (homeState.selectedTab == "리포트") {
                 reportViewModel.refreshToLatestSession()
@@ -264,7 +234,8 @@ data class HomeScreen(
                     is HomeContract.Effect.NavigateToReport -> {
                         homeViewModel.sendIntent(HomeContract.Intent.SelectBottomTab("리포트"))
                     }
-                    is HomeContract.Effect.NavigateToPermission -> navigator.push(PermissionScreen)
+                    is HomeContract.Effect.NavigateToPermissionGuide -> navigator.push(
+                        PermissionGuideScreen())
                     else -> {}
                 }
             }
@@ -278,7 +249,12 @@ data class HomeScreen(
                             effect.sessionId
                         )
                     )
-
+                    is TrackingContract.Effect.NavigateToPermissionGuide -> navigator.push(
+                        PermissionGuideScreen(
+                            musicTitle = trackingState.musicTitle,
+                            startTrackingOnComplete = true
+                        )
+                    )
                     else -> {}
                 }
             }
@@ -325,13 +301,23 @@ data class HomeScreen(
                     }
 
                     "마이페이지" -> SettingContent(
+                        reportState = reportViewModel.state.collectAsState().value,
                         authViewModel = authViewModel,
                         onNavigateToLoginBenefit = { navigator.push(LoginBenefitScreen) },
                         onNavigateToAccountSetting = { navigator.push(AccountSettingScreen) },
-                        onNavigateToNotification = { navigator.push(NotificationSettingScreen) },
+                        onNavigateToNotification = { /*navigator.push(NotificationSettingScreen)*/ },
                         onNavigateToSleepSetting = { navigator.push(SleepSettingScreen) },
                         onNavigateToAppInfo = { navigator.push(AppInfoScreen) },
-                        onNavigateToSupport = { navigator.push(SupportScreen) }
+                        onNavigateToSupport = { navigator.push(SupportScreen) },
+                        onDateSelected = {
+                            reportViewModel.sendIntent(ReportContract.Intent.SelectDate(it))
+                        },
+                        onPrevClicked = { unit ->
+                            reportViewModel.sendIntent(ReportContract.Intent.PrevClicked(unit))
+                        },
+                        onNextClicked = { unit ->
+                            reportViewModel.sendIntent(ReportContract.Intent.NextClicked(unit))
+                        },
                     )
 
                     else -> HomeContent(
@@ -341,10 +327,13 @@ data class HomeScreen(
                         reportState = reportViewModel.state.collectAsState().value,
                         elapsedSleepMusicSeconds = musicViewModel.elapsedSleepMusicSeconds.collectAsState().value,
                         onStartTracking = { musicTitle ->
-                            trackingViewModel.sendIntent(
-                                TrackingContract.Intent.StartTracking(
-                                    trackingState.durationMillis,
-                                    musicTitle
+                            // 💡 수면 시작 버튼을 누르면 항상 PermissionGuideScreen을 거칩니다.
+                            // 필요한 권한이 없으면 권한 설정 UI + 안내 가이드를, 모두 허용된 상태라면
+                            // 안내 가이드만 보여준 뒤 이어서 측정을 시작합니다.
+                            navigator.push(
+                                PermissionGuideScreen(
+                                    musicTitle = musicTitle,
+                                    startTrackingOnComplete = true
                                 )
                             )
                         },
@@ -364,6 +353,54 @@ data class HomeScreen(
                 modifier = Modifier.fillMaxWidth()
             )
         }
+    }
+}
+@ExperimentalTime
+@ExperimentalCoroutinesApi
+@ExperimentalMaterial3Api
+@ExperimentalSettingsApi
+@InternalVoyagerApi
+data class PermissionGuideScreen(
+    // 수면 시작 버튼을 눌러 진입한 경우, 권한 확인이 끝난 뒤 이어서 측정을 시작하기 위해 전달받는 값들.
+    // 최초실행 온보딩처럼 단순 안내 목적으로 진입한 경우에는 기본값(null / false)을 사용합니다.
+    val musicTitle: String? = null,
+    val startTrackingOnComplete: Boolean = false
+) : Screen {
+    @Composable
+    override fun Content() {
+        val navigator = LocalNavigator.currentOrThrow
+        val permissionViewModel = koinScreenModel<PermissionViewModel>()
+        val trackingViewModel = koinScreenModel<TrackingViewModel>()
+        val permissionState by permissionViewModel.state.collectAsState()
+        val trackingState by trackingViewModel.state.collectAsState()
+
+        LaunchedEffect(startTrackingOnComplete) {
+            if (startTrackingOnComplete) {
+                trackingViewModel.effect.collect { effect ->
+                    if (effect is TrackingContract.Effect.NavigateToTracking) {
+                        navigator.replace(TrackingScreen(effect.durationMillis, effect.sessionId))
+                    }
+                }
+            }
+        }
+
+        PermissionGuideContent(
+            permissionState = permissionState,
+            onContinue = {
+                permissionViewModel.markOnboardingDone()
+                if (startTrackingOnComplete) {
+                    trackingViewModel.sendIntent(
+                        TrackingContract.Intent.StartTracking(trackingState.durationMillis, musicTitle)
+                    )
+                } else {
+                    navigator.pop()
+                }
+            },
+            onUpdatePermission = { type, granted ->
+                permissionViewModel.updatePermission(type, granted)
+            },
+            onBackClick = { navigator.pop() }
+        )
     }
 }
 
@@ -400,6 +437,12 @@ data class TrackingScreen(
                     is TrackingContract.Effect.NavigateToHome -> {
                         navigator.replaceAll(HomeScreen()) // 기본 홈으로 복귀
                     }
+                    is TrackingContract.Effect.NavigateToPermissionGuide -> navigator.push(
+                        PermissionGuideScreen(
+                            musicTitle = trackingState.musicTitle,
+                            startTrackingOnComplete = true
+                        )
+                    )
                     else -> {}
                 }
             }
@@ -421,7 +464,8 @@ data class TrackingScreen(
             onChangeAlarmHour = { hour -> alarmViewModel.sendIntent(AlarmContract.Intent.ChangeAlarmHour(hour)) },
             onChangeAlarmMinute = { minute, index ->
                 alarmViewModel.sendIntent(AlarmContract.Intent.ChangeAlarmMinute(minute, index))
-            }
+            },
+            onToggleRecommend = { alarmViewModel.sendIntent(AlarmContract.Intent.ToggleRecommend) },
         )
     }
 }
@@ -494,7 +538,11 @@ object SleepSettingScreen : Screen {
                 alarmViewModel.sendIntent(
                     AlarmContract.Intent.SelectSmartAlarmRange(it)
                 )
-            }
+            },
+            onToggleRecommend = { alarmViewModel.sendIntent(AlarmContract.Intent.ToggleRecommend) },
+            onToggleSleepReminder = { alarmViewModel.sendIntent(AlarmContract.Intent.ToggleSleepReminder(it)) },
+            onChangeReminderTime = { hour, minute ->
+                alarmViewModel.sendIntent(AlarmContract.Intent.ChangeReminderTime(hour, minute)) },
         )
     }
 }
@@ -507,7 +555,7 @@ object SupportScreen : Screen {
 
         SupportContent(
             allItems = FaqData.items,
-            onNavigateToChat = { navigator.push(CustomChatScreen) },
+            onChatClick = { navigator.push(CustomChatScreen) },
         )
     }
 }
@@ -635,18 +683,18 @@ object WithdrawalConfirmDetailScreen : Screen {
     }
 }
 
-object NotificationSettingScreen : Screen {
-    @Composable
-    override fun Content() {
-        val authViewModel = koinScreenModel<AuthViewModel>()
-        val authState by authViewModel.state.collectAsState()
-
-        NotificationSettingContent(
-            authState = authState,
-            onIntent = { authViewModel.sendIntent(it) }
-        )
-    }
-}
+//object NotificationSettingScreen : Screen {
+//    @Composable
+//    override fun Content() {
+//        val authViewModel = koinScreenModel<AuthViewModel>()
+//        val authState by authViewModel.state.collectAsState()
+//
+//        NotificationSettingContent(
+//            authState = authState,
+//            onIntent = { authViewModel.sendIntent(it) }
+//        )
+//    }
+//}
 
 @OptIn(ExperimentalTime::class, ExperimentalMaterial3Api::class, ExperimentalCoroutinesApi::class, ExperimentalSettingsApi::class)
 object AppInfoScreen : Screen {

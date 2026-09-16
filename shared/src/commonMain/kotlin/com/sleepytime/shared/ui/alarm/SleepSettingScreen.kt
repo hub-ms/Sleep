@@ -1,14 +1,15 @@
 ﻿package com.sleepytime.shared.ui.alarm
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -25,8 +26,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -45,28 +44,23 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SuggestionChip
-import androidx.compose.material3.SuggestionChipDefaults
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -74,45 +68,31 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.geometry.center
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.sleepytime.shared.domain.model.Alarm
 import com.sleepytime.shared.platform.CircleCanvas
 import com.sleepytime.shared.resources.Res
 import com.sleepytime.shared.resources.ic_alarm_clock
-import com.sleepytime.shared.resources.ic_help
 import com.sleepytime.shared.resources.ic_music_note
-import com.sleepytime.shared.resources.ic_pencil
 import com.sleepytime.shared.resources.ic_smart_alarm
 import com.sleepytime.shared.resources.ic_vibration
 import com.sleepytime.shared.resources.ic_volume_high
 import com.sleepytime.shared.resources.ic_volume_low
 import com.sleepytime.shared.resources.ic_volume_off
-import com.sleepytime.shared.ui.auth.AuthContract
-import com.sleepytime.shared.ui.component.SelectableChip
 import com.sleepytime.shared.ui.component.SelectableChipGroup
 import com.sleepytime.shared.ui.component.ToggleSettingItem
 import com.sleepytime.shared.ui.theme.SleepAppTheme
 import com.sleepytime.shared.ui.theme.SleepTheme
-import com.sleepytime.shared.ui.theme.bodyHighlight
 import com.sleepytime.shared.ui.theme.bodyText
 import com.sleepytime.shared.ui.theme.caption
 import com.sleepytime.shared.ui.theme.sectionTitle
@@ -123,13 +103,10 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
-import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.absoluteValue
-import kotlin.math.atan2
 import kotlin.math.round
 import kotlin.math.roundToInt
-import kotlin.math.sin
 
 enum class Setting(val text: String) {
     ALARM("알람"), VIBRATION("진동"), SMART_ALARM("스마트 알람")
@@ -151,6 +128,9 @@ fun SleepSettingContent(
     onToggleVibration: () -> Unit,
     onToggleSmartAlarm: () -> Unit,
     onSelectSmartAlarmRange: (Int) -> Unit,
+    onToggleRecommend: (Boolean) -> Unit,
+    onToggleSleepReminder: (Boolean) -> Unit,
+    onChangeReminderTime: (Int, Int) -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -166,6 +146,9 @@ fun SleepSettingContent(
             verticalArrangement = Arrangement.spacedBy(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            AlarmStatusCard(
+                alarmState = alarmState,
+            )
             AlarmTopStatusSection(
                 alarmState = alarmState,
                 selectedAlarm = alarmState.selectedAlarmSound,
@@ -176,7 +159,10 @@ fun SleepSettingContent(
                 onChangeVolume = onChangeVolume,
                 onToggleVibration = onToggleVibration,
                 onToggleSmartAlarm = onToggleSmartAlarm,
-                onSelectSmartAlarmRange = onSelectSmartAlarmRange
+                onSelectSmartAlarmRange = onSelectSmartAlarmRange,
+                onToggleRecommend = onToggleRecommend,
+                onToggleSleepReminder = onToggleSleepReminder,
+                onChangeReminderTime = onChangeReminderTime
             )
         }
     }
@@ -196,6 +182,9 @@ fun AlarmTopStatusSection(
     onToggleVibration: () -> Unit,
     onToggleSmartAlarm: () -> Unit,
     onSelectSmartAlarmRange: (Int) -> Unit,
+    onToggleRecommend: (Boolean) -> Unit,
+    onToggleSleepReminder: (Boolean) -> Unit,
+    onChangeReminderTime: (Int, Int) -> Unit
 ) {
     val effectiveVibrationEnabled =
         alarmState.isAlarmEnabled && (alarmState.isVibrationEnabled || alarmState.appVolume == 0f)
@@ -238,6 +227,9 @@ fun AlarmTopStatusSection(
     val scrollState = rememberScrollState()
     var showSoundSelection by remember { mutableStateOf(false) }
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -274,7 +266,8 @@ fun AlarmTopStatusSection(
                         AlarmTimeSection(
                             alarmState = alarmState,
                             onChangeAlarmHour = onChangeAlarmHour,
-                            onChangeAlarmMinute = onChangeAlarmMinute
+                            onChangeAlarmMinute = onChangeAlarmMinute,
+                            onToggleRecommend = onToggleRecommend,
                         )
                         Column(
                             verticalArrangement = Arrangement.Center,
@@ -341,24 +334,50 @@ fun AlarmTopStatusSection(
                         items = alarmState.smartAlarmRangeList,
                         selectedItem = alarmState.selectedSmartAlarmRange,
                         onSelectItem = onSelectSmartAlarmRange,
-                        itemLabel =  { "${it}분" }
+                        itemLabel = { "${it}분" }
+                    )
+                }
+                ToggleSettingItem(
+                    title = "취침 시각 알림",
+                    subtitle = "설정하신 시간에 맞춰 수면 준비를 도와드립니다",
+                    checked = alarmState.isReminderEnabled,
+                    onCheckedChange = {
+                        onToggleSleepReminder(alarmState.isReminderEnabled)
+                        scope.launch {
+                            snackbarHostState.showSnackbar(
+                                if (it) "취침 시각 알림이 켜졌습니다" else "취침 시각 알림이 꺼졌습니다",
+                                duration = SnackbarDuration.Short
+                            )
+                        }
+                    }
+                )
+                AnimatedVisibility(
+                    visible = alarmState.isReminderEnabled,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    BedtimePickerSection(
+                        hour = alarmState.reminderHour,
+                        minute = alarmState.reminderMinute,
+                        onTimeChanged = { hour, minute ->
+                            onChangeReminderTime(hour, minute)
+                        }
                     )
                 }
             }
         }
     }
 }
+
 @Composable
 fun AlarmStatusCard(
     alarmState: AlarmContract.State,
-    onNavigateToSleepSetting: () -> Unit,
 ) {
     val effectiveVibrationEnabled =
         alarmState.isAlarmEnabled && (alarmState.isVibrationEnabled || alarmState.appVolume == 0f)
     val effectiveSmartAlarmEnabled = alarmState.isAlarmEnabled && alarmState.isSmartAlarmEnabled
     Surface(
         modifier = Modifier
-            .clickable { onNavigateToSleepSetting() }
             .fillMaxWidth()
             .wrapContentHeight()
             .background(
@@ -374,9 +393,8 @@ fun AlarmStatusCard(
         ) {
             TopStatusHeader(
                 alarmState = alarmState,
-                onNavigateToSleepSetting = onNavigateToSleepSetting,
             )
-            if(alarmState.isAlarmEnabled) {
+            if (alarmState.isAlarmEnabled) {
                 BottomStatusRow(
                     alarmState = alarmState,
                     selectedAlarm = alarmState.selectedAlarmSound,
@@ -388,10 +406,10 @@ fun AlarmStatusCard(
         }
     }
 }
+
 @Composable
 fun TopStatusHeader(
     alarmState: AlarmContract.State,
-    onNavigateToSleepSetting: () -> Unit = {},
 ) {
     val alarmMinutes = alarmState.alarmHour * 60 + alarmState.alarmMinute
     Box(
@@ -472,6 +490,7 @@ fun BottomStatusRow(
         }
     }
 }
+
 @Composable
 fun BouncingPreviewIcon(
     isPlaying: Boolean,
@@ -556,38 +575,87 @@ fun AlarmTimeSection(
     alarmState: AlarmContract.State,
     onChangeAlarmHour: (Int) -> Unit,
     onChangeAlarmMinute: (Int, Int) -> Unit,
+    onToggleRecommend: (Boolean) -> Unit
 ) {
-    val currentTime = "${alarmState.alarmHour.toString().padStart(2, '0')}:${alarmState.alarmMinute.toString().padStart(2, '0')}"
-
     Column(
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = if (alarmState.isRecommendEnabled) "기상시각 추천 켜짐" else "기상시각 추천 꺼짐",
+                style = MaterialTheme.typography.caption,
+                color = SleepTheme.textColors.primary
+            )
+            Switch(
+                checked = alarmState.isRecommendEnabled,
+                onCheckedChange = { onToggleRecommend(it) }
+            )
+        }
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            key("HourPicker") {
-                CommonTimePicker(
-                    isEnabled = alarmState.isAlarmEnabled,
-                    items = (0..23).toList(),
-                    selectedValue = alarmState.alarmHour,
-                    onValueChanged = { value, _ -> onChangeAlarmHour(value) }
-                )
-            }
+            CommonTimePicker(
+                isEnabled = alarmState.isAlarmEnabled && !alarmState.isRecommendEnabled,
+                items = (0..23).toList(),
+                selectedValue = alarmState.alarmHour,
+                onValueChanged = { value, _ -> onChangeAlarmHour(value) }
+            )
             Box(contentAlignment = Alignment.Center) {
-                CircleCanvas(isEnabled = alarmState.isAlarmEnabled)
+                CircleCanvas(isEnabled = alarmState.isAlarmEnabled && !alarmState.isRecommendEnabled)
             }
-            key("MinutePicker") {
-                CommonTimePicker(
-                    isEnabled = alarmState.isAlarmEnabled,
-                    items = (0..59).toList(),
-                    selectedValue = alarmState.alarmMinute,
-                    onValueChanged = { value, index -> onChangeAlarmMinute(value, index) }
-                )
-            }
+            CommonTimePicker(
+                isEnabled = alarmState.isAlarmEnabled && !alarmState.isRecommendEnabled,
+                items = (0..59).toList(),
+                selectedValue = alarmState.alarmMinute,
+                onValueChanged = { value, index -> onChangeAlarmMinute(value, index) }
+            )
         }
     }
 }
+@Composable
+fun BedtimePickerSection(
+    hour: Int,
+    minute: Int,
+    onTimeChanged: (Int, Int) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            CommonTimePicker(
+                isEnabled = true,
+                items = (0..23).toList(),
+                selectedValue = hour,
+                onValueChanged = { value, _ -> onTimeChanged(value, minute) }
+            )
+            Text(
+                text = ":",
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
+            CommonTimePicker(
+                isEnabled = true,
+                items = (0..59).toList(),
+                selectedValue = minute,
+                onValueChanged = { value, _ -> onTimeChanged(hour, value) }
+            )
+        }
+    }
+}
+
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -620,8 +688,10 @@ fun CommonTimePicker(
             val visibleItems = layoutInfo.visibleItemsInfo
             if (visibleItems.isEmpty()) null
             else {
-                val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
-                val centerItem = visibleItems.minByOrNull { abs((it.offset + it.size / 2) - viewportCenter) }
+                val viewportCenter =
+                    (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
+                val centerItem =
+                    visibleItems.minByOrNull { abs((it.offset + it.size / 2) - viewportCenter) }
                 centerItem?.index
             }
         }
@@ -685,10 +755,12 @@ fun CommonTimePicker(
                         .height(itemHeight)
                         .fillMaxWidth()
                         .graphicsLayer {
-                            val itemInfo = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
+                            val itemInfo =
+                                listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
 
                             val distance = if (itemInfo != null) {
-                                val viewportCenter = (listState.layoutInfo.viewportStartOffset + listState.layoutInfo.viewportEndOffset) / 2
+                                val viewportCenter =
+                                    (listState.layoutInfo.viewportStartOffset + listState.layoutInfo.viewportEndOffset) / 2
                                 abs((itemInfo.offset + itemInfo.size / 2) - viewportCenter).toFloat()
                             } else {
                                 Float.MAX_VALUE
@@ -740,6 +812,7 @@ fun rememberLimitedSnapFlingBehavior(listState: LazyListState): FlingBehavior {
         }
     }
 }
+
 @Composable
 fun VerticalVolumeDial(
     volume: Float,
@@ -747,7 +820,7 @@ fun VerticalVolumeDial(
 ) {
     val trackHeight = 16.dp
     val trackWidth = 300.dp
-    val handleSize = 32.dp
+    val handleSize = trackHeight * 2
     val handleSizePx = with(LocalDensity.current) { handleSize.toPx() }
 
     val trackColor = Color.White.copy(0.15f)
@@ -763,102 +836,123 @@ fun VerticalVolumeDial(
         animatedVolume.snapTo(volume)
     }
 
-    val currentDisplayVolume = if (animatedVolume.isRunning) animatedVolume.value else (draggingVolume.absoluteValue)
+    val currentDisplayVolume =
+        if (animatedVolume.isRunning) animatedVolume.value else (draggingVolume.absoluteValue)
+    val chipColor = when (currentDisplayVolume) {
+        in 0f..0.2f, in 0.8f..1.0f -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.primary
+    }
+    val statusText = when (currentDisplayVolume) {
+        in 0f..0.2f -> "볼륨을 조금 더 키워보세요."
+        in 0.8f..1.0f -> "볼륨이 커서 놀랄 수 있어요"
+        else -> "적절한 볼륨이에요"
+    }
 
     Column(
         modifier = Modifier.wrapContentWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        Surface(
+            shape = CircleShape,
+            color = chipColor.copy(0.4f)
+        ) {
+            Text(
+                modifier = Modifier.padding(4.dp),
+                text = "${(currentDisplayVolume * 100).roundToInt()}%",
+                style = MaterialTheme.typography.caption,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+        }
         Text(
-            modifier = Modifier.align(Alignment.CenterHorizontally),
-            text = "${(currentDisplayVolume*100).roundToInt()}%",
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Bold,
-            color = Color.White
+            text = statusText,
+            style = MaterialTheme.typography.caption,
+            color = SleepTheme.textColors.primary
         )
         Box(
             modifier = Modifier
                 .width(trackWidth)
-                .height(trackHeight)
-                .clip(RoundedCornerShape(50.dp))
-                .background(trackColor),
+                .height(handleSize), // 높이를 핸들 사이즈에 맞춤
             contentAlignment = Alignment.CenterStart
         ) {
-            Canvas(
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = (handleSize / 2))
+                    .fillMaxWidth()
+                    .height(trackHeight)
+                    .clip(RoundedCornerShape(50.dp))
+                    .background(trackColor)
             ) {
-                val dotCount = 20
-                val spacing = size.width / dotCount
-                for (i in 0..dotCount) {
-                    drawCircle(
-                        color = Color.White,
-                        radius = 1.2.dp.toPx(),
-                        center = Offset(size.width - (i * spacing), size.height / 2)
-                    )
+                Canvas(modifier = Modifier.fillMaxSize().padding(horizontal = (handleSize / 2))) {
+                    val dotCount = 20
+                    val spacing = size.width / dotCount
+                    for (i in 0..dotCount) {
+                        drawCircle(
+                            color = Color.White,
+                            radius = 1.2.dp.toPx(),
+                            center = Offset(size.width - (i * spacing), size.height / 2)
+                        )
+                    }
                 }
             }
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(currentDisplayVolume.toFloat())
+                    .fillMaxWidth(currentDisplayVolume)
                     .height(trackHeight)
                     .background(progressBrush, RoundedCornerShape(50.dp))
             )
+
+            // 3. 투명한 드래그 감지 레이어 (트랙 전체 영역)
             Box(
                 modifier = Modifier
-                    .width(trackWidth)
+                    .border(2.dp, Color.Green)
+                    .fillMaxWidth()
+                    .height(handleSize)
                     .pointerInput(Unit) {
                         detectDragGestures(
                             onDragStart = { offset ->
-                                val travelRange = trackWidth.toPx()
+                                val travelRange = (trackWidth - handleSize).toPx()
                                 val relativeX = (offset.x - handleSizePx / 2f)
                                 val rawVolume = (relativeX / travelRange).coerceIn(0f, 1f)
                                 draggingVolume = (round(rawVolume / 0.05f) * 0.05f)
                             },
                             onDrag = { change, _ ->
                                 change.consume()
-                                val travelRange = trackWidth.toPx()
+                                val travelRange = (trackWidth - handleSize).toPx()
                                 val relativeX = (change.position.x - handleSizePx / 2f)
                                 val rawVolume = (relativeX / travelRange).coerceIn(0f, 1f)
                                 draggingVolume = (round(rawVolume / 0.05f) * 0.05f)
                                 onChangeVolume(draggingVolume)
                             },
-                            onDragEnd = {
-                                onChangeVolume(draggingVolume)
-                            }
+                            onDragEnd = { onChangeVolume(draggingVolume) }
                         )
-                    },
+                    }
+            )
+
+            // 4. 볼륨 핸들 (트랙보다 높이가 큼)
+            Surface(
+                modifier = Modifier
+                    .size(handleSize)
+                    .offset(x = (trackWidth - handleSize) * currentDisplayVolume),
+                shape = CircleShape,
+                color = handleColor,
+                shadowElevation = 4.dp // 💡 핸들이 돋보이도록 그림자 추가
             ) {
-                Surface(
-                    modifier = Modifier
-                        .size(handleSize)
-                        .offset(x = (trackWidth - handleSize) * currentDisplayVolume),
-                    shape = CircleShape,
-                    color = handleColor,
-                ) {
-                    Icon(
-                        modifier = Modifier.padding(4.dp),
-                        painter = when((currentDisplayVolume*100).roundToInt()) {
-                            in 0..20 -> painterResource(Res.drawable.ic_volume_off)
-                            in 20..60 -> painterResource(Res.drawable.ic_volume_low)
-                            else -> painterResource(Res.drawable.ic_volume_high)
-                        },
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
+                Icon(
+                    modifier = Modifier.padding(8.dp),
+                    painter = when ((currentDisplayVolume * 100).roundToInt()) {
+                        in 0..20 -> painterResource(Res.drawable.ic_volume_off)
+                        in 20..60 -> painterResource(Res.drawable.ic_volume_low)
+                        else -> painterResource(Res.drawable.ic_volume_high)
+                    },
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
             }
         }
-        Text(
-            text = "${(currentDisplayVolume*100).roundToInt()}%",
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Bold,
-            color = Color.White
-        )
     }
 }
+
 @Preview
 @Composable
 fun SleepSettingScreenPreview() {
@@ -885,6 +979,9 @@ fun SleepSettingScreenPreview() {
             onToggleVibration = {},
             onToggleSmartAlarm = {},
             onSelectSmartAlarmRange = {},
+            onToggleRecommend = {},
+            onToggleSleepReminder = { _ -> },
+            onChangeReminderTime = { _, _ -> }
         )
     }
 }

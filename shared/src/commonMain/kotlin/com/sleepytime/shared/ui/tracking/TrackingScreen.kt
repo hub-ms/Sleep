@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -39,6 +40,7 @@ import com.sleepytime.shared.resources.Res
 import com.sleepytime.shared.resources.*
 import com.sleepytime.shared.ui.alarm.AlarmContract
 import com.sleepytime.shared.ui.alarm.AlarmTimeSection
+import com.sleepytime.shared.ui.component.SelectableChipGroup
 import com.sleepytime.shared.ui.home.MusicBrowserSection
 import com.sleepytime.shared.ui.music.MusicContract
 import com.sleepytime.shared.ui.theme.SleepTheme
@@ -71,7 +73,8 @@ fun TrackingContent(
     onSetTimer: (Int?) -> Unit,
     onToggleFavorite: (SleepMusic) -> Unit,
     onChangeAlarmHour: (Int) -> Unit,
-    onChangeAlarmMinute: (Int, Int) -> Unit
+    onChangeAlarmMinute: (Int, Int) -> Unit,
+    onToggleRecommend: (Boolean) -> Unit,
 ) {
     val isAlarmTimePickerShow = remember { mutableStateOf(false) }
     val isTrackingFinishDialogShow = remember { mutableStateOf(false) }
@@ -111,6 +114,7 @@ fun TrackingContent(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .navigationBarsPadding()
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
@@ -176,7 +180,8 @@ fun TrackingContent(
                 sleepDurationMillis = sleepDurationMillis,
                 isAlarmTimePickerShow = isAlarmTimePickerShow,
                 onChangeAlarmHour = onChangeAlarmHour,
-                onChangeAlarmMinute = onChangeAlarmMinute
+                onChangeAlarmMinute = onChangeAlarmMinute,
+                onToggleRecommend = onToggleRecommend
             )
             Column(
                 modifier = Modifier
@@ -408,33 +413,43 @@ fun CurrentMusicCard(
         shape = RoundedCornerShape(16.dp),
         color = Color.Transparent
     ) {
-        if(musicState.selectedMusic==null) {
-            Text(
-                text = "수면 음악과 함께 잠들어보세요",
-                style = MaterialTheme.typography.bodyText,
-                color = Color.White
-            )
-        } else {
-            Column(
-                modifier = Modifier
-                    .padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+        Column(
+            modifier = Modifier
+                .padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                Box(
+                    modifier = Modifier
+                        .then(
+                            if(musicState.selectedMusic==null)
+                                Modifier
+                                    .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp))
+                                    .size(64.dp)
+                            else Modifier),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        contentAlignment = Alignment.Center
-                    ) {
+                    if(musicState.selectedMusic==null) {
+                        Icon(
+                            painter = painterResource(Res.drawable.ic_music_note),
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    } else {
                         Image(
                             painter = painterResource(image),
                             contentDescription = null,
-                            modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)),
+                            modifier = Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)),
                             contentScale = ContentScale.Crop
                         )
+                    }
+                    musicState.selectedMusic?.let {
                         IconButton(
                             onClick = onTogglePlaying,
                             modifier = Modifier.size(48.dp).background(MaterialTheme.colorScheme.primary.copy(0.1f), CircleShape)
@@ -443,61 +458,66 @@ fun CurrentMusicCard(
                                 painter = if (musicState.isPlaying) painterResource(Res.drawable.ic_pause) else painterResource(Res.drawable.ic_play),
                                 contentDescription = null,
                                 tint = Color.White,
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(32.dp)
                             )
                         }
                     }
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
+                }
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = musicState.selectedMusic.title,
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
+                        Text(
+                            text = if(musicState.selectedMusic==null) "선택된 수면음악 없음" else musicState.selectedMusic.title,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        musicState.selectedMusic?.let {
                             Text(
                                 text = formatSleepMusicSeconds(elapsedSleepMusicSeconds),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (musicState.isPlaying) MaterialTheme.colorScheme.primary else Color.Gray
-                            )
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceAround
-                        ) {
-                            ControlMenu(
-                                icon = if(musicState.timerMinutes != null) Res.drawable.ic_timer_on else Res.drawable.ic_timer_off,
-                                label = if (musicState.timerMinutes != null) "${musicState.timerMinutes}분" else "타이머",
-                                onClick = { onSetTimer(if (musicState.timerMinutes == null) 30 else null) }
+                                style = MaterialTheme.typography.caption,
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
                 }
             }
+            val timerRangeList = listOf("30분", "1시간", "2시간", "자동")
+            val selectedLabel = when (musicState.timerMinutes) {
+                30 -> "30분"
+                60 -> "1시간"
+                120 -> "2시간"
+                null -> "자동"
+                else -> "30분"
+            }
+            val minutes = when (selectedLabel) {
+                "30분" -> 30
+                "1시간" -> 60
+                "2시간" -> 120
+                "자동" -> null
+                else -> 30
+            }
+            if(musicState.selectedMusic==null) {
+                Text(
+                    text = "아래에서 수면 음악을 선택해보세요",
+                    style = MaterialTheme.typography.bodyText,
+                    color = Color.White
+                )
+            } else {
+                SelectableChipGroup(
+                    items = timerRangeList,
+                    selectedItem = selectedLabel,
+                    onSelectItem = {
+                        onSetTimer(minutes)
+                    }
+                )
+            }
         }
-    }
-}
-
-@Composable
-fun ControlMenu(icon: DrawableResource, label: String, selected: Boolean = false, onClick: () -> Unit) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable { onClick() }.padding(8.dp)
-    ) {
-        Icon(
-            painter = painterResource(icon),
-            contentDescription = label,
-            tint = if (selected) MaterialTheme.colorScheme.primary else Color.White,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(label, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
     }
 }
 @Composable
@@ -508,6 +528,7 @@ fun TimeSection(
     isAlarmTimePickerShow: MutableState<Boolean>,
     onChangeAlarmHour: (Int) -> Unit,
     onChangeAlarmMinute: (Int, Int) -> Unit,
+    onToggleRecommend: (Boolean) -> Unit,
 ) {
     val gradientBrush = Brush.sweepGradient(
         0.0f to MaterialTheme.colorScheme.primary,
@@ -562,6 +583,7 @@ fun TimeSection(
                         alarmState = alarmState,
                         onChangeAlarmHour = onChangeAlarmHour,
                         onChangeAlarmMinute = onChangeAlarmMinute,
+                        onToggleRecommend = onToggleRecommend
                     )
                 }
             }

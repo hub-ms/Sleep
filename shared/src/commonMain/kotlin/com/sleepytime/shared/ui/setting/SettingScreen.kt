@@ -31,14 +31,26 @@ import com.sleepytime.shared.resources.ic_sleep
 import com.sleepytime.shared.resources.ic_smart_alarm
 import com.sleepytime.shared.resources.ic_support
 import com.sleepytime.shared.ui.auth.AuthViewModel
+import com.sleepytime.shared.ui.report.Calendar
+import com.sleepytime.shared.ui.report.CalendarDayCell
+import com.sleepytime.shared.ui.report.ReportContract
 import com.sleepytime.shared.ui.theme.*
 import io.github.aakira.napier.Napier
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.isoDayNumber
+import kotlinx.datetime.minus
+import kotlinx.datetime.plus
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun SettingContent(
+    reportState: ReportContract.State,
     authViewModel: AuthViewModel,
+    onDateSelected: (LocalDate) -> Unit,
+    onPrevClicked: (DateTimeUnit.DateBased) -> Unit,
+    onNextClicked: (DateTimeUnit.DateBased) -> Unit,
     onNavigateToLoginBenefit: () -> Unit,
     onNavigateToAccountSetting: () -> Unit,
     onNavigateToNotification: () -> Unit,
@@ -65,11 +77,14 @@ fun SettingContent(
             style = MaterialTheme.typography.sectionTitle,
             color = Color.White,
         )
-        UserProfileSection(
-            user = authState.user,
-            userType = authState.userType,
-            isGuest = isGuest,
-            onLoginBenefitClicked = onNavigateToLoginBenefit
+        Calendar(
+            reportState = reportState,
+            selectedDate = reportState.date,
+            onDateSelected = { date ->
+                onDateSelected(date)
+            },
+            onPrevClicked = { onPrevClicked(it) },
+            onNextClicked = { onNextClicked(it) },
         )
         SettingCard {
             if(!isGuest) {
@@ -77,9 +92,9 @@ fun SettingContent(
                     onNavigateToAccountSetting()
                 }
             }
-            SettingItem(painterResource(Res.drawable.ic_notification), "알림 및 환경설정") {
-                onNavigateToNotification()
-            }
+//            SettingItem(painterResource(Res.drawable.ic_notification), "알림 및 환경설정") {
+//                onNavigateToNotification()
+//            }
             SettingItem(painterResource(Res.drawable.ic_sleep), "수면 및 알람 설정") {
                 onNavigateToSleepSetting()
             }
@@ -95,7 +110,7 @@ fun SettingContent(
 @Composable
 fun SettingCard(content: @Composable ColumnScope.() -> Unit) {
     Card(
-        modifier = Modifier.windowInsetsPadding(WindowInsets.safeContent),
+        modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)

@@ -26,17 +26,6 @@ object AuthContract {
         val withdrawReason: String? = null, // 추가
 
         val resetCompleted: Boolean = false,
-
-        // 💡 추가: 알림 설정 상태
-        val isPushEnabled: Boolean = true,
-        val isReminderEnabled: Boolean = true,
-        val isWeeklyReportEnabled: Boolean = true,
-        val isUpdateEnabled: Boolean = true,
-
-        val reminderHour: Int = 23,
-        val reminderMinute: Int = 0,
-
-        val reportDeliveryMethod: ReportDeliveryMethod = ReportDeliveryMethod.PUSH,
     )
     enum class ReportDeliveryMethod {
         PUSH, EMAIL
@@ -86,15 +75,6 @@ object AuthContract {
 
         data object EmailDisconnectClicked : Intent()
         object LoginBenefitClicked: Intent()
-
-        // 💡 추가: 알림 설정 인텐트
-        data class TogglePushNotification(val enabled: Boolean) : Intent()
-        data class ToggleSleepReminder(val enabled: Boolean) : Intent()
-        data class ToggleWeeklyReport(val enabled: Boolean) : Intent()
-        data class ToggleUpdate(val enabled: Boolean) : Intent()
-
-        data class ChangeReminderTime(val hour: Int, val minute: Int) : Intent()
-        data class ChangeReportDeliveryMethod(val method: ReportDeliveryMethod) : Intent()
     }
 
     sealed class Effect {

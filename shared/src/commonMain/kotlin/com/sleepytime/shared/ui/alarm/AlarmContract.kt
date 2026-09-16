@@ -1,6 +1,7 @@
 ﻿package com.sleepytime.shared.ui.alarm
 
 import com.sleepytime.shared.domain.model.Alarm
+import com.sleepytime.shared.ui.auth.AuthContract.Intent
 import com.sleepytime.shared.util.ResourceMapper
 import kotlinx.datetime.LocalTime
 
@@ -9,6 +10,7 @@ object AlarmContract {
         val isAlarmEnabled: Boolean = true,
         val isAlarmPlaying: Boolean = false,
         val isAlarmPreviewPlaying: Boolean = false,
+        val isRecommendEnabled: Boolean = false,
         val alarmHour: Int = 7,
         val alarmMinute: Int = 30,
         val wakeUpTime: LocalTime? = null,
@@ -42,7 +44,11 @@ object AlarmContract {
         val selectedSleepTrackingModes: Set<SleepTrackingMode> = setOf(
             SleepTrackingMode.AUTO_PHONE,
         ),
-        val autoTrackingTime: LocalTime? = null
+        val autoTrackingTime: LocalTime? = null,
+        val isReminderEnabled: Boolean = true,
+
+        val reminderHour: Int = 23,
+        val reminderMinute: Int = 0,
     )
     sealed class Intent {
         object ToggleAlarm : Intent()
@@ -58,6 +64,10 @@ object AlarmContract {
         object ToggleVibration : Intent()
         object ToggleSmartAlarm : Intent()
         data class SelectSmartAlarmRange(val range: Int): Intent()
+        object ToggleRecommend : Intent()
+        data class ToggleSleepReminder(val enabled: Boolean) : Intent()
+
+        data class ChangeReminderTime(val hour: Int, val minute: Int) : Intent()
     }
     sealed class Effect {
         object NavigateToHome: Effect()

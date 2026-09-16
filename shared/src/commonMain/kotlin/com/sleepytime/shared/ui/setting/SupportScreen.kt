@@ -1,18 +1,26 @@
 ﻿package com.sleepytime.shared.ui.setting
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeContent
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -42,6 +50,7 @@ import com.sleepytime.shared.resources.ic_caret_right
 import com.sleepytime.shared.resources.ic_help
 import com.sleepytime.shared.ui.component.FaqItem
 import com.sleepytime.shared.ui.component.SelectableChip
+import com.sleepytime.shared.ui.theme.SleepTheme
 import com.sleepytime.shared.ui.theme.sectionTitle
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
@@ -52,12 +61,12 @@ import org.jetbrains.compose.resources.painterResource
 @Composable
 fun SupportContent(
     allItems: List<FaqItem>,
-    onNavigateToChat: () -> Unit,
+    onChatClick: () -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(SleepTheme.gradients.background)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -66,23 +75,17 @@ fun SupportContent(
             text = "도움말 및 지원",
             style = MaterialTheme.typography.sectionTitle,
             color = Color.White,
-            modifier = Modifier.padding(bottom = 16.dp)
         )
-        Box(modifier = Modifier.weight(1f)) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                FaqSection(allItems)
-                ContactSection(onChatClick = onNavigateToChat)
-            }
+        FaqSection(allItems, modifier = Modifier.weight(1f))
+        SettingCard {
+            ContactItem("고객센터 1:1 상담", "상담원과 채팅으로 문의하세요", onClick = onChatClick)
         }
     }
 }
 
 @Composable
-fun FaqSection(allItems: List<FaqItem>) {
-    var selectedCategory by remember { mutableStateOf<FaqCategory>(FaqCategory.SLEEP) }
+fun FaqSection(allItems: List<FaqItem>, modifier: Modifier = Modifier) {
+    var selectedCategory by remember { mutableStateOf(FaqCategory.SLEEP) }
 
     val filteredItems = remember(selectedCategory) {
         allItems.filter { item ->
@@ -95,16 +98,16 @@ fun FaqSection(allItems: List<FaqItem>) {
     val coroutineScope = rememberCoroutineScope()
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .navigationBarsPadding()
+        modifier = modifier
     ) {
         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             LazyRow(
                 state = listState,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
             ) {
                 items(FaqCategory.entries) { category ->
                     SelectableChip(
@@ -131,8 +134,6 @@ fun FaqSection(allItems: List<FaqItem>) {
                     )
                 }
             }
-
-            // 오른쪽 화살표: 앞으로 스크롤 가능할 때만 표시
             if (listState.canScrollForward) {
                 IconButton(
                     modifier = Modifier.align(Alignment.CenterEnd).background(
@@ -153,19 +154,36 @@ fun FaqSection(allItems: List<FaqItem>) {
                 }
             }
         }
-
-        if (filteredItems.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(top = 48.dp), contentAlignment = Alignment.Center) {
-                Text("검색 결과가 없습니다.", color = Color.Gray)
-            }
-        } else {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = Color.White.copy(alpha = 0.05f),
+        ) {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                state = rememberLazyListState()
+                modifier = Modifier
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 items(filteredItems) { item ->
-                    ExpandableFaqItem(item)
+                    Column(
+                        modifier = Modifier
+                            .border(2.dp, Color.Green),
+                        verticalArrangement = Arrangement.SpaceBetween,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = item.question,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White
+                        )
+                        Text(
+                            text = item.answer,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.LightGray,
+                            lineHeight = MaterialTheme.typography.bodySmall.lineHeight * 1.4
+                        )
+                    }
                 }
             }
         }
@@ -195,58 +213,36 @@ fun ExpandableFaqItem(item: FaqItem) {
         }
     }
 }
-
-@Composable
-fun ContactSection(onChatClick: () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        SettingCard {
-            ContactItem("고객센터 1:1 상담", "상담원과 채팅으로 문의하세요", onClick = onChatClick)
-        }
-
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-        ) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    painter = painterResource(Res.drawable.ic_help),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    "운영시간: 평일 10:00 - 18:00\n(주말 및 공휴일 제외)",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.LightGray
-                )
-            }
-        }
-    }
-}
-
 @Composable
 fun ContactItem(title: String, description: String, onClick: () -> Unit) {
-    Row(
+    Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(16.dp)
+            .clickable { onClick() },
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, color = Color.White, style = MaterialTheme.typography.bodyMedium)
-            Text(description, color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                Text(description, color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+            }
+            Icon(
+                painter = painterResource(Res.drawable.ic_caret_right),
+                contentDescription = null,
+                tint = Color.Gray,
+                modifier = Modifier.size(20.dp)
+            )
         }
-        Icon(
-            painter = painterResource(Res.drawable.ic_caret_right),
-            contentDescription = null,
-            tint = Color.Gray,
-            modifier = Modifier.size(20.dp)
+        Text(
+            text = "운영시간: 평일 10:00~18:00",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.LightGray
         )
     }
 }

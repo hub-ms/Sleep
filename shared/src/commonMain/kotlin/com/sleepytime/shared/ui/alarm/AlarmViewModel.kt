@@ -2,13 +2,20 @@ package com.sleepytime.shared.ui.alarm
 
 import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import com.russhwolf.settings.ObservableSettings
 import com.sleepytime.shared.domain.repository.AuthRepository
+import com.sleepytime.shared.domain.repository.SleepSessionRepository
 import com.sleepytime.shared.domain.repository.SleepSettingsRepository
 import com.sleepytime.shared.platform.AudioSystem
 import com.sleepytime.shared.platform.MusicPlayer
 import com.sleepytime.shared.platform.SoundType
 import com.sleepytime.shared.platform.TrackingManager
+import com.sleepytime.shared.ui.auth.AuthContract
 import com.sleepytime.shared.ui.tracking.TrackingContract
+import com.sleepytime.shared.util.DateTimeUtil.toLocalDateTime
+import com.sleepytime.shared.util.PreferencesKeys.Settings.KEY_REMINDER_ENABLED
+import com.sleepytime.shared.util.PreferencesKeys.Settings.KEY_REMINDER_HOUR
+import com.sleepytime.shared.util.PreferencesKeys.Settings.KEY_REMINDER_MINUTE
 import io.github.aakira.napier.Napier
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -21,16 +28,24 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.datetime.Clock
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 
 class AlarmViewModel(
-    private val authRepository: AuthRepository,
+    private val sleepSessionRepository: SleepSessionRepository,
     private val sleepSettingsRepository: SleepSettingsRepository,
     private val player: MusicPlayer,
     private val audioSystem: AudioSystem,
-    private val trackingManager: TrackingManager
+    private val trackingManager: TrackingManager,
+    private val settings: ObservableSettings,
 ) : ScreenModel {
     private val _state = MutableStateFlow(AlarmContract.State())
     val state = _state.asStateFlow()
@@ -176,12 +191,7 @@ class AlarmViewModel(
                     _effect.emit(AlarmContract.Effect.NavigateToHome)
                     return
                 }
-
-                // 🐛 버그 수정: finish()는 포그라운드 서비스에 인텐트만 보내고 즉시 반환되는
-                // fire-and-forget 호출이라, 세션 분석/저장(analyzeAndSave)이 끝나기 전에 리포트
-                // 화면으로 이동하면 방금 잰 수면 데이터가 아직 저장되지 않아 0값으로 보였습니다.
-                // isFinished가 true가 될 때까지(최대 10초) 기다린 뒤 리포트로 이동합니다.
-                withTimeoutOrNull(10_000L) {
+                withTimeoutOrNull(10_000L.milliseconds) {
                     trackingManager.trackingState.first { it.isFinished }
                 }
                 _effect.emit(AlarmContract.Effect.NavigateToReport(currentSessionId))
@@ -208,8 +218,71 @@ class AlarmViewModel(
                 _state.update { it.copy(selectedSmartAlarmRange = intent.range) }
                 sleepSettingsRepository.setSmartAlarmRange(intent.range)
             }
+            is AlarmContract.Intent.ToggleRecommend -> {
+                val newStatus = !_state.value.isRecommendEnabled
+                _state.update { it.copy(isRecommendEnabled = newStatus) }
+                if (newStatus) recommendWakeTime(sleepSessionRepository)
+            }
+            is AlarmContract.Intent.ToggleSleepReminder -> {
+                settings.putBoolean(KEY_REMINDER_ENABLED, intent.enabled)
+                _state.update { it.copy(isReminderEnabled = intent.enabled) }
+            }
+            is AlarmContract.Intent.ChangeReminderTime -> {
+                settings.putInt(KEY_REMINDER_HOUR, intent.hour)
+                settings.putInt(KEY_REMINDER_MINUTE, intent.minute)
+                _state.update { it.copy(reminderHour = intent.hour, reminderMinute = intent.minute) }
+            }
         }
     }
+    private fun recommendWakeTime(sleepSessionRepository: SleepSessionRepository) {
+        screenModelScope.launch {
+            val sessions = sleepSessionRepository.getRecentSessions(14)
+            if (sessions.isEmpty()) return@launch
+
+            val avgWakeTime = sessions.map { it.wakeTime }.averageTime()
+            val sleepDurationMinutes = sessions.map { it.duration.sleepLatencyMinutes + it.duration.awakeMinutes + it.duration.lightMinutes + it.duration.deepMinutes + it.duration.remMinutes }
+
+            val avgSleepDuration = sleepDurationMinutes.average().toInt()
+
+            val recentWakeTimes = sessions.takeLast(3).map { it.wakeTime }
+            val weightedWakeTime = weightedAverage(avgWakeTime, recentWakeTimes)
+
+            val recommendedWakeTime = when {
+                avgSleepDuration < 420 -> weightedWakeTime.minute.plus(30).toLocalDateTime()
+                avgSleepDuration > 540 -> weightedWakeTime.minute.minus(30).toLocalDateTime()
+                else -> weightedWakeTime
+            }
+
+            _state.update {
+                it.copy(
+                    alarmHour = recommendedWakeTime.hour,
+                    alarmMinute = recommendedWakeTime.minute
+                )
+            }
+        }
+    }
+
+    // 평균 시간 계산
+    private fun List<LocalDateTime>.averageTime(): LocalDateTime {
+        val avgHour = this.map { it.hour }.average().toInt()
+        val avgMinute = this.map { it.minute }.average().toInt()
+        return LocalDateTime(
+            Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date,
+            LocalTime(avgHour, avgMinute)
+        )
+    }
+
+    // 최근 데이터 가중치 반영
+    private fun weightedAverage(base: LocalDateTime, recent: List<LocalDateTime>): LocalDateTime {
+        val avgHour = ((base.hour * 0.7) + (recent.map { it.hour }.average() * 0.3)).toInt()
+        val avgMinute = ((base.minute * 0.7) + (recent.map { it.minute }.average() * 0.3)).toInt()
+        return LocalDateTime(
+            Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date,
+            LocalTime(avgHour, avgMinute)
+        )
+    }
+
+
 
     fun onUserVolumeChange(volume: Float) {
         isUserChangingVolume.value = true

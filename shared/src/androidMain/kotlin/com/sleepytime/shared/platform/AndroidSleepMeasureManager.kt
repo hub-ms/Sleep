@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.CopyOnWriteArrayList
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.abs
 import kotlin.math.sqrt
 
 data class RawAccel(val values: FloatArray, val timestamp: Long) {
@@ -175,9 +176,19 @@ class AndroidSleepMeasureManager @Inject constructor(
         if (minuteAccel.isEmpty() && minuteNoise.isEmpty()) return
 
         // 💡 1주차 로드맵: 가속도계 + 자이로스코프 RAW 데이터 로깅 (7채널, 심박수 제거)
+        // 버킷의 마지막 소음값을 일괄 태깅하지 않고, 각 accel 샘플과 시간상 가장 가까운
+        // 소음 샘플을 매칭합니다(accel/noise 모두 타임스탬프 오름차순이므로 two-pointer로 O(n+m)).
+        var noiseIdx = 0
         val windowData = minuteAccel.mapIndexed { index, accel ->
             val gyro = minuteGyro.getOrNull(index) ?: RawGyro(floatArrayOf(0f, 0f, 0f), accel.timestamp)
-            val noise = minuteNoise.lastOrNull()?.db ?: DEFAULT_NOISE_DB
+
+            while (noiseIdx < minuteNoise.size - 1 &&
+                abs(minuteNoise[noiseIdx + 1].timestamp - accel.timestamp) <=
+                abs(minuteNoise[noiseIdx].timestamp - accel.timestamp)
+            ) {
+                noiseIdx++
+            }
+            val noise = minuteNoise.getOrNull(noiseIdx)?.db ?: DEFAULT_NOISE_DB
 
             floatArrayOf(
                 accel.values[0], accel.values[1], accel.values[2], // 0, 1, 2: Accel XYZ

@@ -18,7 +18,7 @@ class CircularFloatBuffer(private val capacity: Int) {
     }
     fun toList(): List<Float> {
         val list = ArrayList<Float>(size)
-        for(i in 0..size) {
+        for(i in 0 until size) {
             list.add(arr[(head + i) % capacity])
         }
         return list

@@ -70,7 +70,10 @@ class SleepSessionRepositoryImpl(
             val stagesDistribution = calculateStagesDistribution(metrics)
             Napier.d("efficiency:$efficiency, stageTimeline:$stageTimeline, stageDistribution:$stagesDistribution")
 
-            val latestFeature = environmentFeatures.lastOrNull()
+            // 세션 전체(야간 전체)를 대표하는 소음 통계를 마지막 30초 버킷이 아니라
+            // 모든 EnvironmentFeature의 noise 스냅샷을 모아 재계산합니다.
+            val sessionNoiseStats = Stats.from(environmentFeatures.map { it.snapshot.noise })
+            val sessionNoiseDanger = environmentFeatures.any { it.flag.isNoiseDanger }
             val now = Clock.System.now().toEpochMilliseconds()
             SleepSession(
                 sessionId = sessionId,
@@ -81,9 +84,9 @@ class SleepSessionRepositoryImpl(
                 sleepEfficiency = efficiency,
                 environment = SleepSession.Environment(
                     history = environmentFeatures.map { it.snapshot },
-                    stats = latestFeature?.stats ?: EnvironmentFeature.Statistics(Stats()),
-                    flags = latestFeature?.flag ?: EnvironmentFeature.Flag(
-                        isNoiseDanger = false
+                    stats = EnvironmentFeature.Statistics(noise = sessionNoiseStats),
+                    flags = EnvironmentFeature.Flag(
+                        isNoiseDanger = sessionNoiseDanger
                     )
                 ),
                 csvData = SleepSession.CsvData(

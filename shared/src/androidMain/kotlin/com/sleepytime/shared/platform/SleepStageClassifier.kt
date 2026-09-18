@@ -13,8 +13,13 @@ actual class SleepStageClassifier {
     actual companion object {
         actual const val CONTEXT_LEN = 60
 
-        actual val COMBINED_CHANNEL_MEAN = floatArrayOf(0.000000f, -0.000000f, -0.000002f, 0.000003f, 68.576897f, 0.000000f, 0.404252f, 0.000000f, -0.117739f, -0.002428f, -0.342475f, 0.050531f, 65.854195f, 1.845736f, 0.000000f, 0.409671f)
-        actual val COMBINED_CHANNEL_STD = floatArrayOf(0.000033f, 0.000040f, 0.000080f, 0.000020f, 1.000000f, 1.000000f, 0.298018f, 1.000000f, 0.400636f, 0.554048f, 0.635913f, 0.211875f, 9.069786f, 1.609346f, 1.000000f, 0.301205f)
+        // 🐛 버그 수정: 예전에는 16채널(EDF 8 + Accel 8) COMBINED 배열을 썼는데, buildInputBuffer가
+        // NUM_CHANNELS(8)만큼만 순회해 실제로는 앞 8개(EDF/EEG용) 값만 참조하고 있었습니다.
+        // 이 모델(accel_infer_model 기반 sleep_model.tflite)의 입력은 가속도계 데이터라
+        // Accel 도메인 정규화 기준이 필요합니다.
+        // compute_stats.py가 bidsleep·sleep_accel 각각의 norm_stats.npy를 단순 평균해 계산한 값입니다.
+        actual val ACCEL_CHANNEL_MEAN = floatArrayOf(-0.120757f, -0.043699f, -0.363963f, 0.044877f, 65.443787f, 24.274971f, 0.000000f, 0.449583f)
+        actual val ACCEL_CHANNEL_STD = floatArrayOf(0.378034f, 0.514663f, 0.660465f, 0.196010f, 9.678553f, 7.435197f, 1.000000f, 0.292682f)
 
         // EDF 채널 인덱스
         actual const val CH_EEG1 = 0

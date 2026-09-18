@@ -43,6 +43,31 @@ def load_checkpoint(path: Path):
         return None
 
 
+def check_architecture_compatibility(model, expected_context_len, expected_window, expected_channels, expected_classes):
+    """체크포인트 로드 자체는 성공해도(가중치 shape만 맞으면 로드는 됨), 현재 model.py가 기대하는
+    입력 컨텍스트 길이/채널 수, 출력 클래스 수와 실제로 다를 수 있습니다(구버전 파이프라인은
+    CONTEXT_LEN, N_CLASSES가 달랐을 수 있음). 그 경우 evaluate_domain을 시도하면 TF가 shape
+    불일치로 크래시하므로, 미리 비교해 명확한 이유와 함께 건너뜁니다."""
+    input_shape = tuple(model.input_shape)
+    output_shape = tuple(model.output_shape)
+    expected_input = (None, expected_context_len, expected_window, expected_channels)
+
+    problems = []
+    if input_shape != expected_input:
+        problems.append(f"입력 shape {input_shape} != 현재 파이프라인 기대값 {expected_input}")
+    if output_shape[-1] != expected_classes:
+        problems.append(f"출력 클래스 수 {output_shape[-1]} != 현재 파이프라인 기대값 {expected_classes}")
+
+    if problems:
+        print("⚠️ 이 체크포인트는 현재 파이프라인과 아키텍처(컨텍스트 길이/클래스 수 등)가 다릅니다:")
+        for p in problems:
+            print(f"  - {p}")
+        print("  → 구버전 파이프라인에서 학습된 모델로 보입니다. 이 체크포인트로는 현재 model.py 기준 "
+              "baseline을 낼 수 없습니다 — 실제 재학습(train.py)이 필요합니다.")
+        return False
+    return True
+
+
 def evaluate_accel_checkpoint():
     print("\n===== Accel 도메인 baseline 평가 =====")
     if not train.ACCEL_NORM_STATS_PATH.exists():
@@ -66,6 +91,10 @@ def evaluate_accel_checkpoint():
     model = load_checkpoint(train.OUTPUT_DIR / "accel_inference_model.keras")
     if model is None:
         return
+    if not check_architecture_compatibility(
+        model, train.CONTEXT_LEN, train.ACCEL_WINDOW, train.ACCEL_CHANNELS, train.N_CLASSES
+    ):
+        return
 
     dataset = train.build_dataset(
         [train.BID_DIR, train.ACCEL_DIR], {train.BID_DIR: bid_te, train.ACCEL_DIR: acc_te},
@@ -75,7 +104,10 @@ def evaluate_accel_checkpoint():
         [train.BID_DIR, train.ACCEL_DIR], {train.BID_DIR: bid_te, train.ACCEL_DIR: acc_te}, train.ACCEL_STRIDE
     ) // train.BATCH_SIZE)
 
-    train.evaluate_domain(model, dataset, steps, "accel_baseline_checkpoint")
+    try:
+        train.evaluate_domain(model, dataset, steps, "accel_baseline_checkpoint")
+    except Exception as e:
+        print(f"평가 중 오류: {type(e).__name__}: {e}")
 
 
 def evaluate_psg_checkpoint():

@@ -61,21 +61,29 @@ def main():
     # 순수 EEG/EOG/EMG 도메인 (Sleep-EDF Expanded만 해당)
     edf_channel_names = ["eeg1", "eeg2", "eog", "emg", "heart_rate", "hrv", "time_feature", "reserved"]
 
-    # 가속도+심박 도메인 (BIDSleep + Sleep-Accel, 동일 레이아웃이므로 병합 계산)
+    # 가속도+심박 도메인 채널 레이아웃 (BIDSleep과 Sleep-Accel이 동일한 8채널 구성)
     accel_channel_names = ["accel_x", "accel_y", "accel_z", "tilt", "heart_rate", "hrv", "mfcc_energy", "time_feature"]
 
+    edf_norm_path = BASE_DIR / "data" / "sleep_edf" / "norm_stats.npy"
+    bid_norm_path = BASE_DIR / "data" / "bidsleep" / "norm_stats.npy"
+    sleep_accel_norm_path = BASE_DIR / "data" / "sleep_accel" / "norm_stats.npy"
+
     compute_domain_stats(
-        BASE_DIR / "data" / "sleep_edf" / "subjects", 8, edf_channel_names,
-        BASE_DIR / "data" / "sleep_edf" / "norm_stats.npy"
+        BASE_DIR / "data" / "sleep_edf" / "subjects", 8, edf_channel_names, edf_norm_path
     )
-    compute_domain_stats_multi(
-        [BASE_DIR / "data" / "bidsleep" / "subjects", BASE_DIR / "data" / "sleep_accel" / "subjects"],
-        8, accel_channel_names,
-        BASE_DIR / "data" / "accel_domain" / "norm_stats.npy"
+    compute_domain_stats(
+        BASE_DIR / "data" / "bidsleep" / "subjects", 8, accel_channel_names, bid_norm_path
+    )
+    compute_domain_stats(
+        BASE_DIR / "data" / "sleep_accel" / "subjects", 8, accel_channel_names, sleep_accel_norm_path
     )
 
-    edf_stats = np.load(BASE_DIR / "data" / "sleep_edf" / "norm_stats.npy", allow_pickle=True).item()
-    accel_stats = np.load(BASE_DIR / "data" / "accel_domain" / "norm_stats.npy", allow_pickle=True).item()
+    # 💡 입력 .npy가 아예 없는 도메인은 compute_domain_stats*가 경고만 찍고 norm_stats.npy를
+    # 저장하지 않은 채 조용히 반환합니다. 예전에는 이후 np.load가 바로 FileNotFoundError로
+    # 죽었는데, 어느 도메인이 준비됐는지 봐가며 있는 도메인만 이어서 출력하도록 바꿨습니다.
+    edf_stats = np.load(edf_norm_path, allow_pickle=True).item() if edf_norm_path.exists() else None
+    bid_stats = np.load(bid_norm_path, allow_pickle=True).item() if bid_norm_path.exists() else None
+    sleep_accel_stats = np.load(sleep_accel_norm_path, allow_pickle=True).item() if sleep_accel_norm_path.exists() else None
 
     print("// Sleep-EDF Expanded")
     print(to_kotlin_array("EDF_CHANNEL_MEAN", edf_stats["mean"]))

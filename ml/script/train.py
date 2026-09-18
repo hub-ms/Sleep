@@ -18,8 +18,11 @@ EDF_DIR    = BASE_DIR / "data" / "sleep_edf" / "subjects"
 BID_DIR    = BASE_DIR / "data" / "bidsleep" / "subjects"
 ACCEL_DIR  = BASE_DIR / "data" / "sleep_accel" / "subjects"
 
-PSG_NORM_STATS_PATH   = BASE_DIR / "data" / "sleep_edf" / "norm_stats.npy"
-ACCEL_NORM_STATS_PATH = BASE_DIR / "data" / "accel_domain" / "norm_stats.npy"
+PSG_NORM_STATS_PATH        = BASE_DIR / "data" / "sleep_edf" / "norm_stats.npy"
+# 💡 bidsleep과 sleep_accel은 서로 다른 기기/수집 환경의 데이터라 정규화 통계를 하나로
+# 합치지 않고 소스별로 따로 계산합니다(compute_stats.py도 이 두 경로에 각각 저장).
+BID_NORM_STATS_PATH        = BASE_DIR / "data" / "bidsleep" / "norm_stats.npy"
+SLEEP_ACCEL_NORM_STATS_PATH = BASE_DIR / "data" / "sleep_accel" / "norm_stats.npy"
 
 # 하이퍼파라미터
 PSG_WINDOW, PSG_CHANNELS = 1500, 8
@@ -156,7 +159,9 @@ def augment_accel(x_slice):
         x_slice += noise
     return x_slice
 
-def create_generator(directories, subject_ids_by_dir, mean, std, stride, augment=False, shuffle=True):
+def create_generator(directories, subject_ids_by_dir, mean_by_dir, std_by_dir, stride, augment=False, shuffle=True):
+    """mean_by_dir/std_by_dir: {directory: FloatArray} — 소스 디렉토리별로 서로 다른 정규화
+    통계를 적용합니다(예: bidsleep과 sleep_accel은 통계값 자체가 다름)."""
     def gen():
         pairs = [(d, sid) for d in directories for sid in subject_ids_by_dir.get(d, [])]
         while True:
@@ -164,6 +169,7 @@ def create_generator(directories, subject_ids_by_dir, mean, std, stride, augment
             for d, sid in pairs:
                 X, y = _MEM_CACHE.get((str(d), sid), (None, None))
                 if X is None: continue
+                mean, std = mean_by_dir[d], std_by_dir[d]
                 starts = list(range(0, len(X) - CONTEXT_LEN + 1, stride))
                 if shuffle: np.random.shuffle(starts)
                 for s in starts:
@@ -173,8 +179,8 @@ def create_generator(directories, subject_ids_by_dir, mean, std, stride, augment
                     yield x_slice, y[s:s+CONTEXT_LEN]
     return gen
 
-def build_dataset(directories, subject_ids_by_dir, mean, std, window, channels, stride, augment=False, shuffle=True):
-    gen_fn = create_generator(directories, subject_ids_by_dir, mean, std, stride, augment, shuffle)
+def build_dataset(directories, subject_ids_by_dir, mean_by_dir, std_by_dir, window, channels, stride, augment=False, shuffle=True):
+    gen_fn = create_generator(directories, subject_ids_by_dir, mean_by_dir, std_by_dir, stride, augment, shuffle)
     return tf.data.Dataset.from_generator(
         gen_fn,
         output_signature=(
@@ -233,10 +239,16 @@ def _combine_with_weights(psg_batch, accel_batch, psg_w, accel_w):
 # ============================================================
 def main():
     # Stats Load
+    # 💡 bidsleep/sleep_accel을 각각 독립적으로 정규화합니다(통계값 자체가 다름).
     psg_stats = np.load(PSG_NORM_STATS_PATH, allow_pickle=True).item()
-    accel_stats = np.load(ACCEL_NORM_STATS_PATH, allow_pickle=True).item()
+    bid_stats = np.load(BID_NORM_STATS_PATH, allow_pickle=True).item()
+    sleep_accel_stats = np.load(SLEEP_ACCEL_NORM_STATS_PATH, allow_pickle=True).item()
     psg_m, psg_s = psg_stats["mean"], psg_stats["std"]
-    accel_m, accel_s = accel_stats["mean"], accel_stats["std"]
+
+    psg_mean_by_dir = {EDF_DIR: psg_m}
+    psg_std_by_dir = {EDF_DIR: psg_s}
+    accel_mean_by_dir = {BID_DIR: bid_stats["mean"], ACCEL_DIR: sleep_accel_stats["mean"]}
+    accel_std_by_dir = {BID_DIR: bid_stats["std"], ACCEL_DIR: sleep_accel_stats["std"]}
 
     # Subject Split
     def get_sids(d): return sorted(p.name.replace("X_", "").replace(".npy", "") for p in d.glob("X_*.npy"))
@@ -301,10 +313,10 @@ def main():
     # 💡 Phase 0: edf_te/bid_te/acc_te는 이전에는 계산만 되고 한 번도 쓰이지 않아
     # baseline F1을 측정할 방법이 없었습니다. 학습 종료 후 held-out 테스트셋으로 실제 평가합니다.
     test_psg_ds = build_dataset(
-        [EDF_DIR], {EDF_DIR: edf_te}, psg_m, psg_s, PSG_WINDOW, PSG_CHANNELS, PSG_STRIDE, shuffle=False
+        [EDF_DIR], {EDF_DIR: edf_te}, psg_mean_by_dir, psg_std_by_dir, PSG_WINDOW, PSG_CHANNELS, PSG_STRIDE, shuffle=False
     )
     test_accel_ds = build_dataset(
-        [BID_DIR, ACCEL_DIR], {BID_DIR: bid_te, ACCEL_DIR: acc_te}, accel_m, accel_s,
+        [BID_DIR, ACCEL_DIR], {BID_DIR: bid_te, ACCEL_DIR: acc_te}, accel_mean_by_dir, accel_std_by_dir,
         ACCEL_WINDOW, ACCEL_CHANNELS, ACCEL_STRIDE, shuffle=False
     )
     psg_test_steps = max(1, count_context_windows([EDF_DIR], {EDF_DIR: edf_te}, PSG_STRIDE) // BATCH_SIZE)

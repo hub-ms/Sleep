@@ -488,6 +488,13 @@ fun CurrentMusicCard(
                 }
             }
             val timerRangeList = listOf("30분", "1시간", "2시간", "자동")
+            fun labelToMinutes(label: String): Int? = when (label) {
+                "30분" -> 30
+                "1시간" -> 60
+                "2시간" -> 120
+                "자동" -> null
+                else -> 30
+            }
             val selectedLabel = when (musicState.timerMinutes) {
                 30 -> "30분"
                 60 -> "1시간"
@@ -512,8 +519,11 @@ fun CurrentMusicCard(
                 SelectableChipGroup(
                     items = timerRangeList,
                     selectedItem = selectedLabel,
-                    onSelectItem = {
-                        onSetTimer(minutes)
+                    onSelectItem = { clickedLabel ->
+                        // 🐛 버그 수정: 클릭된 칩(clickedLabel)이 아니라 클릭 이전의 selectedLabel로
+                        // 계산한 minutes를 그대로 재전송하고 있어, 어떤 칩을 눌러도 기존 값이 다시
+                        // 저장되는 no-op이었습니다.
+                        onSetTimer(labelToMinutes(clickedLabel))
                     }
                 )
             }

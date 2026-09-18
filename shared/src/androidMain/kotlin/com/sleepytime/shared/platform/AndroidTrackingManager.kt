@@ -352,8 +352,15 @@ class AndroidTrackingManager @Inject constructor(
             val endTime = startTime.plus(durationMillis.milliseconds).toLocalDateTime(tz)
             val sessionDate = startTime.toLocalDateTime(tz).date
 
-            val session = createInitialSession(sessionId, sessionDate)
-            sleepSessionRepository.insertSession(session)
+            // 🐛 버그 수정 (리포트 화면 값이 모두 0으로 표시되던 문제):
+            // 예전에는 여기서 모든 필드가 0인 플레이스홀더 SleepSession을 곧바로 DB(SleepSessionEntity)에
+            // 저장했습니다. 정상적으로 측정을 마치면 analyzeAndSave()가 같은 sessionId로 실제 데이터를
+            // INSERT OR REPLACE해 덮어쓰지만, 앱 강제종료/크래시/OS의 백그라운드 서비스 종료 등으로
+            // finish()나 discard() 없이 측정이 중단되면 이 0값 플레이스홀더가 DB에 영구히 남았습니다.
+            // 리포트/홈 화면은 getLatestSession()(createdAt 내림차순 LIMIT 1)으로 최신 세션을 가져오는데,
+            // 이 플레이스홀더가 실제 완료된 세션보다 최근이면 그대로 "모든 값이 0인 리포트"로 노출됐습니다.
+            // 활성 세션 추적은 이미 아래 activeSessionStore가 전담하므로, 완료된 세션만 저장되는
+            // SleepSessionEntity 테이블에는 실제 분석 결과(analyzeAndSave)가 나올 때만 기록합니다.
 
             classifier.initialize(context)
             if (!initializeModel()) return@launch
@@ -370,12 +377,12 @@ class AndroidTrackingManager @Inject constructor(
                     trackingStartTime = startTime.toLocalDateTime(TimeZone.currentSystemDefault()),
                     trackingEndTime = endTime,
                     durationMillis = durationMillis,
-                    sessionId = session.sessionId,
+                    sessionId = sessionId,
                     musicTitle = musicTitle
                 )
             }
             activeSessionStore.save(
-                sessionId = session.sessionId,
+                sessionId = sessionId,
                 startTimeMillis = startTime.toEpochMilliseconds(),
                 duration = (durationMillis / 60000).toInt(), // Keeping Int minutes for store if needed, or update store
                 musicTitle = musicTitle

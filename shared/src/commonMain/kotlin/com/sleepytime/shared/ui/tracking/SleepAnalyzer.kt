@@ -37,7 +37,7 @@ class SleepAnalyzer(private val classifier: SleepStageClassifier) {
         return try {
             val currentTimeMs = Clock.System.now().toEpochMilliseconds()
 
-            val hrFallback = SleepStageClassifier.COMBINED_CHANNEL_MEAN[SleepStageClassifier.CH_HEART_RATE]
+            val hrFallback = SleepStageClassifier.ACCEL_CHANNEL_MEAN[SleepStageClassifier.CH_HEART_RATE]
 
             val noiseValue = environmentFeature?.stats?.noise?.avg ?: 0f // 기본 진폭 (Noise_RMS)
             val mfccEnergy = environmentFeature?.stats?.noise?.max?.minus(noiseValue)?.coerceAtLeast(0f) ?: 0f

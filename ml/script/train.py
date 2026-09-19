@@ -270,12 +270,33 @@ def evaluate_domain(infer_model, dataset, steps, label, transition_matrix=None, 
             )
 
     y_true = np.concatenate(y_true_all)
-    raw_report, raw_cm = _report_and_save(y_true, np.concatenate(y_pred_all), label)
-    _report_and_save(y_true, np.concatenate(y_pred_mode_all), f"{label}_mode_smoothed")
+    y_pred_raw = np.concatenate(y_pred_all)
+    y_pred_mode = np.concatenate(y_pred_mode_all)
+    raw_report, raw_cm = _report_and_save(y_true, y_pred_raw, label)
+    _report_and_save(y_true, y_pred_mode, f"{label}_mode_smoothed")
+
+    ensemble_members = [y_pred_raw, y_pred_mode]
     if transition_matrix is not None:
-        _report_and_save(y_true, np.concatenate(y_pred_viterbi_all), f"{label}_viterbi_smoothed")
+        y_pred_viterbi = np.concatenate(y_pred_viterbi_all)
+        _report_and_save(y_true, y_pred_viterbi, f"{label}_viterbi_smoothed")
+        ensemble_members.append(y_pred_viterbi)
+
+    # 💡 모델 앙상블: 새 모델을 더 학습하는 대신, 이미 계산한 raw/다수결/Viterbi 세 예측을
+    # epoch 단위로 다수결 앙상블합니다(동률이면 낮은 클래스 인덱스 우선, np.argmax 기본 동작).
+    if len(ensemble_members) >= 2:
+        y_pred_ensemble = _majority_vote_ensemble(ensemble_members, N_CLASSES)
+        _report_and_save(y_true, y_pred_ensemble, f"{label}_ensemble")
 
     return raw_report, raw_cm
+
+
+def _majority_vote_ensemble(pred_arrays, n_classes):
+    """여러 예측 배열(raw/다수결/Viterbi 등, 모두 같은 shape)에서 epoch별 다수결 앙상블을 계산합니다."""
+    stacked = np.stack(pred_arrays, axis=0)  # (num_methods, N)
+    votes = np.zeros((n_classes, stacked.shape[1]), dtype=np.int32)
+    for row in stacked:
+        votes[row, np.arange(len(row))] += 1
+    return np.argmax(votes, axis=0)
 
 
 def _add_sample_weights(x, y, class_weights):

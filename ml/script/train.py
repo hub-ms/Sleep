@@ -34,14 +34,23 @@ CONTEXT_LEN = 60
 PSG_STRIDE = 3
 ACCEL_STRIDE = 3
 
+# 💡 학습 시간 단축 시도: BATCH_SIZE를 64로 올려봤더니 스텝당 시간이 오히려 8배 이상
+# 느려졌습니다(32일 때 ~103ms/step -> 64일 때 ~860~920ms/step, 실측). 이는 병목이 GPU
+# 연산이 아니라 Python 쪽 tf.data 제네레이터(파일 읽기+정규화)라는 뜻이라 32로 되돌립니다.
+# STEPS_PER_EPOCH 600->300은 epoch당 실제 걸리는 시간을 절반으로 줄입니다. 다만 이러면
+# EarlyStopping의 patience(epoch 단위)가 실질적으로 절반의 step만 견디는 셈이 되어 너무
+# 일찍 멈출 수 있으므로, 아래 두 Stage의 patience를 절반→2배로 늘려 이전과 동일한
+# "step 기준 허용치"를 유지합니다(Stage1: 8->16, Stage2: 12->24).
 BATCH_SIZE = 32
-STEPS_PER_EPOCH = 600
+STEPS_PER_EPOCH = 300
 VAL_STEPS = 40
 
 # 💡 2단계 학습(Stage 1: PSG 사전학습 → Stage 2: 공유 바디 고정 후 Accel 파인튜닝)의
 # 단계별 epoch 수. 이전 EPOCHS=60(단일 단계 공동학습) 예산을 두 단계로 나눴습니다.
 PSG_PRETRAIN_EPOCHS = 30
 ACCEL_FINETUNE_EPOCHS = 30
+STAGE1_PATIENCE = 16
+STAGE2_PATIENCE = 24
 
 FOCAL_GAMMA = 1.0
 LABEL_SMOOTHING = 0.1
@@ -275,19 +284,19 @@ def main():
     # Datasets — 2단계 학습이므로 PSG/Accel을 zip해 하나로 묶지 않고 도메인별로 독립적으로 만듭니다.
     psg_train_ds = build_dataset(
         [EDF_DIR], {EDF_DIR: edf_tr}, psg_mean_by_dir, psg_std_by_dir, PSG_WINDOW, PSG_CHANNELS, PSG_STRIDE, augment=False
-    ).map(lambda x, y: _add_sample_weights(x, y, psg_w)).prefetch(10)
+    ).map(lambda x, y: _add_sample_weights(x, y, psg_w)).prefetch(tf.data.AUTOTUNE)
     psg_val_ds = build_dataset(
         [EDF_DIR], {EDF_DIR: edf_vl}, psg_mean_by_dir, psg_std_by_dir, PSG_WINDOW, PSG_CHANNELS, PSG_STRIDE, shuffle=False
-    ).prefetch(10)
+    ).prefetch(tf.data.AUTOTUNE)
 
     accel_train_ds = build_dataset(
         [BID_DIR, ACCEL_DIR], {BID_DIR: bid_tr, ACCEL_DIR: acc_tr}, accel_mean_by_dir, accel_std_by_dir,
         ACCEL_WINDOW, ACCEL_CHANNELS, ACCEL_STRIDE, augment=True
-    ).map(lambda x, y: _add_sample_weights(x, y, acc_w)).prefetch(10)
+    ).map(lambda x, y: _add_sample_weights(x, y, acc_w)).prefetch(tf.data.AUTOTUNE)
     accel_val_ds = build_dataset(
         [BID_DIR, ACCEL_DIR], {BID_DIR: bid_vl, ACCEL_DIR: acc_vl}, accel_mean_by_dir, accel_std_by_dir,
         ACCEL_WINDOW, ACCEL_CHANNELS, ACCEL_STRIDE, shuffle=False
-    ).prefetch(10)
+    ).prefetch(tf.data.AUTOTUNE)
 
     # Model Build
     models = build_dual_domain_model(context_len=CONTEXT_LEN, n_classes=N_CLASSES)
@@ -297,25 +306,40 @@ def main():
 
     # ============================================================
     # Stage 1: PSG(EEG/EOG/EMG) 사전학습 — 공유 컨텍스트 트랜스포머를 형성합니다.
+    # 💡 학습 시간 단축: Stage 2에서 실패해 재시도할 때마다 이미 끝난 Stage 1(PSG)을 처음부터
+    # 다시 돌리는 게 낭비라, 저장된 체크포인트가 있으면 재학습 없이 그 가중치를 불러와
+    # 건너뜁니다. PSG 데이터/모델 구조를 바꿔서 Stage 1을 진짜로 다시 돌리고 싶다면
+    # output/psg_inference_model.keras를 지우고 실행하세요.
     # ============================================================
-    print("\n===== Stage 1: PSG 사전학습 (공유 컨텍스트 트랜스포머 형성) =====")
-    stage1_lr = WarmupCosineDecay(
-        peak_lr=4e-4, warmup_steps=STEPS_PER_EPOCH * 2, decay_steps=STEPS_PER_EPOCH * PSG_PRETRAIN_EPOCHS
-    )
-    psg_infer_model.compile(
-        optimizer=tf.keras.optimizers.AdamW(learning_rate=stage1_lr, weight_decay=1e-4, clipnorm=1.0),
-        loss=weighted_focal_loss(gamma=FOCAL_GAMMA),
-    )
-    stage1_cbs = [
-        tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=8, restore_best_weights=True),
-        tf.keras.callbacks.CSVLogger(str(OUTPUT_DIR / "train_log_stage1_psg.csv")),
-    ]
-    psg_infer_model.fit(
-        psg_train_ds, validation_data=psg_val_ds,
-        epochs=PSG_PRETRAIN_EPOCHS, steps_per_epoch=STEPS_PER_EPOCH, validation_steps=VAL_STEPS,
-        callbacks=stage1_cbs,
-    )
-    psg_infer_model.save(OUTPUT_DIR / "psg_inference_model.keras")
+    psg_checkpoint_path = OUTPUT_DIR / "psg_inference_model.keras"
+    resumed_stage1 = False
+    if psg_checkpoint_path.exists():
+        try:
+            psg_infer_model.load_weights(psg_checkpoint_path)
+            resumed_stage1 = True
+            print(f"\n===== Stage 1 건너뜀: 기존 체크포인트 재사용 ({psg_checkpoint_path}) =====")
+        except Exception as e:
+            print(f"기존 PSG 체크포인트를 불러오지 못해 Stage 1을 처음부터 진행합니다: {type(e).__name__}: {e}")
+
+    if not resumed_stage1:
+        print("\n===== Stage 1: PSG 사전학습 (공유 컨텍스트 트랜스포머 형성) =====")
+        stage1_lr = WarmupCosineDecay(
+            peak_lr=4e-4, warmup_steps=STEPS_PER_EPOCH * 2, decay_steps=STEPS_PER_EPOCH * PSG_PRETRAIN_EPOCHS
+        )
+        psg_infer_model.compile(
+            optimizer=tf.keras.optimizers.AdamW(learning_rate=stage1_lr, weight_decay=1e-4, clipnorm=1.0),
+            loss=weighted_focal_loss(gamma=FOCAL_GAMMA),
+        )
+        stage1_cbs = [
+            tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=STAGE1_PATIENCE, restore_best_weights=True),
+            tf.keras.callbacks.CSVLogger(str(OUTPUT_DIR / "train_log_stage1_psg.csv")),
+        ]
+        psg_infer_model.fit(
+            psg_train_ds, validation_data=psg_val_ds,
+            epochs=PSG_PRETRAIN_EPOCHS, steps_per_epoch=STEPS_PER_EPOCH, validation_steps=VAL_STEPS,
+            callbacks=stage1_cbs,
+        )
+        psg_infer_model.save(psg_checkpoint_path)
 
     # ============================================================
     # Stage 2: 공유 바디를 고정하고 Accel 인코더만 이어서 학습합니다.
@@ -328,6 +352,17 @@ def main():
     print("\n===== Stage 2: 공유 바디 고정, Accel 인코더 파인튜닝 =====")
     context_body.trainable = False
 
+    # 🐛 버그 수정: context_body 안의 도메인별 FiLM 조건화(domain_gamma/domain_beta Embedding)는
+    # Stage 1에서 domain_id=0(PSG)만 사용하므로 PSG용 행만 학습되고 Accel용 행(domain_id=1)은
+    # 무작위 초기값 그대로 남습니다. 그런데 바로 위에서 context_body 전체를 얼려버리면 이
+    # Embedding도 함께 얼어붙어, Accel 인코더가 아무리 학습해도 그 뒤에 학습된 적 없는 무작위
+    # 조건화가 신호를 망가뜨려 Accel 쪽이 최빈 클래스로 붕괴했습니다(실측: macro F1 0.17,
+    # Wake/Deep/REM의 97~98%를 Light로 오분류). 트랜스포머 본체(어텐션/FF)는 그대로 얼리되,
+    # 이 두 Embedding만 다시 학습 가능하게 풀어 Accel 도메인 조건화가 실제로 학습되게 합니다.
+    for layer in context_body.layers:
+        if layer.name in ("domain_gamma", "domain_beta"):
+            layer.trainable = True
+
     stage2_lr = WarmupCosineDecay(
         peak_lr=4e-4, warmup_steps=STEPS_PER_EPOCH * 2, decay_steps=STEPS_PER_EPOCH * ACCEL_FINETUNE_EPOCHS
     )
@@ -336,7 +371,7 @@ def main():
         loss=weighted_focal_loss(gamma=FOCAL_GAMMA),
     )
     stage2_cbs = [
-        tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=12, restore_best_weights=True),
+        tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=STAGE2_PATIENCE, restore_best_weights=True),
         tf.keras.callbacks.ModelCheckpoint(str(OUTPUT_DIR / "best_model.keras"), save_best_only=True),
         # .gitignore가 이 경로를 이미 기대하고 있었지만 실제로 기록하는 콜백이 없었습니다.
         tf.keras.callbacks.CSVLogger(str(OUTPUT_DIR / "train_log.csv")),

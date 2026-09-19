@@ -55,14 +55,26 @@ def resample_to_grid(t_src, values, t_grid):
         fill = values[0] if len(values) else 0.0
         return np.full(len(t_grid), fill, dtype=np.float32)
     return np.interp(t_grid, t_src, values).astype(np.float32)
-def compute_hrv_proxy(hr_t, hr_v, t_start, t_end):
-    """epoch 구간 심박수의 RMSSD 근사치. REM epoch에서 값이 커지는 경향이 있음."""
-    mask = (hr_t >= t_start - 60) & (hr_t <= t_end + 60)
-    v = hr_v[mask]
-    if len(v) < 3:
-        return 0.0
-    diffs = np.diff(v)
-    return float(np.sqrt(np.mean(diffs ** 2)))
+# 💡 Phase 1(로드맵): 단일 epoch 값만으로는 예측력이 약해, epoch 전후 몇 분간 활동량의
+# 추세(기울기)와 변동성(표준편차)을 파생 특징으로 추가합니다(HRV 전환기 변동성 연구에서
+# 착안 — 논문에서는 심박변동성에 적용했지만 같은 아이디어를 활동량 신호에 적용). 기존에
+# 거의 쓸모없던 채널(mfcc_energy=항상 0, hrv=데이터 품질 의심)을 재활용해 채널 수는
+# 그대로 유지합니다.
+TREND_VARIABILITY_WINDOW_SEC = 180.0  # 전후 3분
+
+def compute_trend_variability(t_signal, magnitude_signal, t_center, window_sec=TREND_VARIABILITY_WINDOW_SEC):
+    """t_center 기준 ±window_sec 구간에서 magnitude_signal의 선형 추세(기울기)와
+    변동성(표준편차)을 계산합니다."""
+    mask = (t_signal >= t_center - window_sec) & (t_signal <= t_center + window_sec)
+    if mask.sum() < 3:
+        return 0.0, 0.0
+    t_masked = t_signal[mask].astype(np.float64)
+    v_masked = magnitude_signal[mask].astype(np.float64)
+    t_centered = t_masked - t_masked.mean()
+    denom = np.sum(t_centered ** 2)
+    trend = float(np.sum(t_centered * (v_masked - v_masked.mean())) / denom) if denom > 0 else 0.0
+    variability = float(np.std(v_masked))
+    return trend, variability
 
 def robust_loadtxt(path, ncols, delimiter=None, skiprows=0):
     """np.loadtxt는 파일 중간에 컬럼 수가 바뀌면(깨진 줄, 잘린 줄 등) 통째로 예외를 던지고 멈춥니다.
@@ -142,6 +154,8 @@ def load_sleep_accel_subject(subject_id: str):
     t_acc_raw = motion[:, 0]
     t_acc = t_acc_raw - (t_acc_raw[-1] - last_label_time)
     ax, ay, az = motion[:, 1], motion[:, 2], motion[:, 3]
+    # 💡 Phase 1: 전/후 몇 분 구간의 추세/변동성 계산용 활동량 크기(가속도 벡터 크기)
+    activity_mag = np.sqrt(ax.astype(np.float64) ** 2 + ay.astype(np.float64) ** 2 + az.astype(np.float64) ** 2)
 
     hr_t, hr_v = np.array([]), np.array([])
     if hr_path.exists():
@@ -183,8 +197,12 @@ def load_sleep_accel_subject(subject_id: str):
         else:
             hr_val = np.full(WINDOW, 68.5769, dtype=np.float32)
 
-        hrv_val      = np.full(WINDOW, compute_hrv_proxy(hr_t, hr_v, t_start, t_end), dtype=np.float32)
-        mfcc_energy  = np.full(WINDOW, 0.0,  dtype=np.float32)
+        # 💡 Phase 1: hrv(품질 의심 채널)를 활동량 변동성으로, mfcc_energy(항상 0이던 죽은 채널)를
+        # 활동량 추세로 재활용합니다. t_center 기준 전후 3분 구간을 봅니다.
+        t_center = (t_start + t_end) / 2.0
+        trend, variability = compute_trend_variability(t_acc, activity_mag, t_center)
+        hrv_val      = np.full(WINDOW, variability, dtype=np.float32)
+        mfcc_energy  = np.full(WINDOW, trend, dtype=np.float32)
         time_feature = np.full(WINDOW, onset / total_span, dtype=np.float32)
 
         window = np.column_stack([x, yv, z, tilt, hr_val, hrv_val, mfcc_energy, time_feature])
@@ -219,6 +237,8 @@ def load_bidsleep_subject(subject_id: str):
             print(f"  스킵: {night_dir} motion.csv 유효 데이터 부족")
             continue
         t_acc, ax, ay, az = motion[:, 0], motion[:, 1], motion[:, 2], motion[:, 3]
+        # 💡 Phase 1: 전/후 몇 분 구간의 추세/변동성 계산용 활동량 크기(가속도 벡터 크기)
+        activity_mag = np.sqrt(ax.astype(np.float64) ** 2 + ay.astype(np.float64) ** 2 + az.astype(np.float64) ** 2)
 
         # 💡 수정: hr.csv는 헤더가 없음 -> skiprows 제거 (있으면 첫 데이터 행이 날아감) + robust 로더
         hr = robust_loadtxt(hr_path, ncols=2, delimiter=",")
@@ -258,8 +278,12 @@ def load_bidsleep_subject(subject_id: str):
                       if hr_mask.sum() >= 1
                       else np.full(WINDOW, 68.5769, dtype=np.float32))
 
-            hrv_val = np.full(WINDOW, compute_hrv_proxy(hr_t, hr_v, t_start, t_end), dtype=np.float32)
-            mfcc_energy  = np.full(WINDOW, 0.0,  dtype=np.float32)
+            # 💡 Phase 1: hrv(품질 의심 채널)를 활동량 변동성으로, mfcc_energy(항상 0이던 죽은 채널)를
+            # 활동량 추세로 재활용합니다. t_center 기준 전후 3분 구간을 봅니다.
+            t_center = (t_start + t_end) / 2.0
+            trend, variability = compute_trend_variability(t_acc, activity_mag, t_center)
+            hrv_val = np.full(WINDOW, variability, dtype=np.float32)
+            mfcc_energy  = np.full(WINDOW, trend,  dtype=np.float32)
             time_feature = np.full(WINDOW, (t_start - rec_start) / total_span, dtype=np.float32)
 
             window = np.column_stack([x, yv, z, tilt, hr_val, hrv_val, mfcc_energy, time_feature])

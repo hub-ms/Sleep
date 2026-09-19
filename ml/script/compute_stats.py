@@ -64,7 +64,8 @@ def main():
     edf_channel_names = ["eeg1", "eeg2", "eog", "emg", "heart_rate", "hrv", "time_feature", "reserved"]
 
     # 가속도+심박 도메인 채널 레이아웃 (BIDSleep과 Sleep-Accel이 동일한 8채널 구성)
-    accel_channel_names = ["accel_x", "accel_y", "accel_z", "tilt", "heart_rate", "hrv", "mfcc_energy", "time_feature"]
+    # 💡 Phase 1: hrv/mfcc_energy 채널을 전/후 3분 활동량 변동성/추세로 재활용 (build_dataset_hybrid.py)
+    accel_channel_names = ["accel_x", "accel_y", "accel_z", "tilt", "heart_rate", "activity_variability_3min", "activity_trend_3min", "time_feature"]
 
     edf_norm_path = BASE_DIR / "data" / "sleep_edf" / "norm_stats.npy"
     bid_norm_path = BASE_DIR / "data" / "bidsleep" / "norm_stats.npy"

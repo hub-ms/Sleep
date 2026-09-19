@@ -12,6 +12,7 @@ import com.sleepytime.shared.domain.model.*
 import com.sleepytime.shared.enum_.*
 import com.sleepytime.shared.util.SleepReportCalculator
 import com.sleepytime.shared.util.SleepReportCalculator.toEfficiencyScore
+import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.Instant as KInstant
 import kotlinx.datetime.LocalDateTime as KLocalDateTime
 import kotlinx.datetime.TimeZone
@@ -53,13 +54,14 @@ class SleepService(
             sessionId = request.sessionId,
             date = KInstant.fromEpochMilliseconds(request.startTime).toLocalDateTime(TimeZone.currentSystemDefault()).date,
             sleepMetrics = metrics,
+            wakeTime = request.endTime.toKLocalDateTime(),
             stageTimeline = stageTimeline,
             stagesDistribution = stagesDistribution,
             sleepEfficiency = efficiency,
             environment = SleepSession.Environment(
                 history = request.environmentFeatures.map { it.snapshot },
-                stats = latestFeature?.stats ?: EnvironmentFeature.Statistics(Stats(), Stats()),
-                flags = latestFeature?.flag ?: EnvironmentFeature.Flag(isHeartRateAnomaly = false, isNoiseDanger = false)
+                stats = latestFeature?.stats ?: EnvironmentFeature.Statistics(Stats()),
+                flags = latestFeature?.flag ?: EnvironmentFeature.Flag(isNoiseDanger = false)
             ),
             csvData = SleepSession.CsvData(sensorCsv = "", environmentCsv = ""),
             duration = SleepSession.Duration(
@@ -162,7 +164,6 @@ class SleepService(
     }
     private fun calculateEfficiency(metrics: SleepMetrics, features: List<EnvironmentFeature>): Int =
         metrics.toEfficiencyScore(
-            isHeartRateAnomaly = features.any { it.flag.isHeartRateAnomaly },
             isNoiseDanger = features.any { it.flag.isNoiseDanger },
         )
 
@@ -287,7 +288,6 @@ class SleepService(
             sleepLatencyMinutes = 0.0,
             sleepEfficiency = entity.sleepScore ?: 0,
             wakeCount = 0,
-            heartRateStats = null,
             noiseStats = null,
             createdAt = entity.createdAt.toEpochMilli(),
             updatedAt = entity.updatedAt.toEpochMilli()
@@ -298,12 +298,13 @@ class SleepService(
         val now = System.currentTimeMillis()
         return SleepSession(
             sessionId = id.toString(),
+            wakeTime = LocalDateTime(1970,1,1,0,0),
             date = startAt.atZone(ZoneOffset.UTC).toLocalDate().toKxLocalDate(),
             sleepMetrics = SleepMetrics(),
             stageTimeline = emptyList(),
             stagesDistribution = emptyMap(),
             sleepEfficiency = sleepScore ?: 0,
-            environment = SleepSession.Environment(emptyList(), EnvironmentFeature.Statistics(Stats(), Stats()), EnvironmentFeature.Flag(false, false)),
+            environment = SleepSession.Environment(emptyList(), EnvironmentFeature.Statistics(Stats()), EnvironmentFeature.Flag(false)),
             csvData = SleepSession.CsvData("", ""),
             duration = SleepSession.Duration(0.0, 0.0, 0.0, 0.0, 480.0, 0.0),
             wakeCount = 0,
@@ -315,19 +316,6 @@ class SleepService(
         kotlinx.datetime.LocalDate(year, monthValue, dayOfMonth)
 
     private fun toSessionResponse(entity: SleepSession): SleepSessionResponse {
-        // Null 가능성이 있는 가변 통계치 필드들을 객체 조건에 맞게 세팅 조립
-        val heartRateStats = if (
-            entity.environment.stats.heartRate.avg != null &&
-            entity.environment.stats.heartRate.max != null &&
-            entity.environment.stats.heartRate.min != null
-            ) {
-            MetricStatsResponse(
-                entity.environment.stats.heartRate.avg!!,
-                entity.environment.stats.heartRate.max!!,
-                entity.environment.stats.heartRate.min!!
-            )
-        } else null
-
         val noiseStats = if (
             entity.environment.stats.noise.avg != null &&
             entity.environment.stats.noise.max != null &&
@@ -350,7 +338,6 @@ class SleepService(
             sleepLatencyMinutes = entity.sleepMetrics.sleepLatencyMinutes,
             sleepEfficiency = entity.sleepEfficiency,
             wakeCount = entity.wakeCount,
-            heartRateStats = heartRateStats,
             noiseStats = noiseStats,
             createdAt = entity.timestamp.createdAt ?: System.currentTimeMillis(),
             updatedAt = entity.timestamp.updatedAt ?: System.currentTimeMillis()

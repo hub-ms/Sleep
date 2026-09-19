@@ -259,7 +259,7 @@ class AndroidSleepMeasureManager @Inject constructor(
                 noise = Stats(noiseStats.avg, noiseStats.std, noiseStats.min, noiseStats.max),
             ),
             flag = EnvironmentFeature.Flag(
-                isNoiseDanger = noiseStats.avg > NOISE_DANGER_THRESHOLD,
+                isNoiseDanger = resolveNoiseDanger(noiseStats),
             )
         )
     }

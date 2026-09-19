@@ -25,7 +25,6 @@ object HomeContract {
         object SleepMusicClicked : Intent()
 
         data class SelectBottomTab(val tab: String) : Intent()
-        object TutorialClicked: Intent()
 
         object ToggleTimer: Intent()
         data class SetTimerMinutes(val minutes: Int): Intent()
@@ -35,11 +34,7 @@ object HomeContract {
         data class NavigateToReport(val sessionId: String) : Effect()
 
         object NavigateToSleepMusicSelection : Effect()
-
-        object NavigateToTutorial: Effect()
-
-        // 최초 실행 시 권한 요청 화면으로 이동시키기 위한 effect
-        object NavigateToPermission : Effect()
+        object NavigateToPermissionGuide : Effect()
     }
 }
 sealed class ReportMode {

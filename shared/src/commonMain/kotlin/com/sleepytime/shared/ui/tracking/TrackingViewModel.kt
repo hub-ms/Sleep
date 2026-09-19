@@ -96,6 +96,15 @@ class TrackingViewModel(
                 }
             }
         }
+        screenModelScope.launch {
+            trackingManager.trackingState
+                .map { it.permissionDenied }
+                .distinctUntilChanged()
+                .filter { it }
+                .collect {
+                    _effect.emit(TrackingContract.Effect.NavigateToPermissionGuide)
+                }
+        }
     }
      fun sendIntent(intent: TrackingContract.Intent) {
         when (intent) {
@@ -145,11 +154,7 @@ class TrackingViewModel(
                     val currentSessionId = state.value.sessionId ?: ""
                     val currentMusicTitle = state.value.musicTitle
                     trackingManager.finish(currentSessionId, currentMusicTitle)
-                    // 🐛 버그 수정: finish()는 포그라운드 서비스에 인텐트만 보내고 즉시 반환되는
-                    // fire-and-forget 호출이라, 세션 분석/저장이 끝나기 전에 리포트 화면으로 이동하면
-                    // 방금 잰 수면 데이터가 아직 저장되지 않아 0값으로 보였습니다. isFinished가
-                    // true가 될 때까지(최대 10초) 기다린 뒤 리포트로 이동합니다.
-                    withTimeoutOrNull(10_000L) {
+                    withTimeoutOrNull(10_000L.milliseconds) {
                         trackingManager.trackingState.first { it.isFinished }
                     }
                     _effect.emit(TrackingContract.Effect.NavigateToReport(sessionId = currentSessionId))

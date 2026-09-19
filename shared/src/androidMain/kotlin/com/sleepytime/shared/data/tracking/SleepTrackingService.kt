@@ -1,16 +1,19 @@
 package com.sleepytime.shared.data.tracking
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import androidx.media3.common.util.UnstableApi
 import cafe.adriel.voyager.core.annotation.InternalVoyagerApi
 import com.russhwolf.settings.ExperimentalSettingsApi
@@ -73,6 +76,11 @@ class SleepTrackingService : Service(), KoinComponent {
     ): Int {
         if (intent == null) {
             if (trackingManager.trackingState.value.isTracking) {
+                if (!hasRecordAudioPermission()) {
+                    Log.e("SleepTrackingService", "RECORD_AUDIO 권한 없음 — 서비스 재시작 시 포그라운드 전환 불가")
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
                 startForeground(NOTIFICATION_ID, createNotification("수면 측정 중.."))
                 acquireWakeLock()
             }
@@ -81,6 +89,16 @@ class SleepTrackingService : Service(), KoinComponent {
 
         when (intent.action) {
             ACTION_START -> {
+                // 서비스가 microphone 타입 포그라운드로 선언되어 있어(AndroidManifest.xml),
+                // RECORD_AUDIO 권한 없이 startForeground()를 호출하면 SecurityException으로 크래시한다.
+                // 온보딩 이후 사용자가 권한을 회수한 경우를 대비해 반드시 먼저 확인한다.
+                if (!hasRecordAudioPermission()) {
+                    Log.e("SleepTrackingService", "RECORD_AUDIO 권한 없음 — 수면 측정을 시작할 수 없습니다")
+                    trackingManager.notifyPermissionDenied()
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
+
                 startForeground(NOTIFICATION_ID, createNotification("수면 측정 중.."))
                 Log.d("SleepTrackingService", "startForeground 완료")
                 acquireWakeLock()
@@ -132,6 +150,11 @@ class SleepTrackingService : Service(), KoinComponent {
         if(wakeLock?.isHeld == true) wakeLock?.release()
         wakeLock = null
     }
+
+    private fun hasRecordAudioPermission(): Boolean = ContextCompat.checkSelfPermission(
+        this,
+        Manifest.permission.RECORD_AUDIO
+    ) == PackageManager.PERMISSION_GRANTED
 
     private fun createNotificationChannel() {
         val channel = NotificationChannel(

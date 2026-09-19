@@ -42,7 +42,9 @@ object TrackingContract {
         val isTempExtreme: Boolean = false,
         val isHumidityExtreme: Boolean = false,
 
-        val environmentHistory: List<EnvironmentFeature.Snapshot> = emptyList()
+        val environmentHistory: List<EnvironmentFeature.Snapshot> = emptyList(),
+
+        val permissionDenied: Boolean = false
     )
 
     sealed class Intent {
@@ -56,5 +58,8 @@ object TrackingContract {
 
         object NavigateToHome: Effect()
         data class NavigateToWakeUp(val sessionId: String) : Effect()
+
+        // 수면 측정 시작 시 마이크(RECORD_AUDIO) 권한이 없어 측정을 시작하지 못했을 때 발생
+        object NavigateToPermissionGuide : Effect()
     }
 }

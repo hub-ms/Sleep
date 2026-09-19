@@ -87,7 +87,7 @@ class HomeViewModel(
             // 💡 최초실행 권한 플로우 연결: 완성돼 있었지만 네비게이션에 연결되지 않았던
             // PermissionScreen을, 홈에 처음 진입할 때(권한 온보딩을 아직 끝내지 않았을 때) 띄웁니다.
             if (!settings.getBoolean(PreferencesKeys.App.PERMISSION_ONBOARDING_DONE, false)) {
-                _effect.emit(HomeContract.Effect.NavigateToPermission)
+                _effect.emit(HomeContract.Effect.NavigateToPermissionGuide)
             }
 
             _intentChannel.receiveAsFlow().collect { intent ->
@@ -124,7 +124,6 @@ class HomeViewModel(
                 _state.update { it.copy(timerMinutes = intent.minutes) }
                 settings.putInt(TIMER_MINUTES, intent.minutes)
             }
-            is HomeContract.Intent.TutorialClicked-> _effect.emit(HomeContract.Effect.NavigateToTutorial)
         }
     }
     private suspend fun loadYesterdayReport() {

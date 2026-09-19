@@ -2,8 +2,10 @@
 
 package com.sleepytime.shared.platform
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -16,8 +18,6 @@ import cafe.adriel.voyager.core.annotation.InternalVoyagerApi
 import com.russhwolf.settings.ExperimentalSettingsApi
 import com.sleepytime.shared.data.tracking.SleepTrackingService
 import com.sleepytime.shared.domain.model.EnvironmentFeature
-import com.sleepytime.shared.domain.model.SleepMetrics
-import com.sleepytime.shared.domain.model.SleepSession
 import com.sleepytime.shared.domain.model.Stats
 import com.sleepytime.shared.domain.repository.SleepSessionRepository
 import com.sleepytime.shared.domain.repository.SleepSettingsRepository
@@ -41,7 +41,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
-import kotlinx.datetime.LocalDate
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
@@ -118,6 +117,20 @@ class AndroidTrackingManager @Inject constructor(
 
     override fun start(sessionId: String, durationMillis: Long, musicTitle: String?) {
         Log.d("AndroidTrackingManager","start()")
+        _trackingState.update { it.copy(permissionDenied = false) }
+
+        // 서비스가 microphone 타입 포그라운드로 선언되어 있어(AndroidManifest.xml), RECORD_AUDIO 권한 없이는
+        // startForeground()를 호출할 수 없다. 권한이 없는 상태에서 startForegroundService()만 호출하고
+        // 서비스가 startForeground()를 호출하지 못하면 시스템이 ForegroundServiceDidNotStartInTimeException으로
+        // 앱을 강제 종료하므로, 서비스를 아예 시작하지 않고 여기서 미리 걸러낸다.
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.e("AndroidTrackingManager", "RECORD_AUDIO 권한이 없어 수면 측정을 시작할 수 없습니다")
+            _trackingState.update { it.copy(permissionDenied = true) }
+            return
+        }
+
         val serviceIntent = Intent(context, SleepTrackingService::class.java).apply {
             action = SleepTrackingService.ACTION_START
             putExtra(SleepTrackingService.EXTRA_SESSION_ID, sessionId)
@@ -126,11 +139,23 @@ class AndroidTrackingManager @Inject constructor(
         }
         ContextCompat.startForegroundService(context, serviceIntent)
     }
+
+    // RECORD_AUDIO 권한이 없어 SleepTrackingService가 포그라운드 서비스를 시작하지 못했을 때 호출된다.
+    // startForeground()를 마이크 타입으로 호출하려면 권한이 필수이므로, 권한이 없으면 크래시 대신
+    // 이 경로로 안전하게 종료하고 State를 통해 UI에 알린다.
+    fun notifyPermissionDenied() {
+        Log.e("AndroidTrackingManager", "RECORD_AUDIO 권한이 없어 수면 측정을 시작할 수 없습니다")
+        _trackingState.update { it.copy(permissionDenied = true) }
+        onRequestStopForeground?.invoke()
+    }
+
     private suspend fun initializeModel(): Boolean {
         val initResult = sleepSessionRepository.initializeModel()
         if (initResult.isFailure) {
             Log.e("TrackingService", "모델 초기화 실패", initResult.exceptionOrNull())
             clear()
+            // 포그라운드 알림이 "수면 측정 중.."에 영구히 머무르지 않도록 정리 콜백을 호출한다.
+            onRequestStopForeground?.invoke()
             return false
         }
         return true
@@ -350,7 +375,6 @@ class AndroidTrackingManager @Inject constructor(
             val tz = TimeZone.currentSystemDefault()
             val startTime = Clock.System.now()
             val endTime = startTime.plus(durationMillis.milliseconds).toLocalDateTime(tz)
-            val sessionDate = startTime.toLocalDateTime(tz).date
 
             // 🐛 버그 수정 (리포트 화면 값이 모두 0으로 표시되던 문제):
             // 예전에는 여기서 모든 필드가 0인 플레이스홀더 SleepSession을 곧바로 DB(SleepSessionEntity)에
@@ -518,63 +542,19 @@ class AndroidTrackingManager @Inject constructor(
             onRequestStopForeground?.invoke()
         }.onFailure { e ->
             Log.e("TrackingService", "분석 실패", e)
+            // 🐛 버그 수정: 분석이 실패해도 isFinished를 설정하지 않아, TrackingScreen의 타이머는
+            // 이미 멈췄는데(isTracking=false는 위에서 이미 설정됨) 리포트 화면으로는 영원히
+            // 넘어가지 못하고 멈춰 있는 상태가 됐습니다. 실패해도 isFinished는 true로 설정해
+            // TrackingViewModel의 리포트 화면 이동 흐름이 계속 진행되도록 합니다.
+            activeSessionStore.clear()
+            _trackingState.update {
+                it.copy(isFinished = true, finishedSessionId = sessionId)
+            }
             onRequestStopForeground?.invoke()
         }
     }
     fun clear() {
         stopSensors()
         scope.cancel()
-    }
-
-    private fun createInitialSession(sessionId: String, date: LocalDate): SleepSession {
-        val now = System.currentTimeMillis()
-        return SleepSession(
-            sleepMetrics = SleepMetrics(
-                wakeCountScore = 0.0,
-                continuityScore = 0.0,
-                deepScore = 0.0,
-                remScore = 0.0,
-                latencyScore = 0.0,
-                awakeMinutes = 0.0,
-                lightMinutes = 0.0,
-                deepMinutes = 0.0,
-                remMinutes = 0.0,
-                sleepLatencyMinutes = 0.0,
-                wakeCount = 0
-            ),
-            environment = SleepSession.Environment(
-                history = emptyList(),
-                stats = EnvironmentFeature.Statistics(
-                    noise = Stats(),
-                ),
-                flags = EnvironmentFeature.Flag(
-                    isNoiseDanger = false,
-                ),
-            ),
-            duration = SleepSession.Duration(
-                awakeMinutes = 0.0,
-                lightMinutes = 0.0,
-                deepMinutes = 0.0,
-                remMinutes = 0.0,
-                targetMinutes = 0.0,
-                sleepLatencyMinutes = 0.0,
-            ),
-            csvData = SleepSession.CsvData(
-                sensorCsv = "",
-                environmentCsv = ""
-            ),
-            timestamp = SleepSession.Timestamp(
-                createdAt = now,
-                updatedAt = now
-            ),
-            stageTimeline = emptyList(),
-            stagesDistribution = emptyMap(),
-            sleepEfficiency = 0,
-
-            sessionId = sessionId,
-
-            date = date,
-            wakeCount = 0,
-        )
     }
 }

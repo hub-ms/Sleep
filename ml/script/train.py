@@ -6,6 +6,7 @@ import tensorflow as tf
 import keras
 from sklearn.metrics import classification_report, confusion_matrix
 from model import build_dual_domain_model
+from postprocess import mode_filter, viterbi_smooth
 
 tf.keras.mixed_precision.set_global_policy("mixed_bfloat16")
 
@@ -203,21 +204,25 @@ def build_dataset(directories, subject_ids_by_dir, mean_by_dir, std_by_dir, wind
         )
     ).batch(BATCH_SIZE, drop_remainder=True)
 
-def evaluate_domain(infer_model, dataset, steps, label):
-    """테스트셋에서 실제로 classification_report/confusion matrix를 계산해 파일로 저장합니다.
-    (기존에는 edf_te/bid_te/acc_te가 계산만 되고 어디서도 쓰이지 않아 baseline F1을 측정할 방법이 없었습니다.)"""
-    y_true_all, y_pred_all = [], []
-    it = iter(dataset)
-    for _ in range(steps):
-        x_batch, y_batch = next(it)
-        logits = infer_model.predict(x_batch, verbose=0)
-        preds = np.argmax(logits, axis=-1)
-        y_true_all.append(y_batch.numpy().reshape(-1))
-        y_pred_all.append(preds.reshape(-1))
+def compute_transition_matrix(directories, subject_ids_by_dir, n_classes=N_CLASSES, laplace=1.0):
+    """💡 Phase 5(후처리): 학습 데이터의 실제 라벨 시퀀스(윈도우/stride 적용 전, subject 전체
+    연속열)에서 경험적 상태전이 확률을 계산합니다. Viterbi 스무딩의 전이행렬로 사용합니다.
+    (output/에 남아있던 *_transition_matrix.npy는 생성 코드가 없는 정체불명 산출물이라
+    신뢰하지 않고, 매번 현재 학습 데이터에서 새로 계산합니다.)"""
+    counts = np.full((n_classes, n_classes), laplace, dtype=np.float64)  # 라플라스 스무딩(0 확률 방지)
+    for d in directories:
+        for sid in subject_ids_by_dir.get(d, []):
+            cached = _MEM_CACHE.get((str(d), sid))
+            if not cached:
+                continue
+            y = cached[1]
+            for a, b in zip(y[:-1], y[1:]):
+                if 0 <= a < n_classes and 0 <= b < n_classes:
+                    counts[a, b] += 1
+    return counts / counts.sum(axis=1, keepdims=True)
 
-    y_true = np.concatenate(y_true_all)
-    y_pred = np.concatenate(y_pred_all)
 
+def _report_and_save(y_true, y_pred, label):
     report = classification_report(
         y_true, y_pred,
         labels=list(range(N_CLASSES)),
@@ -235,6 +240,42 @@ def evaluate_domain(infer_model, dataset, steps, label):
     (OUTPUT_DIR / f"{label}_classification_report.txt").write_text(report, encoding="utf-8")
     np.save(OUTPUT_DIR / f"{label}_confusion_matrix.npy", cm)
     return report, cm
+
+
+def evaluate_domain(infer_model, dataset, steps, label, transition_matrix=None, mode_window=5):
+    """테스트셋에서 실제로 classification_report/confusion matrix를 계산해 파일로 저장합니다.
+    (기존에는 edf_te/bid_te/acc_te가 계산만 되고 어디서도 쓰이지 않아 baseline F1을 측정할 방법이 없었습니다.)
+
+    💡 Phase 5(후처리 연결): 배치의 각 행(윈도우)은 CONTEXT_LEN개 연속 epoch로 이루어진 온전한
+    시계열이므로, 전체를 이어붙인 뒤가 아니라 윈도우 단위로 다수결 필터/Viterbi 스무딩을 적용합니다
+    (이어붙이면 서로 다른 윈도우/subject 경계를 하나의 시퀀스처럼 스무딩해버리는 문제가 생김).
+    원본(raw)과 스무딩 결과를 모두 저장해 실제로 도움이 되는지 비교할 수 있게 합니다."""
+    y_true_all, y_pred_all, y_pred_mode_all = [], [], []
+    y_pred_viterbi_all = [] if transition_matrix is not None else None
+
+    it = iter(dataset)
+    for _ in range(steps):
+        x_batch, y_batch = next(it)
+        logits = infer_model.predict(x_batch, verbose=0)  # (batch, CONTEXT_LEN, N_CLASSES)
+        preds = np.argmax(logits, axis=-1)  # (batch, CONTEXT_LEN)
+
+        y_true_all.append(y_batch.numpy().reshape(-1))
+        y_pred_all.append(preds.reshape(-1))
+        y_pred_mode_all.append(np.stack([mode_filter(row, window=mode_window) for row in preds]).reshape(-1))
+
+        if transition_matrix is not None:
+            probs = tf.nn.softmax(logits, axis=-1).numpy()
+            y_pred_viterbi_all.append(
+                np.stack([viterbi_smooth(p, transition_matrix) for p in probs]).reshape(-1)
+            )
+
+    y_true = np.concatenate(y_true_all)
+    raw_report, raw_cm = _report_and_save(y_true, np.concatenate(y_pred_all), label)
+    _report_and_save(y_true, np.concatenate(y_pred_mode_all), f"{label}_mode_smoothed")
+    if transition_matrix is not None:
+        _report_and_save(y_true, np.concatenate(y_pred_viterbi_all), f"{label}_viterbi_smoothed")
+
+    return raw_report, raw_cm
 
 
 def _add_sample_weights(x, y, class_weights):
@@ -398,8 +439,12 @@ def main():
         count_context_windows([BID_DIR, ACCEL_DIR], {BID_DIR: bid_te, ACCEL_DIR: acc_te}, ACCEL_STRIDE) // BATCH_SIZE
     )
 
-    evaluate_domain(psg_infer_model, test_psg_ds, psg_test_steps, "psg")
-    evaluate_domain(accel_infer_model, test_accel_ds, accel_test_steps, "accel")
+    # 💡 Phase 5: 후처리(다수결/Viterbi 스무딩)용 상태전이행렬은 학습셋 라벨 시퀀스에서 계산합니다.
+    psg_transition_matrix = compute_transition_matrix([EDF_DIR], {EDF_DIR: edf_tr})
+    accel_transition_matrix = compute_transition_matrix([BID_DIR, ACCEL_DIR], {BID_DIR: bid_tr, ACCEL_DIR: acc_tr})
+
+    evaluate_domain(psg_infer_model, test_psg_ds, psg_test_steps, "psg", transition_matrix=psg_transition_matrix)
+    evaluate_domain(accel_infer_model, test_accel_ds, accel_test_steps, "accel", transition_matrix=accel_transition_matrix)
 
 if __name__ == "__main__":
     main()

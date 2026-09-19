@@ -16,16 +16,22 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
@@ -55,7 +61,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -81,6 +89,8 @@ import com.sleepytime.shared.resources.ic_kakao
 import com.sleepytime.shared.resources.ic_pencil
 import com.sleepytime.shared.resources.ic_profile
 import com.sleepytime.shared.ui.auth.AuthContract
+import com.sleepytime.shared.ui.component.AuthMethod
+import com.sleepytime.shared.ui.component.toUi
 import com.sleepytime.shared.ui.theme.bodyText
 import com.sleepytime.shared.ui.theme.caption
 import com.sleepytime.shared.ui.theme.sectionTitle
@@ -111,9 +121,10 @@ fun AccountSettingContent(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.systemBars)
                 .background(MaterialTheme.colorScheme.background)
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // 1. 프로필 헤더
@@ -169,19 +180,14 @@ fun AccountSettingContent(
 
             // 2. 기본 정보 카드 (복사 기능)
             SettingCard {
-                InfoItem(
-                    label = "닉네임",
-                    value = user?.nickname ?: "닉네임 없음",
-                    onCopy = {
-                        clipboardManager.setText(AnnotatedString(user?.nickname.orEmpty()))
-                        scope.launch { snackbarHostState.showSnackbar("닉네임이 복사되었습니다.") }
-                    }
-                )
-                HorizontalDivider(
-                    color = Color(0xFF2A2C3D),
-                    thickness = 1.dp,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
+//                InfoItem(
+//                    label = "닉네임",
+//                    value = user?.nickname ?: "닉네임 없음",
+//                    onCopy = {
+//                        clipboardManager.setText(AnnotatedString(user?.nickname.orEmpty()))
+//                        scope.launch { snackbarHostState.showSnackbar("닉네임이 복사되었습니다.") }
+//                    }
+//                )
                 InfoItem(
                     label = "이메일",
                     value = user?.email ?: "연결 안 됨",
@@ -290,7 +296,7 @@ fun InfoItem(label: String, value: String, onCopy: () -> Unit) {
                 painter = painterResource(Res.drawable.ic_copy),
                 contentDescription = "$label 복사",
                 tint = Color.Gray,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(24.dp)
             )
         }
     }
@@ -308,6 +314,14 @@ fun AccountConnectItem(
     onSocialDisConnect: (AuthProvider) -> Unit,
     onEmailDisConnect: () -> Unit,
 ) {
+    val iconColor = when(provider) {
+        AuthProvider.KAKAO -> Color(0xFFFEE500)
+        AuthProvider.GOOGLE -> Color.Transparent
+        AuthProvider.APPLE -> Color.White
+        AuthProvider.EMAIL -> Color.White
+    }
+    val method = AuthMethod.Member(provider)
+    val ui = method.toUi()
     Column {
         Row(
             modifier = Modifier
@@ -321,9 +335,9 @@ fun AccountConnectItem(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Image(
+                    modifier = Modifier.size(24.dp),
                     painter = painterResource(getAuthProviderIconRes(provider)),
                     contentDescription = null,
-                    modifier = Modifier.size(24.dp)
                 )
                 Text(
                     text = getAuthProviderDisplayName(provider),

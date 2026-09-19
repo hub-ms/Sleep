@@ -14,6 +14,7 @@ import com.sleepytime.shared.domain.model.User
 import com.sleepytime.shared.domain.repository.AuthRepository
 import com.sleepytime.shared.domain.repository.TokenRepository
 import com.sleepytime.shared.enum_.AuthProvider
+import com.sleepytime.shared.platform.ChatSupportManager
 import com.sleepytime.shared.platform.SocialAuthService
 import com.sleepytime.shared.ui.navigation.HomeScreen
 import com.sleepytime.shared.ui.navigation.OnboardingScreen
@@ -39,6 +40,7 @@ class AuthViewModel(
     private val tokenRepository: TokenRepository,
     private val socialAuthService: SocialAuthService,
     private val settings: ObservableSettings,
+    private val chatSupportManager: ChatSupportManager,
 ) : ScreenModel {
 
     private val _startDestination = MutableStateFlow<Screen?>(null)
@@ -334,12 +336,14 @@ class AuthViewModel(
         is AuthContract.Intent.LogoutClicked -> {
             screenModelScope.launch {
                 authRepository.logout()
+                chatSupportManager.shutdown()
             }
         }
 
         is AuthContract.Intent.LogoutConfirmed -> {
             screenModelScope.launch {
                 authRepository.logout()
+                chatSupportManager.shutdown()
             }
         }
 

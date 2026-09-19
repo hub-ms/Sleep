@@ -17,6 +17,8 @@ spring/.env
 *.mp4
 *.html
 *.md
+*.pdf
+*.ipynb
 spring/src/main/resources/application.yml
 ml/data/weather_simulation/*.json
 ml/output/train_log.csv
@@ -39,3 +41,5 @@ Thumbs.db
 
 # ── 오디오/이미지 대용량 리소스 (필요시) ─────────────
 # 프로젝트 정책에 따라 조정 — 앱에 실제로 포함되는 리소스라면 이 줄들은 넣지 마세요
+/portfolio/SleepyTime_포트폴리오.docx
+/sleep_ml.zip

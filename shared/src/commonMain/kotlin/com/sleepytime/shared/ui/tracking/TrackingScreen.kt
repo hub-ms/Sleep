@@ -405,7 +405,7 @@ fun CurrentMusicCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .wrapContentHeight()
+            .height(150.dp)
             .background(
                 brush = SleepTheme.gradients.surface,
                 shape = RoundedCornerShape(16.dp)
@@ -501,13 +501,6 @@ fun CurrentMusicCard(
                 120 -> "2시간"
                 null -> "자동"
                 else -> "30분"
-            }
-            val minutes = when (selectedLabel) {
-                "30분" -> 30
-                "1시간" -> 60
-                "2시간" -> 120
-                "자동" -> null
-                else -> 30
             }
             if(musicState.selectedMusic==null) {
                 Text(

@@ -77,6 +77,12 @@ fun SettingContent(
             style = MaterialTheme.typography.sectionTitle,
             color = Color.White,
         )
+        UserProfileSection(
+            user = authState.user,
+            userType = authState.userType,
+            isGuest = isGuest,
+            onLoginBenefitClicked = onNavigateToLoginBenefit
+        )
         Calendar(
             reportState = reportState,
             selectedDate = reportState.date,

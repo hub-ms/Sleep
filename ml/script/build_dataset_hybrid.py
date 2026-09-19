@@ -3,6 +3,7 @@ from pathlib import Path
 from scipy.io import loadmat
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from collections import deque
 import mne
 
 mne.set_log_level("ERROR")
@@ -55,25 +56,29 @@ def resample_to_grid(t_src, values, t_grid):
         fill = values[0] if len(values) else 0.0
         return np.full(len(t_grid), fill, dtype=np.float32)
     return np.interp(t_grid, t_src, values).astype(np.float32)
-# 💡 Phase 1(로드맵): 단일 epoch 값만으로는 예측력이 약해, epoch 전후 몇 분간 활동량의
-# 추세(기울기)와 변동성(표준편차)을 파생 특징으로 추가합니다(HRV 전환기 변동성 연구에서
-# 착안 — 논문에서는 심박변동성에 적용했지만 같은 아이디어를 활동량 신호에 적용). 기존에
-# 거의 쓸모없던 채널(mfcc_energy=항상 0, hrv=데이터 품질 의심)을 재활용해 채널 수는
-# 그대로 유지합니다.
-TREND_VARIABILITY_WINDOW_SEC = 180.0  # 전후 3분
+# 💡 Phase 1(로드맵): 단일 epoch 값만으로는 예측력이 약해, 최근 몇 분간 활동량의 추세(기울기)와
+# 변동성(표준편차)을 파생 특징으로 추가합니다(HRV 전환기 변동성 연구에서 착안 — 논문에서는
+# 심박변동성에 적용했지만 같은 아이디어를 활동량 신호에 적용). 기존에 거의 쓸모없던 채널
+# (mfcc_energy=항상 0, hrv=데이터 품질 의심)을 재활용해 채널 수는 그대로 유지합니다.
+#
+# 🐛 설계 수정: 처음에는 epoch 전후(미래 포함) ±3분 구간을 봤는데, 온디바이스 실시간 추론은
+# 아직 일어나지 않은 미래 데이터를 볼 수 없어 그대로 재현이 불가능했습니다. 과거 epoch들의
+# "epoch 단위 평균 활동량"만 누적해 추세/변동성을 계산하는 인과적(causal) 방식으로 바꿨습니다
+# — Kotlin(SleepAnalyzer.kt)도 매 epoch마다 같은 방식으로 과거 값만 누적하면 동일하게 재현됩니다.
+LOOKBACK_EPOCHS = 6  # 30초 epoch 6개 = 최근 3분
 
-def compute_trend_variability(t_signal, magnitude_signal, t_center, window_sec=TREND_VARIABILITY_WINDOW_SEC):
-    """t_center 기준 ±window_sec 구간에서 magnitude_signal의 선형 추세(기울기)와
-    변동성(표준편차)을 계산합니다."""
-    mask = (t_signal >= t_center - window_sec) & (t_signal <= t_center + window_sec)
-    if mask.sum() < 3:
+def compute_causal_trend_variability(recent_epoch_means, current_epoch_mean):
+    """recent_epoch_means(과거 epoch들의 활동량 평균, 시간순)에 현재 epoch까지 포함해 선형
+    추세(기울기)와 변동성(표준편차)을 계산합니다. 미래 데이터를 쓰지 않습니다."""
+    window = list(recent_epoch_means) + [current_epoch_mean]
+    if len(window) < 3:
         return 0.0, 0.0
-    t_masked = t_signal[mask].astype(np.float64)
-    v_masked = magnitude_signal[mask].astype(np.float64)
-    t_centered = t_masked - t_masked.mean()
+    v = np.asarray(window, dtype=np.float64)
+    t = np.arange(len(v), dtype=np.float64)
+    t_centered = t - t.mean()
     denom = np.sum(t_centered ** 2)
-    trend = float(np.sum(t_centered * (v_masked - v_masked.mean())) / denom) if denom > 0 else 0.0
-    variability = float(np.std(v_masked))
+    trend = float(np.sum(t_centered * (v - v.mean())) / denom) if denom > 0 else 0.0
+    variability = float(np.std(v))
     return trend, variability
 
 def robust_loadtxt(path, ncols, delimiter=None, skiprows=0):
@@ -168,6 +173,9 @@ def load_sleep_accel_subject(subject_id: str):
     labels = raw_labels[raw_labels[:, 1] != -1]
     total_span = last_label_time
 
+    # 💡 Phase 1: epoch 시간순으로 최근 활동량 평균만 누적하는 인과적 버퍼(미래 데이터 사용 안 함).
+    recent_epoch_means = deque(maxlen=LOOKBACK_EPOCHS)
+
     X, y = [], []
     for onset, stage_raw in labels:
         stage_raw = int(stage_raw)
@@ -198,9 +206,10 @@ def load_sleep_accel_subject(subject_id: str):
             hr_val = np.full(WINDOW, 68.5769, dtype=np.float32)
 
         # 💡 Phase 1: hrv(품질 의심 채널)를 활동량 변동성으로, mfcc_energy(항상 0이던 죽은 채널)를
-        # 활동량 추세로 재활용합니다. t_center 기준 전후 3분 구간을 봅니다.
-        t_center = (t_start + t_end) / 2.0
-        trend, variability = compute_trend_variability(t_acc, activity_mag, t_center)
+        # 활동량 추세로 재활용합니다. 이 epoch을 포함해 과거 LOOKBACK_EPOCHS개(최근 3분)만 봅니다.
+        current_epoch_mean = float(activity_mag[mask].mean())
+        trend, variability = compute_causal_trend_variability(recent_epoch_means, current_epoch_mean)
+        recent_epoch_means.append(current_epoch_mean)
         hrv_val      = np.full(WINDOW, variability, dtype=np.float32)
         mfcc_energy  = np.full(WINDOW, trend, dtype=np.float32)
         time_feature = np.full(WINDOW, onset / total_span, dtype=np.float32)
@@ -254,6 +263,9 @@ def load_bidsleep_subject(subject_id: str):
 
         total_span = t_acc[-1] - rec_start if len(t_acc) else 1.0
 
+        # 💡 Phase 1: 밤(수면 세션)마다 새로 시작하는 인과적 버퍼(미래 데이터 사용 안 함).
+        recent_epoch_means = deque(maxlen=LOOKBACK_EPOCHS)
+
         for k, stage_raw in enumerate(stage_seq):
             if stage_raw not in BIDSLEEP_LABEL_MAP:
                 continue  # Unknown(5) 제외
@@ -279,9 +291,10 @@ def load_bidsleep_subject(subject_id: str):
                       else np.full(WINDOW, 68.5769, dtype=np.float32))
 
             # 💡 Phase 1: hrv(품질 의심 채널)를 활동량 변동성으로, mfcc_energy(항상 0이던 죽은 채널)를
-            # 활동량 추세로 재활용합니다. t_center 기준 전후 3분 구간을 봅니다.
-            t_center = (t_start + t_end) / 2.0
-            trend, variability = compute_trend_variability(t_acc, activity_mag, t_center)
+            # 활동량 추세로 재활용합니다. 이 epoch을 포함해 과거 LOOKBACK_EPOCHS개(최근 3분)만 봅니다.
+            current_epoch_mean = float(activity_mag[mask].mean())
+            trend, variability = compute_causal_trend_variability(recent_epoch_means, current_epoch_mean)
+            recent_epoch_means.append(current_epoch_mean)
             hrv_val = np.full(WINDOW, variability, dtype=np.float32)
             mfcc_energy  = np.full(WINDOW, trend,  dtype=np.float32)
             time_feature = np.full(WINDOW, (t_start - rec_start) / total_span, dtype=np.float32)

@@ -26,6 +26,9 @@ expect class SleepStageClassifier {
         val CH_ACCEL_Z: Int
         val CH_TILT: Int
         val CH_HEART_RATE: Int
+        // 💡 Phase 1(로드맵): 이름은 CH_HRV/CH_MFCC_ENERGY로 남아있지만, build_dataset_hybrid.py에서
+        // 두 채널을 각각 "최근 3분 활동량 변동성(표준편차)"/"활동량 추세(기울기)"로 재활용했습니다
+        // (SleepAnalyzer.kt의 computeCausalTrendVariability 참고). 실제 HRV/MFCC 값이 아닙니다.
         val CH_HRV: Int
         val CH_MFCC_ENERGY: Int
         val CH_TIME_FEATURE: Int

@@ -16,6 +16,10 @@ private const val RAW_GYRO_X = 3
 private const val RAW_GYRO_Y = 4
 private const val RAW_GYRO_Z = 5
 
+// 💡 ml/script/build_dataset_hybrid.py의 LOOKBACK_EPOCHS와 반드시 같은 값이어야 합니다
+// (학습 때 계산한 "최근 3분 활동량 추세/변동성" 특징을 실시간 추론에서 동일하게 재현하기 위함).
+private const val ACTIVITY_LOOKBACK_EPOCHS = 6
+
 class SleepAnalyzer(private val classifier: SleepStageClassifier) {
 
     // 🐛 버그 수정: 모델은 한 번에 CONTEXT_LEN(60)개의 연속된 epoch를 컨텍스트로 요구하는데,
@@ -23,6 +27,10 @@ class SleepAnalyzer(private val classifier: SleepStageClassifier) {
     // SleepStageClassifier의 require(sensorData.size == CONTEXT_LEN) 체크에 항상 걸려 추론이
     // 조용히 실패(Result.failure)했습니다. 최근 CONTEXT_LEN개의 epoch를 슬라이딩 버퍼로 유지합니다.
     private val epochBuffer = ArrayDeque<List<FloatArray>>()
+
+    // 💡 build_dataset_hybrid.py의 recent_epoch_means(deque)와 동일한 역할 — 과거 epoch들의
+    // 평균 활동량(가속도 벡터 크기)만 누적하는 인과적(미래 데이터 미사용) 버퍼입니다.
+    private val recentEpochActivityMeans = ArrayDeque<Float>()
 
     fun analyzeWindow(
         sensorData: List<FloatArray>,
@@ -39,9 +47,6 @@ class SleepAnalyzer(private val classifier: SleepStageClassifier) {
 
             val hrFallback = SleepStageClassifier.ACCEL_CHANNEL_MEAN[SleepStageClassifier.CH_HEART_RATE]
 
-            val noiseValue = environmentFeature?.stats?.noise?.avg ?: 0f // 기본 진폭 (Noise_RMS)
-            val mfccEnergy = environmentFeature?.stats?.noise?.max?.minus(noiseValue)?.coerceAtLeast(0f) ?: 0f
-
             val elapsedMs = (currentTimeMs - sessionStartTimeMs).coerceAtLeast(0L)
             val timeFeature = (elapsedMs.toDouble() / 28_800_000.0).coerceAtMost(1.0).toFloat()
 
@@ -51,29 +56,55 @@ class SleepAnalyzer(private val classifier: SleepStageClassifier) {
             val avgY = resampled.map { it.getOrElse(SleepStageClassifier.CH_ACCEL_Y) { 0f } }.average().toFloat()
             val avgZ = resampled.map { it.getOrElse(SleepStageClassifier.CH_ACCEL_Z) { 1f } }.average().toFloat()
 
+            // 🐛 버그 수정: 이 epoch(현재 시점)까지 포함한 최근 ACTIVITY_LOOKBACK_EPOCHS개(3분)
+            // 활동량 평균의 추세/변동성을 계산합니다. build_dataset_hybrid.py의
+            // compute_causal_trend_variability()와 동일한 계산이며, 미래 데이터를 쓰지 않아
+            // 실시간 추론에서도 학습 때와 동일하게 재현됩니다.
+            val currentEpochActivityMean = resampled.map { sample ->
+                val x = sample.getOrElse(SleepStageClassifier.CH_ACCEL_X) { 0f }
+                val y = sample.getOrElse(SleepStageClassifier.CH_ACCEL_Y) { 0f }
+                val z = sample.getOrElse(SleepStageClassifier.CH_ACCEL_Z) { 1f }
+                sqrt(x * x + y * y + z * z)
+            }.average().toFloat()
+            val (activityTrend, activityVariability) = computeCausalTrendVariability(
+                recentEpochActivityMeans, currentEpochActivityMean
+            )
+            recentEpochActivityMeans.addLast(currentEpochActivityMean)
+            while (recentEpochActivityMeans.size > ACTIVITY_LOOKBACK_EPOCHS) {
+                recentEpochActivityMeans.removeFirst()
+            }
+
+            // 🐛 버그 수정: 학습 데이터의 채널 3("tilt")은 가속도 x/y/z가 이 epoch 평균에서
+            // 얼마나 벗어났는지를 뜻하는데(|x-avgX|+|y-avgY|+|z-avgZ|), 여기서는 자이로스코프
+            // 크기(gyroEnergy)를 대신 넣고 있어 학습/추론 채널의 물리적 의미가 완전히
+            // 달랐습니다. gyroEnergy는 모델 입력이 아니라 아래 움직임 보정 로직 전용으로 따로
+            // 계산합니다.
+            val avgGyroEnergy = resampled.map { sample ->
+                val gx = sample.getOrElse(RAW_GYRO_X) { 0f }
+                val gy = sample.getOrElse(RAW_GYRO_Y) { 0f }
+                val gz = sample.getOrElse(RAW_GYRO_Z) { 0f }
+                sqrt(gx * gx + gy * gy + gz * gz)
+            }.average().toFloat()
+
             val expanded: List<FloatArray> = resampled.map { sample ->
                 val x = sample.getOrElse(SleepStageClassifier.CH_ACCEL_X) { 0f }
                 val y = sample.getOrElse(SleepStageClassifier.CH_ACCEL_Y) { 0f }
                 val z = sample.getOrElse(SleepStageClassifier.CH_ACCEL_Z) { 1f }
-
-                val gx = sample.getOrElse(RAW_GYRO_X) { 0f }
-                val gy = sample.getOrElse(RAW_GYRO_Y) { 0f }
-                val gz = sample.getOrElse(RAW_GYRO_Z) { 0f }
-                val gyroEnergy = sqrt(gx * gx + gy * gy + gz * gz)
+                val tilt = abs(x - avgX) + abs(y - avgY) + abs(z - avgZ)
 
                 // 💡 심박수 제거(앱단): 더 이상 심박수를 수집하지 않으므로, 온디바이스 모델이
                 // 기대하는 채널 shape은 그대로 유지한 채 학습 시점의 채널 평균(중립값)을 채웁니다.
                 // 모델 재학습(8→6채널)은 별도 ML 작업입니다.
                 val hrValue = hrFallback
-                
+
                 floatArrayOf(
                     x,
                     y,
                     z,
-                    gyroEnergy,
+                    tilt,
                     hrValue,
-                    noiseValue,
-                    mfccEnergy,
+                    activityVariability,
+                    activityTrend,
                     timeFeature
                 )
             }
@@ -92,7 +123,6 @@ class SleepAnalyzer(private val classifier: SleepStageClassifier) {
             var predictionStage = indexToStage(stageIdx)
 
 
-            val avgGyroEnergy = expanded.map { it[3] }.average().toFloat()
             val avgMotion = SignalProcessor.calculateMovementEnergy(
                 floatArrayOf(avgX, avgY, avgZ),
                 floatArrayOf(avgGyroEnergy, avgGyroEnergy, avgGyroEnergy)
@@ -136,6 +166,31 @@ class SleepAnalyzer(private val classifier: SleepStageClassifier) {
     // 섞여 들어가지 않도록 버퍼를 비웁니다.
     fun resetContext() {
         epochBuffer.clear()
+        recentEpochActivityMeans.clear()
+    }
+
+    // 💡 ml/script/build_dataset_hybrid.py의 compute_causal_trend_variability()와 동일한
+    // 계산입니다 — recentMeans(과거 epoch들의 활동량 평균, 시간순)에 현재 epoch까지 포함해
+    // 선형 추세(기울기)와 변동성(표준편차)을 구합니다. 미래 데이터를 쓰지 않습니다.
+    private fun computeCausalTrendVariability(recentMeans: List<Float>, currentMean: Float): Pair<Float, Float> {
+        val window = recentMeans + currentMean
+        if (window.size < 3) return 0f to 0f
+
+        val n = window.size
+        val tMean = (n - 1) / 2f
+        val vMean = window.average().toFloat()
+
+        var num = 0f
+        var denom = 0f
+        window.forEachIndexed { i, v ->
+            val tCentered = i - tMean
+            num += tCentered * (v - vMean)
+            denom += tCentered * tCentered
+        }
+        val trend = if (denom > 0f) num / denom else 0f
+        val variance = window.sumOf { ((it - vMean) * (it - vMean)).toDouble() } / n
+        val variability = sqrt(variance).toFloat()
+        return trend to variability
     }
 
     fun isReady(): Boolean = classifier.isReady()

@@ -7,8 +7,12 @@ expect class SleepStageClassifier {
         // SleepAnalyzer는 이 길이만큼 epoch를 모아서 classifySleepStage()를 호출해야 합니다.
         val CONTEXT_LEN: Int
 
-        val COMBINED_CHANNEL_MEAN: FloatArray
-        val COMBINED_CHANNEL_STD: FloatArray
+        // 💡 온디바이스 배포 모델은 가속도계 전용(accel_infer_model)이라, 이 8개 채널은
+        // Accel 도메인(bidsleep·sleep_accel 평균) 정규화 기준을 씁니다. EDF/PSG 정규화와는
+        // 별개입니다 — 예전에 "COMBINED"라는 16채널(EDF 8 + Accel 8) 배열을 쓰면서 앞 8개
+        // (EDF용)만 실제로 참조해, 가속도 데이터를 EEG 정규화 기준으로 정규화하던 버그가 있었습니다.
+        val ACCEL_CHANNEL_MEAN: FloatArray
+        val ACCEL_CHANNEL_STD: FloatArray
 
         // EDF 채널 인덱스
         val CH_EEG1: Int

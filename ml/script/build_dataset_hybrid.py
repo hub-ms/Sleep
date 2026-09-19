@@ -13,10 +13,13 @@ WINDOW      = 1500          # 50Hz * 30s
 EPOCH_SEC   = 30
 N_CLASSES   = 4
 
-SLEEP_ACCEL_DIR = Path("data/sleep_accel")
-BIDSLEEP_DIR    = Path("data/bidsleep")
-EDF_DIR = Path("data/sleep_edf")
+# 💡 cwd(현재 작업 디렉토리)가 로컬/Colab에서 다를 수 있어(ml/, ml/script/ 등) cwd에 의존하지
+# 않도록 이 파일(ml/script/build_dataset_hybrid.py) 자신의 위치를 기준으로 ml/ 폴더를 찾습니다.
+BASE_DIR = Path(__file__).resolve().parent.parent
 
+SLEEP_ACCEL_DIR = BASE_DIR / "data" / "sleep_accel"
+BIDSLEEP_DIR    = BASE_DIR / "data" / "bidsleep"
+EDF_DIR = BASE_DIR / "data" / "sleep_edf"
 
 SLEEP_ACCEL_SAVE_DIR = SLEEP_ACCEL_DIR / "subjects"
 BIDSLEEP_SAVE_DIR    = BIDSLEEP_DIR / "subjects"
@@ -268,7 +271,7 @@ def load_bidsleep_subject(subject_id: str):
     return np.array(all_X, dtype=np.float32), np.array(all_y, dtype=np.int32)
 
 
-SKIP_EXISTING = False  # 💡 수정: 기존 파일을 무시하고 전체 다시 생성 (버그 수정 반영용)
+SKIP_EXISTING = True
 
 def bandpower_proxy(sig, fs, band=None):
     """epoch 구간 신호의 표준편차 기반 파워 근사(경량)."""
@@ -278,11 +281,12 @@ def bandpower_proxy(sig, fs, band=None):
 
 
 def load_sleepedf_subject(psg_path: Path):
-    prefix = psg_path.stem[:7]
-    hyp_candidates = list(psg_path.parent.glob(f"{prefix}*-Hypnogram*.edf"))
+    prefix = psg_path.stem.replace("-PSG", "")
+    hyp_candidates = list(psg_path.parent.glob(f"{prefix[:-1]}*-Hypnogram*.edf"))
     if not hyp_candidates:
-            print(f"Hypnogram 파일 없음: {psg_path.name}")
-            return None, None
+        print(f"Hypnogram 파일 없음: {psg_path.name}")
+        return None, None
+
     hyp_path = hyp_candidates[0]
     try:
         raw = mne.io.read_raw_edf(psg_path, preload=True, verbose=False)
@@ -392,22 +396,44 @@ def merge_and_save(subject_id: str, source: str, psg_path: Path = None):
 
 
 def main():
+    # 💡 원본 폴더가 없거나 비어있으면 예전에는 조용히 건너뛰어서, 왜 특정 도메인의 SAVE_DIR에
+    # npy가 하나도 안 생기는지 알아채기 어려웠습니다. 도메인별로 원본에서 찾은 subject 수를
+    # 먼저 출력해 어느 도메인이 원본 데이터 자체가 없는 건지 바로 보이게 합니다.
     if (SLEEP_ACCEL_DIR / "labels").exists():
         sa_ids = sorted({p.stem.split("_")[0] for p in (SLEEP_ACCEL_DIR / "labels").glob("*_labeled_sleep.txt")})
+        print(f"[sleep_accel] 원본에서 {len(sa_ids)}명 발견 ({SLEEP_ACCEL_DIR / 'labels'})")
         for sid in sa_ids:
             merge_and_save(sid, "sleep_accel")
+    else:
+        print(f"[sleep_accel] 건너뜀: {SLEEP_ACCEL_DIR / 'labels'} 폴더 없음 (원본 데이터 미업로드)")
 
     if BIDSLEEP_DIR.exists():
         bid_ids = sorted([p.name for p in BIDSLEEP_DIR.iterdir() if p.is_dir() and p.name.startswith("Bidslab")])
+        print(f"[bidsleep] 원본에서 {len(bid_ids)}명 발견 ({BIDSLEEP_DIR})")
         for sid in bid_ids:
             merge_and_save(sid, "bidsleep")
+    else:
+        print(f"[bidsleep] 건너뜀: {BIDSLEEP_DIR} 폴더 없음 (원본 데이터 미업로드)")
 
     # 💡 추가: Sleep-EDF Expanded 처리
     if EDF_DIR.exists():
         psg_files = sorted(EDF_DIR.rglob("*-PSG.edf"))
+        print(f"[sleep_edf] 원본에서 {len(psg_files)}개 PSG 파일 발견 ({EDF_DIR})")
         for psg_path in psg_files:
             sid = psg_path.stem.replace("-PSG", "")
             merge_and_save(sid, "sleep_edf", psg_path=psg_path)
+    else:
+        print(f"[sleep_edf] 건너뜀: {EDF_DIR} 폴더 없음 (원본 데이터 미업로드)")
+
+    # 💡 끝나고 나서 SAVE_DIR별 실제 npy 파일 개수를 요약해, 어느 폴더가 비어있는지 한눈에 확인합니다.
+    print("\n===== 결과 요약 =====")
+    for name, save_dir in [
+        ("sleep_accel", SLEEP_ACCEL_SAVE_DIR),
+        ("bidsleep", BIDSLEEP_SAVE_DIR),
+        ("sleep_edf", EDF_SAVE_DIR),
+    ]:
+        n_x = len(list(save_dir.glob("X_*.npy")))
+        print(f"  {name}: {save_dir} 에 X_*.npy {n_x}개")
 
     print("\n완료.")
 

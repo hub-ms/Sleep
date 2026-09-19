@@ -151,5 +151,8 @@ def build_dual_domain_model(psg_window=1500, psg_channels=8, accel_window=1500, 
     return {
         "training_model": training_model,
         "psg_infer_model": tf.keras.Model(psg_in, psg_out),
-        "accel_infer_model": tf.keras.Model(acc_in, acc_out)
+        "accel_infer_model": tf.keras.Model(acc_in, acc_out),
+        # 💡 2단계(PSG 사전학습 → 공유 바디 고정 → Accel 파인튜닝) 학습을 위해 외부에서
+        # trainable 플래그를 조작할 수 있도록 공유 컨텍스트 트랜스포머를 노출합니다.
+        "context_body": ctx_body,
     }

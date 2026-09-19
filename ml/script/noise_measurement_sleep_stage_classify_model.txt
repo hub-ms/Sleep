@@ -1,0 +1,1129 @@
+ ▐▛███▛█   Claude Code v2.1.268
+▝▜██████▀  Sonnet 5 · Claude Pro
+  ▝▝ ▝▝    ~\study\Sleep\ml\script
+
+
+❯ 1. 현재 프로젝트에서 수면측정 시작했을 때 소음측정되는 원리, 소음측정 정확도  
+  향상하는 방법                                                                 
+  2. @ml\ 수면단계 분류모델 구조 개선하는 방법(f1 score 0.75 이상 목표)         
+  - 신호 품질 개선                                                              
+  - 정규화 기법 개선                                                            
+  - 데이터 증강                                                                 
+  - 클래스 불균형 처리                                                          
+  - 모델 앙상블                                                                 
+  - 시퀀스 후처리                                                               
+  - 다수결/스무딩 필터                                                          
+  - 다중 채널/다중 모달 활용                                                    
+  - 시간적 컨텍스트 확장                                                        
+  - 수동 특징 추출 결합                                                         
+  - 개인 수면 데이터 파인튜닝                                                   
+    @pdf\                                                                       
+  ⎿  Listed directory ml\
+  ⎿  Listed directory pdf\
+
+● 두 가지 주제를 조사하겠습니다: (1) 현재 프로젝트의 소음측정 원리 파악을 위해
+  안드로이드 트래킹 서비스 코드 탐색, (2) ml/ 폴더의 현재 수면단계 분류 모델
+  구조와 pdf/ 논문들의 관련 기법을 병렬로 탐색합니다.
+
+● 3 background agents launched (↓ to manage)
+   ├ Explore noise measurement in tracking service
+   ├ Explore ML sleep stage classification model
+   └ Extract sleep-stage classification techniques from PDFs
+
+● 세 개의 탐색 에이전트를 백그라운드로 실행했습니다.
+  1. 소음측정 관련 코드 (SleepTrackingService, AndroidTrackingManager 등)
+  2. ml/ 폴더의 현재 수면단계 분류 모델 구조
+  3. pdf/ 폴더 5개 논문에서 적용 가능한 기법 추출
+
+  완료되면 알려드리겠습니다. 그동안 다른 요청이 있으면 말씀해 주세요.
+
+✻ Baked for 47s · done 오후 2:41
+
+● Agent "Explore noise measurement in tracking service" finished · 2m 35s
+
+● 소음측정 탐색 에이전트가 완료됐습니다. 나머지 두 개(ML 모델 구조, PDF 논문
+  분석)도 마저 기다리겠습니다.
+
+✻ Sautéed for 2s · done 오후 2:43
+
+● Agent "Explore ML sleep stage classification model" finished · 3m 18s
+
+● ML 모델 구조 탐색도 완료됐습니다. PDF 논문 분석 에이전트만 남았습니다, 계속
+  기다리겠습니다.
+
+✻ Cooked for 1s · done 오후 2:44
+
+● Agent "Extract sleep-stage classification techniques from PDFs" finished · 4m 
+20s
+
+● 모든 탐색이 끝났습니다. 두 주제 모두 상세한 근거를 확보했고, 정리하기 전에
+  산출물 범위를 확인하고 싶습니다.
+
+● User answered Claude's questions:
+  ⎿  · 이번 요청의 결과물 범위를 어떻게 잡을까요? → 설명+개선 로드맵 문서만 
+     (권장)
+     · ML 개선 로드맵에서 조사 중 드러난 '파이프라인이 현재 실행 불가능한 
+     상태'(norm_stats.npy 없음, PSG 전처리 미실행, 테스트셋 미사용, 메트릭 코드 
+     없음) 문제를 어떻게 다룰까요? → 0순위로 반드시 포함 (권장)
+
+● Updated plan
+  ⎿  /plan to preview
+
+● User approved Claude's plan
+  ⎿  Plan saved to: ~\.claude\plans\1-indexed-widget.md · /plan to edit
+     소음측정 원리/정확도 개선 + 수면단계 분류 모델(F1≥0.75) 개선 로드맵
+
+     Context
+
+     두 가지 질문에 답하기 위한 산출물입니다.
+     1. 현재 앱에서 수면측정 시작 시 소음측정이 어떤 원리로 동작하는지, 정확도를
+        어떻게 높일 수 있는지
+     2. ml/ 폴더의 수면단계 분류 모델을 F1 score 0.75 이상으로 끌어올리기 위해
+        어떤 기법을 적용해야 하는지 (pdf/ 폴더의 관련 논문 5편 근거 포함)
+
+     코드 탐색 결과 ML 파이프라인은 현재 end-to-end로 실행 불가능한 상태(정규화
+     통계 파일 없음, PSG 데이터 미전처리, 테스트셋 코드상 계산되지만 미사용,
+     평가/메트릭 코드 자체가 없음)임이 확인되었습니다. 기존에 저장된 "버그
+     수정을 신규 기능보다 우선한다"는 원칙과도 일치하게, 이 로드맵은 먼저 
+     파이프라인을 정상 동작 + 측정 가능한 상태로 복구(Phase 0)한 뒤, 논문 기반 
+     F1 향상 기법을 단계적으로 적용하는 순서로 구성했습니다.
+
+     이 작업은 설명 + 개선 로드맵 문서 산출만 목표로 하며, 코드는 수정하지
+     않습니다. (사용자 확인됨)
+
+     ---
+
+     Part 1. 소음측정 원리와 정확도 개선 방안
+
+     1-1. 현재 동작 원리 (End-to-end 파이프라인)
+
+     SensorBridge.startNoiseSensor()                 [AudioRecord로 원시 오디오
+     캡처 → FFT → A-weighting → dB 스무딩]
+         │ 60개 CircularFloatBuffer에 hop(512 sample)마다 기록
+         ▼
+     startNoiseMonitoring() 코루틴 (1초마다) → StatsUtil.computeStats() →
+     latestNoiseStats
+         ▼
+     AndroidTrackingManager.startSensorBridgeSync() (1초마다) →
+     measureManager.submitNoise()
+         ▼
+     AndroidSleepMeasureManager.scheduleWindowUpdate() (0.5초마다 폴링, 30초
+     버킷으로 집계)
+         ▼
+     SleepSessionRepositoryImpl.analyzeSleepSession() →
+     SleepSession.Environment(history, stats, flags)
+         ▼
+     ReportScreen / ChartLegend에 avgNoise, environmentHistory로 시각화
+
+     원시 캡처 (SensorBridge.kt)
+     - AudioRecord(우선 AudioSource.UNPROCESSED, 미지원 시 AudioSource.MIC로
+       폴백) 기반, mono 16bit PCM
+     - 샘플레이트는 기기별 native rate를 조회해 동적으로 선택([native, 44100, 
+       48000, 16000] 순 시도)
+     - FFT_SIZE=1024, HOP_SIZE=512(50% overlap), Hann window 적용
+     - 자체 구현 radix-2 FFT → 주파수 빈별 A-weighting(IEC 61672 근사) + 일반
+       마이크 주파수보정 커브 적용 → 에너지 합산
+     - BASE_SPL_OFFSET_DB = 94.0(고정 SPL 보정 상수)로 디지털 에너지를 절대 dB로
+       환산, NOISE_FLOOR_DB=30/최대 120dB로 클램프
+     - attack(~35ms)/release(~1.5s) 비대칭 지수평활(사운드레벨미터의 "Fast"
+       응답과 유사)
+
+     집계/저장
+     - 1초 단위로 60개 순환버퍼 통계를 내고, 30초 버킷(WINDOW_BUCKET_MS)으로
+       EnvironmentFeature(avg/min/max/stddev) 생성
+     - 세션 종료 시 SleepSession.Environment.stats/flags는 전체 야간 평균이 
+       아니라 마지막 30초 버킷 값만 사용(environmentFeatures.lastOrNull()) —
+       리포트에 표시되는 "평균 소음" 배지가 실제로는 전체 밤이 아닌 마지막
+       구간만 반영
+     - isNoiseDanger는 NOISE_DANGER_THRESHOLD=60dB 고정 임계값
+     - "소음 상승으로 인한 각성" 추정 로직은 peakNoise ≥ avgNoise × 1.5 휴리스틱
+
+     1-2. 정확도에 영향을 주는 구체적 지점 (코드로 확인됨)
+
+     #: 1
+     이슈: 기기별 마이크 보정 테이블(DEVICE_MODEL_FREQ_CORRECTION_DB)이 정의만
+     되어
+     있고 비어있음 — 모든 기기가 동일한 일반 보정 커브 사용, 실제 SPL 값의 기기
+     간
+      편차 미보정
+     위치: SensorBridge.kt
+     ────────────────────────────────────────
+     #: 2
+     이슈: AudioSource.MIC 폴백 시 OEM의 AGC/노이즈 억제가 적용되어 진폭↔dB
+     관계가
+     기기마다 달라질 수 있음
+     위치: SensorBridge.kt
+     ────────────────────────────────────────
+     #: 3
+     이슈: 세션 레벨 소음 통계(avgNoise, isNoiseDanger)가 전체 야간이 아닌
+     마지막 
+     30초 버킷만 반영
+     위치: SleepSessionRepositoryImpl.kt
+     ────────────────────────────────────────
+     #: 4
+     이슈: CircularFloatBuffer.toList()가 0..size로 순회해 off-by-one 발생 →
+     버퍼
+     미충전 구간(추적 시작 후 약 60초)에서 min/avg가 왜곡됨
+     위치: CircularFloatBuffer.kt
+     ────────────────────────────────────────
+     #: 5
+     이슈: 노이즈 플로어를 30dB로 고정 클램프 → 매우 조용한 침실 간 차이를 구분
+     못
+     함
+     위치: SensorBridge.kt
+     ────────────────────────────────────────
+     #: 6
+     이슈: 30초 버킷 내 모든 가속도 샘플에 동일한 마지막 소음값을 태깅 → ML에
+     들어가는 소음 채널이 계단식으로 거칠어짐(시간 동기화 부정확)
+     위치: AndroidSleepMeasureManager.kt
+     ────────────────────────────────────────
+     #: 7
+     이슈: 순간 스파이크(노크, 알림음, 기침 등)를 걸러내는 outlier 제거나 최소
+     지속시간 게이팅이 없어 "소음 위험"/"각성 원인" 판정이 단발성 소음에 과민
+     반응
+     위치: SensorBridge.kt / ReportScreen.kt
+     ────────────────────────────────────────
+     #: 8
+     이슈: 입력(녹음) 샘플레이트를 고르는데 출력(재생) native
+     rate(PROPERTY_OUTPUT_SAMPLE_RATE)를 대리 지표로 사용 — 기기에 따라 입력
+     경로와 다를 수 있음
+     위치: SensorBridge.kt
+     ────────────────────────────────────────
+     #: 9
+     이슈: A-weighting/보정 커브가 정적 이론값일 뿐, 실제 캘리브레이션된
+     기준(SPL
+     미터, 테스트 톤)으로 검증된 적 없음
+     위치: SensorBridge.kt
+
+     1-3. 정확도 개선 방안 (우선순위 순)
+
+     즉시 고칠만한 버그성 이슈 (영향 대비 비용 낮음)
+     1. CircularFloatBuffer.toList() off-by-one 수정 → 모든 소음/센서 통계의
+        기초적 정확도 개선
+     2. SleepSessionRepositoryImpl에서 세션 통계를 lastOrNull()이 아닌 전체 
+        environmentFeatures에 대한 재계산(전체 야간 평균/최대/최소/stddev)으로
+        변경
+     3. 30초 버킷 내 가속도 샘플에 소음값을 태깅할 때, 가장 가까운 시간의 소음
+        샘플을 매칭(현재는 버킷의 마지막 값 고정)
+
+     정확도 향상을 위한 개선 (중기)
+     4. 기기별 마이크 보정: Build.MODEL 기준으로 알려진 기기의 마이크 민감도
+     보정값을 채우거나, 앱 최초 실행 시 "조용한 환경에서 N초간 측정" 방식의 자기
+     캘리브레이션(self-calibration) 절차를 추가해 BASE_SPL_OFFSET_DB를 기기별로
+     보정
+     5. outlier/스파이크 게이팅: 최소 지속시간(예: 2초 이상 임계값 초과) 조건을
+     추가해 일회성 소음과 지속적 소음 문제를 구분 → isNoiseDanger/"각성 원인"
+     판정의 오탐 감소
+     6. 가변 노이즈 플로어: 세션 초반 무음 구간을 측정해 개인 침실의 실제 배경
+     소음 기준선을 추정하고, 고정 30dB 클램프 대신 상대적 기준으로 판단
+     7. AudioSource.UNPROCESSED 미지원 기기 비율을 파악하고, MIC 폴백 시에는
+     절대 dB 값보다 상대적 변화량/추세 중심으로 활용 범위를 제한하는 것을 고려
+
+     검증
+     - 실제 SPL 미터(또는 캘리브레이션된 안드로이드 앱)와 비교해 여러 기기에서
+       절대 오차를 측정하는 것이 근본적 정확도 검증에 필요 — 코드 변경만으로는
+       절대 정확도를 보장할 수 없음
+
+     ---
+
+     Part 2. 수면단계 분류 모델 개선 로드맵 (F1 ≥ 0.75)
+
+     2-1. 현재 구조 요약
+
+     - 아키텍처: Dual-domain(PSG / Accel) CNN+Transformer 하이브리드.
+       Epoch(30초, 1500×8) → 멀티스케일 Conv1D → Transformer 인코더(PSG는
+       2-layer+attention, Accel은 plain CNN) → 60-epoch 컨텍스트를 공유 4-layer
+       Transformer(FiLM 도메인 컨디셔닝)로 처리 → 도메인별
+       4클래스(Wake/Light/Deep/REM) 분류
+     - 입력: PSG(EEG/EOG/EMG, Sleep-EDF) 8채널,
+       Accel(가속도/기울기/심박/HRV/MFCC 등, BIDSleep+Sleep-Accel) 8채널 — 단,
+       mfcc_energy는 하드코딩 0으로 실제로는 미구현
+     - 전처리: per-channel z-score 정규화 스크립트(compute_stats.py)는 존재하나
+       PSG/Accel 도메인 정규화 파일이 현재 없음 → 학습 자체가 불가능한 상태
+     - 학습: focal loss + label smoothing + 클래스 가중치, subject-level
+       70/15/15 분할(정렬 순서 기반, 셔플 없음)
+     - 평가: classification_report import만 있고 호출 코드 없음 — 테스트셋이
+       계산은 되지만 어디서도 쓰이지 않음, 저장된 메트릭/컨퓨전매트릭스 파일
+       전무
+     - 후처리: Viterbi/최빈값 스무딩(postprocess.py)이 구현은 되어 있으나
+       학습/추론 파이프라인 어디에도 연결되지 않은 고아 코드
+
+     2-2. Phase 0 — 파이프라인 정상화 (반드시 선행, 사용자 확인됨)
+
+     F1 수치를 논하기 전에 측정 가능한 baseline이 있어야 함. 다음이 없으면 이후
+     어떤 기법을 적용해도 개선 여부를 검증할 수 없습니다.
+
+     1. build_dataset_hybrid.py를 sleep_edf 원본(ml/data/sleep_edf/subjects/의
+        153명분 EDF)에 대해 실행해 PSG 도메인 .npy 생성
+     2. compute_stats.py를 실행해 norm_stats.npy를 PSG/Accel 도메인 각각에 대해
+        현재 데이터 경로 기준으로 재생성 (현재는 구 경로의 stale 파일만
+        남아있음)
+     3. train.py에 테스트셋 평가 코드 추가: 이미 계산되는 edf_te/bid_te/acc_te를
+        실제로 사용해 학습 종료 후 sklearn.classification_report(이미
+        import되어 있으나 미사용) + confusion matrix를 ml/output/에 저장
+     4. CSVLogger 콜백 추가(.gitignore가 이미 ml/output/train_log.csv를 기대하고
+        있음)해 학습 곡선을 기록
+     5. 클래스 분포(class distribution) 통계를 파일로 저장 — 현재는 stdout에
+        출력만 되고 사라짐
+     6. 죽은 코드 정리: SELF_TRANSITION_BOOST(미사용 상수), ml/models/의 5클래스
+        구버전 스크립트 등은 착오를 유발하므로 제거 또는 현재 4클래스
+        파이프라인에 맞게 갱신
+     7. Phase 0 완료 후 첫 baseline F1(macro/클래스별)을 측정하고 기록 — 이후
+        모든 개선의 비교 기준점
+
+     2-3. Phase 1 — 시간적 맥락(전이/변동성) 특징 강화 (최우선, 논문3·4 근거)
+
+     - 현재 각 30초 epoch은 그 자체의 특징만 사용. 논문3(HRV 연구, 전환 전후
+       변동성 특징 추가로 정확도 +9.2%p)과 논문4(Bi-LSTM에 과거 K-epoch 투입,
+       balanced accuracy +5.7%p)가 공통적으로 시간적 맥락이 단일 epoch보다
+       예측력이 크다는 것을 실증
+     - 적용안:
+       - Accel 도메인에 **전/후 N분(3~5분) 구간의 활동량 회귀계수(추세)와
+         표준편차(변동성)**를 파생 특징으로 추가 (현재 컨텍스트 길이
+         CONTEXT_LEN=60 epoch = 30분 윈도우는 이미 있으므로, 이 안에서 통계적
+         파생 특징을 명시적으로 뽑아 넣는 것)
+       - 클래스(수면단계)별 평균 지속시간에 맞춰 lookback 길이를 다르게 튜닝하는
+         것도 고려(논문4: REM은 더 긴 K, Deep은 더 짧은 K가 최적)
+
+     2-4. Phase 2 — 개인화/그룹화 (논문2·4 근거)
+
+     - 사용자별(per-subject) z-score 정규화가 전체 데이터셋 통합 정규화보다
+       1~2%p 우수(논문2) — compute_stats.py를 subject-level로 확장하는 것을 검토
+     - 가능하다면 사용자군(연령/성별/활동량 등)별 분리 모델 또는 최소한
+       그룹×클래스 확장 방식(논문4·5, 그룹정보를 단순 feature로 추가하는 것보다
+       명확히 우수) 적용을 검토 — 단, 이는 충분한 그룹별 데이터가 있을 때만
+       유효하므로 데이터 가용성 확인 필요
+
+     2-5. Phase 3 — 신호/특징 Ablation (논문5 근거)
+
+     - 가속도 3축 각각, 파생 특징(자세, 활동강도 등), 오디오/기타 채널 각각에
+       대해 sequential + individual ablation 실험을 수행해 F1에 기여하지 않거나
+       오히려 저해하는 특징(논문5에서는 ECG·SpO2가 저해 요인으로 확인됨)을 식별
+       후 제거
+     - 특히 현재 하드코딩된 mfcc_energy=0 죽은 채널을 실제로 구현하거나 제거
+
+     2-6. Phase 4 — 불균형 처리 및 평가지표 정비 (논문2 근거, 주의사항 포함)
+
+     - Weighted CE/Focal Loss가 항상 정답은 아님(논문2: 단순 CE가 accuracy 기준
+       더 우수했던 사례 존재) — 단, 이는 accuracy 기준이므로 F1/recall 기준으로 
+       별도 비교 실험 필요
+     - 평가지표를 accuracy 단일값이 아니라 Balanced Accuracy + 클래스별 F1 + 
+       Macro F1로 전환(Phase 0에서 구축한 평가 코드에 포함)
+
+     2-7. Phase 5 — 후처리 연결 (즉시 적용 가능한 저비용 개선)
+
+     - 이미 구현되어 있으나 연결되지 않은 postprocess.py의 최빈값 필터/Viterbi
+       스무딩을 추론 파이프라인에 연결 — 논문에서도 시퀀스 후처리가 안정적인
+       개선 수단으로 확인됨, 구현 비용이 낮으므로 Phase 0 직후 시도할 가치 있음
+
+     2-8. Phase 6 — 모델 구조/앙상블 (논문2·5 근거)
+
+     - 특징추출기(CNN) 먼저 학습 → freeze → 시퀀스모델(Transformer/LSTM)만 추가
+       학습하는 2단계 학습이 end-to-end fine-tuning보다 안정적으로 우수 — 현재
+       파이프라인은 end-to-end 결합 학습이므로 2단계 학습 옵션을 실험
+     - PSG/Accel 브랜치는 이미 공유 컨텍스트-Transformer 구조이나, 추론 시 두
+       도메인 출력을 결합(late fusion/ensemble)하는 로직이 없음 — 있다면 활용,
+       이 프로젝트는 PSG 데이터가 실제 서비스에 없으므로 Accel 단일 도메인
+       최적화에 집중하는 것이 현실적
+
+     2-9. 참고: 논문5(이미지화 기법)의 적용 제약
+
+     - 논문5의 "1D 신호를 이미지화해 EfficientNet+LSTM" 접근은 성능이 가장
+       높았으나(86%대), PSG 다채널 전제 기법으로 이 프로젝트(가속도계/오디오
+       중심)에는 직접 적용성이 낮음. 다만 채널 ablation 방법론과 다중소스 이질성
+       대응(그룹×클래스 확장) 아이디어는 그대로 유효하므로 Phase 3·2에 반영함.
+
+     ---
+
+     요약 우선순위
+
+     1. Phase 0 (필수 선행): 파이프라인 복구 — PSG 전처리 실행, norm_stats
+        재생성, 테스트 평가 코드 추가, baseline F1 측정
+     2. Phase 1: 전이/변동성 시간 특징 추가 (가장 근거가 탄탄한 F1 향상 기법)
+     3. Phase 5: 후처리(스무딩) 연결 — 이미 구현되어 있어 비용 대비 효과 높음
+     4. Phase 2~4: 개인화, ablation, 불균형/평가지표 정비 — Phase 0~1 이후
+        baseline 대비 반복 실험으로 순차 적용
+     5. Phase 6: 2단계 학습/앙상블 구조 — 구조 변경 비용이 크므로 가장 마지막
+
+     병행하여 Part 1의 소음측정 정확도 개선(특히 CircularFloatBuffer 버그 수정,
+     세션 통계를 전체 야간 기준으로 재계산)도 버그 수정 우선 원칙에 따라 낮은 
+     비용으로 먼저 처리할 것을 권장합니다.
+
+     검증 방법
+
+     - 소음측정: 여러 실기기에서 SPL 미터(또는 검증된 dB미터 앱)와 나란히 측정해
+       절대 오차 비교. 버그 수정(off-by-one, 세션 통계 재계산) 후에는 유닛
+       테스트로 StatsUtil.computeStats 결과가 전체 버퍼/전체 세션을 정확히
+       반영하는지 확인
+     - ML 모델: Phase 0에서 구축한 classification_report/confusion matrix 출력을
+       각 Phase 적용 전후로 비교해 macro F1 및 클래스별(특히 Deep/REM) F1
+       변화를 추적. Wilcoxon signed-rank test 등으로 개선의 통계적 유의성
+       확인(논문4 방법론 참고)
+
+● 조사와 로드맵 문서 작성을 마쳤습니다. 문서는
+  C:\Users\dream\.claude\plans\1-indexed-widget.md에 저장했습니다. 요청하신
+  범위가 "문서만"이었으므로 코드는 건드리지 않았습니다.
+
+  핵심 요약
+
+  1. 소음측정 원리: AudioRecord(UNPROCESSED 우선)로 원시 오디오를 캡처 →
+  FFT+Hann window → A-weighting+마이크 보정 커브 적용 → 94dB 고정 SPL 오프셋으로
+  절대 dB 환산 → attack/release 비대칭 스무딩 → 1초 단위 통계, 30초 버킷 집계.
+  정확도를 갉아먹는 지점은 기기별 마이크 보정 테이블이 비어있는 점, 세션 통계가
+  전체 야간이 아닌 마지막 30초만 반영되는 점, CircularFloatBuffer off-by-one
+  버그, 스파이크 게이팅 부재 등입니다.
+
+  2. ML 모델 개선(F1≥0.75): 현재 파이프라인은 정규화 통계 파일 부재, PSG 데이터
+  미전처리, 평가 코드 부재로 실행 자체가 불가능한 상태라 Phase 0(파이프라인
+  정상화 + baseline 측정)를 최우선으로 잡았습니다. 이후 논문 5편 근거로 Phase
+  1(전이/변동성 시간 특징, 가장 근거 탄탄), Phase 5(이미 구현된 후처리 스무딩
+  연결, 저비용 고효율), Phase 2~4(개인화, 채널 ablation, 불균형 처리), Phase
+  6(2단계 학습/앙상블) 순으로 배치했습니다.
+
+  다음으로 Phase 0의 파이프라인 정상화나 소음측정 버그 수정 중 어느 것부터 실제
+  코드로 착수할지 말씀해 주시면 진행하겠습니다.
+
+✻ Brewed for 16m 8s · done 오후 2:56
+
+❯ 소음측정 정확도 향상                                                          
+
+● 먼저 로드맵의 "즉시 고칠만한 버그성 이슈" 3가지(CircularFloatBuffer
+  off-by-one, 세션 통계 전체 야간 재계산, 버킷 내 소음-가속도 시간 동기화)부터
+  실제 코드로 착수하겠습니다. 관련 파일들을 먼저 확인합니다.
+
+  Searched for 7 patterns, read 6 files (ctrl+o to expand)
+
+● 세 파일을 확인했습니다. 이제 세 가지 버그를 수정합니다.
+
+● Update(~\study\Sleep\shared\src\commonMain\kotlin\com\sleepytime\shared\util\C
+        ircularFloatBuffer.kt)
+  ⎿  Added 1 line, removed 1 line
+      18      }
+      19      fun toList(): List<Float> {
+      20          val list = ArrayList<Float>(size)
+      21 -        for(i in 0..size) {                                    
+      21 +        for(i in 0 until size) {                               
+      22              list.add(arr[(head + i) % capacity])
+      23          }
+      24          return list
+
+● Update(~\study\Sleep\shared\src\commonMain\kotlin\com\sleepytime\shared\data\l
+        ocal\repository\SleepSessionRepositoryImpl.kt)
+  ⎿  Added 7 lines, removed 4 lines
+      70              val stagesDistribution = calculateStagesDistributio
+          n(metrics)
+      71              Napier.d("efficiency:$efficiency, stageTimeline:$st
+          ageTimeline, stageDistribution:$stagesDistribution")
+      72  
+      73 -            val latestFeature = environmentFeatures.lastOrNull(
+         -)                                                              
+      73 +            // 세션 전체(야간 전체)를 대표하는 소음 통계를 마지
+         +막 30초 버킷이 아니라                                          
+      74 +            // 모든 EnvironmentFeature의 noise 스냅샷을 모아 재
+         +계산합니다.                                                    
+      75 +            val sessionNoiseStats = Stats.from(environmentFeatu
+         +res.map { it.snapshot.noise })                                 
+      76 +            val sessionNoiseDanger = environmentFeatures.any { 
+         +it.flag.isNoiseDanger }                                        
+      77              val now = Clock.System.now().toEpochMilliseconds()
+      78              SleepSession(
+      79                  sessionId = sessionId,
+     ...
+      85                  sleepEfficiency = efficiency,
+      86                  environment = SleepSession.Environment(
+      87                      history = environmentFeatures.map { it.snap
+          shot },
+      85 -                    stats = latestFeature?.stats ?: Environment
+         -Feature.Statistics(Stats()),                                   
+      86 -                    flags = latestFeature?.flag ?: EnvironmentF
+         -eature.Flag(                                                   
+      87 -                        isNoiseDanger = false                  
+      88 +                    stats = EnvironmentFeature.Statistics(noise
+         + = sessionNoiseStats),                                         
+      89 +                    flags = EnvironmentFeature.Flag(           
+      90 +                        isNoiseDanger = sessionNoiseDanger     
+      91                      )
+      92                  ),
+      93                  csvData = SleepSession.CsvData(
+
+● Update(~\study\Sleep\shared\src\androidMain\kotlin\com\sleepytime\shared\platf
+        orm\AndroidSleepMeasureManager.kt)
+  ⎿  Added 1 line
+      22  import java.util.concurrent.CopyOnWriteArrayList
+      23  import javax.inject.Inject
+      24  import javax.inject.Singleton
+      25 +import kotlin.math.abs                                         
+      26  import kotlin.math.sqrt
+      27  
+      28  data class RawAccel(val values: FloatArray, val timestamp: Long
+          ) {
+
+● Update(~\study\Sleep\shared\src\androidMain\kotlin\com\sleepytime\shared\platf
+        orm\AndroidSleepMeasureManager.kt)
+  ⎿  Added 11 lines, removed 1 line
+      176          if (minuteAccel.isEmpty() && minuteNoise.isEmpty()) re
+           turn
+      177  
+      178          // 💡 1주차 로드맵: 가속도계 + 자이로스코프 RAW 데이터
+            로깅 (7채널, 심박수 제거)
+      179 +        // 버킷의 마지막 소음값을 일괄 태깅하지 않고, 각 accel
+          + 샘플과 시간상 가장 가까운                                    
+      180 +        // 소음 샘플을 매칭합니다(accel/noise 모두 타임스탬프 
+          +오름차순이므로 two-pointer로 O(n+m)).                         
+      181 +        var noiseIdx = 0                                      
+      182          val windowData = minuteAccel.mapIndexed { index, accel
+            ->
+      183              val gyro = minuteGyro.getOrNull(index) ?: RawGyro(
+           floatArrayOf(0f, 0f, 0f), accel.timestamp)
+      181 -            val noise = minuteNoise.lastOrNull()?.db ?: DEFAUL
+          -T_NOISE_DB                                                    
+      184  
+      185 +            while (noiseIdx < minuteNoise.size - 1 &&         
+      186 +                abs(minuteNoise[noiseIdx + 1].timestamp - acce
+          +l.timestamp) <=                                               
+      187 +                abs(minuteNoise[noiseIdx].timestamp - accel.ti
+          +mestamp)                                                      
+      188 +            ) {                                               
+      189 +                noiseIdx++                                    
+      190 +            }                                                 
+      191 +            val noise = minuteNoise.getOrNull(noiseIdx)?.db ?:
+          + DEFAULT_NOISE_DB                                             
+      192 +                                                              
+      193              floatArrayOf(
+      194                  accel.values[0], accel.values[1], accel.values
+           [2], // 0, 1, 2: Accel XYZ
+      195                  gyro.values[0], gyro.values[1], gyro.values[2]
+           ,    // 3, 4, 5: Gyro XYZ
+
+  Read 1 file (ctrl+o to expand)
+
+● Good. Now let's verify the AndroidSleepMeasureManager edit and spot-check
+  build sanity.
+  Read 1 file, listed 1 directory, ran 1 shell command (ctrl+o to expand)
+
+● Windows 파일 잠금으로 인한 빌드 디렉토리 삭제 실패입니다(제 코드 변경과 무관).
+  재시도합니다.
+
+  Ran 4 shell commands (ctrl+o to expand)
+
+● 세 가지 버그를 수정했습니다. Android Studio가 실행 중이라 빌드 디렉토리에 파일
+  잠금이 걸려 CLI 컴파일 검증(gradlew compileDebugKotlinAndroid)은 두 차례
+  재시도에도 Unable to delete directory 오류로 실패했습니다(제 코드 문제가
+  아니라 Windows에서 Studio가 build/tmp를 잠그고 있는 환경 문제). 코드는 직접
+  재검토해 타입/시그니처가 맞는 것을 확인했습니다. Studio에서 다시 빌드하시면
+  정상적으로 컴파일될 겁니다.
+
+  수정 내용
+
+  1. CircularFloatBuffer.kt — toList()의 for (i in 0..size)를 for (i in 0 until 
+     size)로 수정해 off-by-one 버그 제거. 버퍼가 아직 안 찼을 때 uninitialized
+     0f 슬롯을 읽던 것, 꽉 찼을 때 가장 오래된 샘플을 이중 카운트하던 것 모두
+     해결됨.
+  2. SleepSessionRepositoryImpl.kt — 세션 저장 시 environment.stats/flags를
+     마지막 30초 버킷(environmentFeatures.lastOrNull())이 아니라
+     Stats.from()으로 전체 야간 noise 스냅샷을 재계산하도록 변경.
+     isNoiseDanger도 전체 세션 중 한 번이라도 위험 기준을 넘었는지(any { })로
+     바꿈. 이제 리포트의 "평균 소음" 배지가 실제로 밤 전체 평균을 반영합니다.
+  3. AndroidSleepMeasureManager.kt — processMinuteAggregate()에서 30초 버킷 내
+     모든 accel 샘플에 버킷의 마지막 소음값을 일괄 태깅하던 것을, accel 샘플과 
+     시간상 가장 가까운 소음 샘플을 two-pointer로 매칭하도록 변경(둘 다
+     타임스탬프 오름차순이라 O(n+m)). ML에 들어가는 소음 채널의 시간 동기화가
+     개선됨.
+
+  로드맵의 중기 개선안(기기별 마이크 보정, 스파이크 게이팅, 가변 노이즈
+  플로어)은 UX/임계값 설계 판단이 필요해 다음 단계로 남겨뒀습니다 — 진행할지
+  말씀해 주세요.
+
+✻ Sautéed for 2m 51s · done 오후 3:08
+
+❯ 다음 단계 계속 진행                                                           
+
+● 나머지 항목들(기기별 마이크 보정, 스파이크 게이팅, 가변 노이즈 플로어, MIC
+  폴백 처리)을 구현하기 전에 현재 SensorBridge.kt 구현을 다시 확인하겠습니다.
+
+  Read 1 file (ctrl+o to expand)
+
+● 중기 개선 4가지 중 일부는 순수 로직 개선(설계 결정 불필요)이지만, 일부는 실제
+  UX/정확도 트레이드오프가 있어 확인이 필요합니다.
+
+● User answered Claude's questions:
+  ⎿  · 기기별 마이크 보정(항목 4)은 실측 SPL 기준값이 없으면 정확한 값을 넣을 수
+     없습니다(임의의 수치를 넣으면 오히려 거짓 정확도를 준니다). 어떻게 
+     진행할까요? → 이번엔 보류, 항목 5·6만 진행
+     · 항목 5(스파이크 게이팅)을 어디에 적용할까요? → isNoiseDanger + 각성원인 
+     휴리스틱 모두 (추천)
+
+  Searched for 1 pattern, read 2 files (ctrl+o to expand)
+
+● Update(~\study\Sleep\shared\src\androidMain\kotlin\com\sleepytime\shared\platf
+        orm\AndroidSleepMeasureManager.kt)
+  ⎿  Added 14 lines
+       76      private var isMeasuring = false
+       77      private var measureScope: CoroutineScope? = null
+       78  
+       79 +    // 💡 소음측정 정확도 개선: 세션마다 침실의 배경소음 수준 
+          +이 다르므로, 고정 임계값 하나로                               
+       80 +    // 모든 사용자를 판단하지 않고 세션 초반 몇 분을 "이 밤의 
+          +개인 배경소음 기준선"으로 삼아                                
+       81 +    // 위험 판정 임계값을 개인화합니다. 기준선이 원래 임계값보
+          +다 낮을 때는 절대 임계값보다                                  
+       82 +    // 민감해지지 않도록 max()로 하한을 둡니다(회귀 방지).    
+       83 +    private var sessionAmbientBaselineDb: Float? = null       
+       84 +    private val calibrationBucketNoiseAvgs = mutableListOf<Flo
+          +at>()                                                         
+       85 +                                                              
+       86 +    // 💡 소음측정 정확도 개선: 단발성 스파이크(알림음, 한 번 
+          +의 기침 등)에 과민 반응하지 않도록                            
+       87 +    // 연속된 버킷에서 임계값을 넘을 때만 "소음 위험"으로 판정
+          +합니다.                                                       
+       88 +    private var consecutiveDangerBuckets = 0                  
+       89 +                                                              
+       90      companion object {
+       91          private const val MOVEMENT_THRESHOLD_MS2 = 12.0f
+       92          private const val DEFAULT_NOISE_DB = 30f
+       93          private const val NOISE_DANGER_THRESHOLD = 60f
+       94          private const val WINDOW_BUCKET_MS = 30_000L
+       95 +        private const val CALIBRATION_BUCKET_COUNT = 4 // 첫 2
+          +분(4×30초)을 세션 배경소음 기준선으로 사용                    
+       96 +        private const val DANGER_BASELINE_DELTA_DB = 30f // 개
+          +인 기준선 대비 이만큼 이상 올라야 위험으로 판단               
+       97 +        private const val MIN_CONSECUTIVE_DANGER_BUCKETS = 2 /
+          +/ 연속 2버킷(60초) 이상 지속되어야 위험으로 판단              
+       98      }
+       99      override var onWindowReady: ((List<FloatArray>) -> Unit)? 
+           = null
+      100      override var onEnvironmentReady: ((EnvironmentFeature) -> 
+           Unit)? = null
+
+● Update(~\study\Sleep\shared\src\androidMain\kotlin\com\sleepytime\shared\platf
+        orm\AndroidSleepMeasureManager.kt)
+  ⎿  Added 4 lines
+      158              capturedSensorWindows.clear()
+      159              capturedAggregates.clear()
+      160              capturedEnvironmentFeatures.clear()
+      161 +                                                              
+      162 +            sessionAmbientBaselineDb = null                   
+      163 +            calibrationBucketNoiseAvgs.clear()                
+      164 +            consecutiveDangerBuckets = 0                      
+      165          }
+      166      }
+      167      private fun scheduleWindowUpdate() {
+
+● Now update createEnvironmentFeature to compute the personalized,
+  persistence-gated danger flag.
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(~\study\Sleep\shared\src\androidMain\kotlin\com\sleepytime\shared\platf
+        orm\AndroidSleepMeasureManager.kt)
+  ⎿  Added 34 lines, removed 1 line
+      259                  noise = Stats(noiseStats.avg, noiseStats.std, 
+           noiseStats.min, noiseStats.max),
+      260              ),
+      261              flag = EnvironmentFeature.Flag(
+      262 -                isNoiseDanger = noiseStats.avg > NOISE_DANGER_
+          -THRESHOLD,                                                    
+      262 +                isNoiseDanger = resolveNoiseDanger(noiseStats)
+          +,                                                             
+      263              )
+      264          )
+      265      }
+      266 +                                                              
+      267 +    /**                                                       
+      268 +     * 이번 버킷이 "소음 위험"인지 판정합니다.                
+      269 +     * 1) 세션 초반 [CALIBRATION_BUCKET_COUNT]개 버킷 평균으로
+          + 이 밤의 개인 배경소음 기준선을                               
+      270 +     *    추정하고, 절대 임계값([NOISE_DANGER_THRESHOLD])보다 
+          +낮아지지는 않게 하한을 둔 채                                  
+      271 +     *    기준선 대비 상대적으로 판단합니다.                  
+      272 +     * 2) 연속 [MIN_CONSECUTIVE_DANGER_BUCKETS]개 버킷 이상 임
+          +계값을 넘어야 위험으로 확정해                                 
+      273 +     *    단발성 스파이크에 의한 오탐을 줄입니다.             
+      274 +     */                                                       
+      275 +    private fun resolveNoiseDanger(noiseStats: StatsUtil.Rolli
+          +ngStats): Boolean {                                           
+      276 +        if (noiseStats.count == 0) {                          
+      277 +            consecutiveDangerBuckets = 0                      
+      278 +            return false                                      
+      279 +        }                                                     
+      280 +                                                              
+      281 +        if (sessionAmbientBaselineDb == null) {               
+      282 +            calibrationBucketNoiseAvgs.add(noiseStats.avg)    
+      283 +            if (calibrationBucketNoiseAvgs.size >= CALIBRATION
+          +_BUCKET_COUNT) {                                              
+      284 +                sessionAmbientBaselineDb = calibrationBucketNo
+          +iseAvgs.average().toFloat()                                   
+      285 +            }                                                 
+      286 +        }                                                     
+      287 +                                                              
+      288 +        val effectiveThreshold = sessionAmbientBaselineDb?.let
+          + { baseline ->                                                
+      289 +            maxOf(NOISE_DANGER_THRESHOLD, baseline + DANGER_BA
+          +SELINE_DELTA_DB)                                              
+      290 +        } ?: NOISE_DANGER_THRESHOLD                           
+      291 +                                                              
+      292 +        consecutiveDangerBuckets = if (noiseStats.avg > effect
+          +iveThreshold) {                                               
+      293 +            consecutiveDangerBuckets + 1                      
+      294 +        } else {                                              
+      295 +            0                                                 
+      296 +        }                                                     
+      297 +        return consecutiveDangerBuckets >= MIN_CONSECUTIVE_DAN
+          +GER_BUCKETS                                                   
+      298 +    }                                                         
+      299      private fun <T> ConcurrentLinkedDeque<T & Any>.pollAll(): 
+           List<T> {
+      300          val result = mutableListOf<T>()
+      301          var item = this.poll()
+
+● 이제 ReportScreen.kt의 각성원인 휴리스틱에도 스파이크 게이팅을 적용합니다.
+
+● Update(~\study\Sleep\shared\src\commonMain\kotlin\com\sleepytime\shared\ui\rep
+        ort\ReportScreen.kt)
+  ⎿  Added 28 lines, removed 4 lines
+      1070  private const val NOISE_CHART_MIN = 0f
+      1071  private const val NOISE_CHART_MAX = 90f
+      1072  
+      1073 +private const val NOISE_SPIKE_RATIO = 1.5f                   
+      1074 +                                                             
+      1075 +// 💡 소음측정 정확도 개선: environmentHistory의 한 원소는 30
+           +초 버킷 하나에 해당합니다.                                   
+      1076 +// 단발성 스파이크(알림음, 한 번의 뒤척임 등) 하나만으로 "소 
+           +음 상승"이라 단정하지 않도록,                                
+      1077 +// 깨어난 구간에 30초 버킷이 2개 이상 있을 때는 임계값을 넘는
+           + 버킷이 연속으로 이어질 때만                                 
+      1078 +// 원인으로 인정합니다. 구간이 버킷 1개뿐이라면(짧은 각성) 더
+           + 잘게 쪼갤 해상도가 없으므로                                 
+      1079 +// 해당 버킷 단독 값으로 판단합니다.                         
+      1080 +private const val MIN_SUSTAINED_SPIKE_BUCKETS = 2            
+      1081 +                                                             
+      1082  /**
+      1083   * 수면 중 깨어난 구간의 발생 원인을 추정합니다.
+      1084   * environmentHistory에서 해당 구간(startRatio~endRatio, 전체
+             수면시간 대비 비율)에 해당하는
+      1076 - * 구간의 소음 최고값이 평균 대비 크게 튀었는지를 보고 원인  
+           -텍스트를 만듭니다.                                           
+      1085 + * 구간의 소음이 평균 대비 크게 튀고, 일정 시간 이상 지속되었
+           +는지를 보고 원인 텍스트를 만듭니다.                          
+      1086   * (5번 요청: 중간에 깬 지점에 원인을 알 수 있는 툴팁 추가)
+      1087   */
+      1088  private fun <T> resolveWakeCause(
+     ...
+      1100      val window = environmentHistory.subList(startIdx, endIdx 
+            + 1)
+      1101      if (window.isEmpty()) return "잠깐 깨어남"
+      1102  
+      1094 -    val peakNoise = window.maxOf { noiseOf(it) }             
+      1103 +    val spikeThreshold = if (avgNoise > 0f) avgNoise * NOISE_
+           +SPIKE_RATIO else null                                        
+      1104  
+      1096 -    // 평균 대비 일정 비율 이상 튀는 경우를 원인으로 판단합니
+           -다.                                                          
+      1097 -    val noiseSpike = avgNoise > 0f && peakNoise >= avgNoise *
+           - 1.5f                                                        
+      1105 +    val noiseSpike = if (spikeThreshold == null) {           
+      1106 +        false                                                
+      1107 +    } else if (window.size == 1) {                           
+      1108 +        noiseOf(window[0]) >= spikeThreshold                 
+      1109 +    } else {                                                 
+      1110 +        var currentRun = 0                                   
+      1111 +        var maxRun = 0                                       
+      1112 +        for (item in window) {                               
+      1113 +            if (noiseOf(item) >= spikeThreshold) {           
+      1114 +                currentRun++                                 
+      1115 +                maxRun = maxOf(maxRun, currentRun)           
+      1116 +            } else {                                         
+      1117 +                currentRun = 0                               
+      1118 +            }                                                
+      1119 +        }                                                    
+      1120 +        maxRun >= MIN_SUSTAINED_SPIKE_BUCKETS                
+      1121 +    }                                                        
+      1122  
+      1123      return if (noiseSpike) "소음 상승 · 잠깐 깨어남" else "잠
+            깐 깨어남"
+      1124  }
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● 빌드 잠금 문제가 지속됩니다(Android Studio가 디렉토리를 점유 중). 코드를
+  수동으로 재검토하겠습니다.
+
+  Searched for 1 pattern, read 2 files (ctrl+o to expand)
+
+● No duplicates, clean. Let me try compiling once more in case the lock has
+  cleared.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Android Studio가 실행 중이라 CLI 빌드 검증은 계속 막혀 있습니다(제 코드와
+  무관한 환경 문제). 수동으로 타입과 로직을 재검토했고 문제 없습니다. Studio에서
+  다시 빌드하면 정상 컴파일될 겁니다.
+
+  이번에 구현한 항목
+
+  항목 5 — 스파이크 게이팅 (양쪽 모두 적용)
+  - AndroidSleepMeasureManager.kt: isNoiseDanger를 "이번 30초 버킷 평균이
+    임계값을 넘는가" 단발성 판단에서 연속 2개 버킷(60초) 이상 지속되어야
+    위험으로 확정하도록 변경(resolveNoiseDanger(), consecutiveDangerBuckets 상태
+    추가).
+  - ReportScreen.kt의 resolveWakeCause(): 각성 구간에 30초 버킷이 2개 이상이면
+    임계값을 넘는 버킷이 연속으로 이어질 때만 "소음 상승"으로 판정. 버킷이
+    1개뿐인 짧은 각성은 해상도가 없어 기존처럼 단일값으로 판단(회귀 방지).
+
+  항목 6 — 가변(개인화) 노이즈 플로어
+  - AndroidSleepMeasureManager.kt: 세션 시작 후 첫 4개 버킷(2분) 평균을 **"이
+    밤의 개인 배경소음 기준선"**으로 자동 추정(sessionAmbientBaselineDb, 새 UI
+    불필요). 이후 위험 판정 임계값을 max(기존 절대 임계값 60dB, 기준선 + 30dB)로
+    계산해, 원래 조용한 방(기준선 30dB 수준)은 기존과 동일하게 60dB 근방에서
+    판정되고, 원래 소음이 있는 방(예: 기준선 45dB)은 임계값이 75dB로 올라가
+    "원래 그 방의 정상 소음"을 위험으로 오탐하지 않게 됨. 절대 임계값보다 더 
+    민감해지는 방향으로는 절대 움직이지 않도록 max()로 하한을 둬 기존 동작 대비
+    회귀 위험을 없앴습니다.
+
+  보류한 항목 4(기기별 마이크 SPL 보정)는 말씀하신 대로 실측 데이터 없이는
+  진행하지 않았습니다.
+
+  다음으로 진행할 것은 Part 2의 ML 파이프라인 Phase 0(정상화)입니다 —
+  착수할까요, 아니면 다른 작업을 먼저 할까요?
+
+✻ Worked for 4m 42s · done 오후 3:33
+
+❯ ML 파이프라인 Phase 0 착수                                                    
+
+● ML 파이프라인 Phase 0을 시작하겠습니다. 먼저 실제 스크립트 코드와 Python 실행
+  환경을 확인합니다.
+
+  Searched for 1 pattern, read 3 files, ran 6 shell commands (ctrl+o to expand)
+
+● 로컬 환경을 확인한 결과 중요한 사실을 발견했습니다. ML
+  라이브러리(numpy/tensorflow/mne 등)가 전혀 설치되어 있지 않고, PSG(EEG) 원본은
+  8.2GB·153명분이 미전처리 상태입니다. 반면 Accel 도메인(BIDSleep+Sleep-Accel) 
+  데이터는 이미 전처리되어 있고, ml/output/에 이전 버전 파이프라인으로 학습된
+  accel_inference_model.keras도 이미 존재합니다. 또한 실제 배포되는 모바일 앱은
+  PSG(EEG)가 아니라 가속도계만 사용합니다. 이 점들을 고려해 진행 방식을 확인하고
+  싶습니다.
+
+● User answered Claude's questions:
+  ⎿  · PSG(EEG) 도메인 전처리(153명분 EDF, mne 필요, 수십분~수시간 소요 예상)를 
+     지금 진행할까요? 실제 모바일 앱은 EEG가 아니라 가속도계만 사용합니다. → 
+     Accel 도메인, PSG모두 전처리, 전처리는 AndroidStudio 말고 Google Colab에서 
+     실행(런타임 유형 CPU, A100 GPU, L4 GPU, T4 GPU, v6e-1 TPU, v5e-1 TPU 선택 
+     가이드, Google Colab에서 전처리했을 때와 AndroidStudio에서 전처리했을 때 
+     예상 소요시간)
+     · Accel 도메인의 baseline F1을 어떻게 측정할까요? (이미 학습된 
+     accel_inference_model.keras가 output/에 있지만 구버전 파이프라인 산출물이라
+     호환성 검증이 필요합니다) → 기존 체크포인트로 우선 평가 (추천)
+
+  Read 5 files (ctrl+o to expand)
+
+● Phase 0의 코드 부분(테스트셋 평가, CSVLogger, 클래스 분포 로깅, 죽은 코드
+  정리)을 먼저 구현하고, 이어서 기존 체크포인트 평가용 스크립트와 Colab 가이드를
+  준비하겠습니다.
+
+● Update(train.py)
+  ⎿  Added 1 line, removed 1 line
+       4  import numpy as np
+       5  import tensorflow as tf
+       6  import keras
+       7 -from sklearn.metrics import classification_report              
+       7 +from sklearn.metrics import classification_report, confusion_ma
+         +trix                                                           
+       8  from model import build_dual_domain_model
+       9  
+      10  tf.keras.mixed_precision.set_global_policy("mixed_bfloat16")
+● Update(train.py)
+  ⎿  Added 2 lines, removed 1 line
+      37  ACCEL_LOSS_WEIGHT = 0.5  # 0.8 -> 0.5 (백본 안정화)
+      38  FOCAL_GAMMA = 1.0
+      39  LABEL_SMOOTHING = 0.1
+      40 -SELF_TRANSITION_BOOST = 1.5                                    
+      40  
+      41 +CLASS_NAMES = ["Wake", "Light", "Deep", "REM"]                 
+      42 +                                                               
+      43  _MEM_CACHE = {}
+      44  
+      45  # ============================================================
+
+● Update(train.py)
+  ⎿  Added 35 lines
+      109      weights = np.clip(weights / np.mean(weights), min_weight, 
+           max_weight)
+      110      return weights.astype(np.float32).tolist()
+      111  
+      112 +def count_context_windows(directories, subject_ids_by_dir, str
+          +ide):                                                         
+      113 +    """주어진 subject 목록에서 stride 간격으로 뽑을 수 있는 CO
+          +NTEXT_LEN 길이 윈도우 총 개수."""                             
+      114 +    total = 0                                                 
+      115 +    for d in directories:                                     
+      116 +        for sid in subject_ids_by_dir.get(d, []):             
+      117 +            cached = _MEM_CACHE.get((str(d), sid))            
+      118 +            if not cached:                                    
+      119 +                continue                                      
+      120 +            n = len(cached[0])                                
+      121 +            if n >= CONTEXT_LEN:                              
+      122 +                total += (n - CONTEXT_LEN) // stride + 1      
+      123 +    return total                                              
+      124 +                                                              
+      125 +                                                              
+      126 +def save_class_distribution(directories, subject_ids_by_dir, o
+          +ut_path):                                                     
+      127 +    """클래스 분포를 stdout 출력으로 흘려보내지 않고 파일로 남
+          +겨 재현/비교 가능하게 합니다."""                              
+      128 +    counts = np.zeros(N_CLASSES, dtype=np.int64)              
+      129 +    for d in directories:                                     
+      130 +        for sid in subject_ids_by_dir.get(d, []):             
+      131 +            cached = _MEM_CACHE.get((str(d), sid))            
+      132 +            if cached:                                        
+      133 +                u, c = np.unique(cached[1], return_counts=True
+          +)                                                             
+      134 +                for uu, cc in zip(u, c):                      
+      135 +                    if uu < N_CLASSES:                        
+      136 +                        counts[uu] += cc                      
+      137 +    total = counts.sum()                                      
+      138 +    lines = [                                                 
+      139 +        f"{name}: {count} ({(count / total * 100 if total else
+          + 0):.2f}%)"                                                   
+      140 +        for name, count in zip(CLASS_NAMES, counts)           
+      141 +    ]                                                         
+      142 +    out_path.write_text("\n".join(lines), encoding="utf-8")   
+      143 +    print(f"클래스 분포 저장: {out_path}\n" + "\n".join(lines)
+          +)                                                             
+      144 +    return counts                                             
+      145 +                                                              
+      146 +                                                              
+      147  def augment_accel(x_slice):
+      148      # Light augmentation for Accel domain
+      149      # Scaling (±10%)
+
+● Now add the evaluation helper and wire it all together in main().
+
+● Update(train.py)
+  ⎿  Added 34 lines
+      183          )
+      184      ).batch(BATCH_SIZE, drop_remainder=True)
+      185  
+      186 +def evaluate_domain(infer_model, dataset, steps, label):      
+      187 +    """테스트셋에서 실제로 classification_report/confusion mat
+          +rix를 계산해 파일로 저장합니다.                               
+      188 +    (기존에는 edf_te/bid_te/acc_te가 계산만 되고 어디서도 쓰이
+          +지 않아 baseline F1을 측정할 방법이 없었습니다.)"""           
+      189 +    y_true_all, y_pred_all = [], []                           
+      190 +    it = iter(dataset)                                        
+      191 +    for _ in range(steps):                                    
+      192 +        x_batch, y_batch = next(it)                           
+      193 +        logits = infer_model.predict(x_batch, verbose=0)      
+      194 +        preds = np.argmax(logits, axis=-1)                    
+      195 +        y_true_all.append(y_batch.numpy().reshape(-1))        
+      196 +        y_pred_all.append(preds.reshape(-1))                  
+      197 +                                                              
+      198 +    y_true = np.concatenate(y_true_all)                       
+      199 +    y_pred = np.concatenate(y_pred_all)                       
+      200 +                                                              
+      201 +    report = classification_report(                           
+      202 +        y_true, y_pred,                                       
+      203 +        labels=list(range(N_CLASSES)),                        
+      204 +        target_names=CLASS_NAMES,                             
+      205 +        digits=4,                                             
+      206 +        zero_division=0,                                      
+      207 +    )                                                         
+      208 +    cm = confusion_matrix(y_true, y_pred, labels=list(range(N_
+          +CLASSES)))                                                    
+      209 +                                                              
+      210 +    print(f"\n=== {label} 테스트셋 평가 (n={len(y_true)} epoch
+          +s) ===")                                                      
+      211 +    print(report)                                             
+      212 +    print("Confusion matrix (rows=true, cols=pred):")         
+      213 +    print(cm)                                                 
+      214 +                                                              
+      215 +    (OUTPUT_DIR / f"{label}_classification_report.txt").write_
+          +text(report, encoding="utf-8")                                
+      216 +    np.save(OUTPUT_DIR / f"{label}_confusion_matrix.npy", cm) 
+      217 +    return report, cm                                         
+      218 +                                                              
+      219 +                                                              
+      220  def _combine_with_weights(psg_batch, accel_batch, psg_w, accel
+           _w):
+      221      psg_x, psg_y = psg_batch
+      222      accel_x, accel_y = accel_batch
+
+● Now update main() to load the test subjects, log class distributions, add
+  CSVLogger, and run the evaluation after training.
+
+● Update(train.py)
+  ⎿  Added 8 lines, removed 3 lines
+      247      bid_tr, bid_vl, bid_te = split(bid_sids)
+      248      acc_tr, acc_vl, acc_te = split(acc_sids)
+      249  
+      250 -    load_subjects_lazy(EDF_DIR, edf_tr + edf_vl)              
+      251 -    load_subjects_lazy(BID_DIR, bid_tr + bid_vl)              
+      252 -    load_subjects_lazy(ACCEL_DIR, acc_tr + acc_vl)            
+      250 +    load_subjects_lazy(EDF_DIR, edf_tr + edf_vl + edf_te)     
+      251 +    load_subjects_lazy(BID_DIR, bid_tr + bid_vl + bid_te)     
+      252 +    load_subjects_lazy(ACCEL_DIR, acc_tr + acc_vl + acc_te)   
+      253  
+      254      psg_w = compute_class_weights_multi([EDF_DIR], {EDF_DIR: e
+           df_tr})
+      255      acc_w = compute_class_weights_multi([BID_DIR, ACCEL_DIR], 
+           {BID_DIR: bid_tr, ACCEL_DIR: acc_tr})
+      256      print(f"Weights - PSG: {psg_w}, Accel: {acc_w}")
+      257  
+      258 +    # 클래스 분포는 이전에는 stdout에만 찍히고 사라졌습니다.  
+          +이후 개선(불균형 처리 등) 전후                                
+      259 +    # 비교를 위해 파일로 남깁니다.                            
+      260 +    save_class_distribution([EDF_DIR], {EDF_DIR: edf_tr}, OUTP
+          +UT_DIR / "psg_train_class_distribution.txt")                  
+      261 +    save_class_distribution([BID_DIR, ACCEL_DIR], {BID_DIR: bi
+          +d_tr, ACCEL_DIR: acc_tr}, OUTPUT_DIR / "accel_train_class_dist
+          +ribution.txt")                                                
+      262 +                                                              
+      263      # Datasets
+      264      train_ds = tf.data.Dataset.zip((
+      265          build_dataset([EDF_DIR], {EDF_DIR: edf_tr}, psg_m, psg
+           _s, PSG_WINDOW, PSG_CHANNELS, PSG_STRIDE, augment=False),
+
+● Update(train.py)
+  ⎿  Added 21 lines, removed 1 line
+      287  
+      288      cbs = [
+      289          tf.keras.callbacks.EarlyStopping(monitor="val_loss", p
+           atience=12, restore_best_weights=True),
+      290 -        tf.keras.callbacks.ModelCheckpoint(str(OUTPUT_DIR / "b
+          -est_model.keras"), save_best_only=True)                       
+      290 +        tf.keras.callbacks.ModelCheckpoint(str(OUTPUT_DIR / "b
+          +est_model.keras"), save_best_only=True),                      
+      291 +        # .gitignore가 이 경로를 이미 기대하고 있었지만 실제로
+          + 기록하는 콜백이 없었습니다.                                  
+      292 +        tf.keras.callbacks.CSVLogger(str(OUTPUT_DIR / "train_l
+          +og.csv")),                                                    
+      293      ]
+      294  
+      295      train_model.fit(train_ds, validation_data=val_ds, epochs=E
+           POCHS, steps_per_epoch=STEPS_PER_EPOCH, validation_steps=VAL_S
+           TEPS, callbacks=cbs)
+     ...
+      298      models["psg_infer_model"].save(OUTPUT_DIR / "psg_inference
+           _model.keras")
+      299      models["accel_infer_model"].save(OUTPUT_DIR / "accel_infer
+           ence_model.keras")
+      300  
+      301 +    # 💡 Phase 0: edf_te/bid_te/acc_te는 이전에는 계산만 되고 
+          +한 번도 쓰이지 않아                                           
+      302 +    # baseline F1을 측정할 방법이 없었습니다. 학습 종료 후 hel
+          +d-out 테스트셋으로 실제 평가합니다.                           
+      303 +    test_psg_ds = build_dataset(                              
+      304 +        [EDF_DIR], {EDF_DIR: edf_te}, psg_m, psg_s, PSG_WINDOW
+          +, PSG_CHANNELS, PSG_STRIDE, shuffle=False                     
+      305 +    )                                                         
+      306 +    test_accel_ds = build_dataset(                            
+      307 +        [BID_DIR, ACCEL_DIR], {BID_DIR: bid_te, ACCEL_DIR: acc
+          +_te}, accel_m, accel_s,                                       
+      308 +        ACCEL_WINDOW, ACCEL_CHANNELS, ACCEL_STRIDE, shuffle=Fa
+          +lse                                                           
+      309 +    )                                                         
+      310 +    psg_test_steps = max(1, count_context_windows([EDF_DIR], {
+          +EDF_DIR: edf_te}, PSG_STRIDE) // BATCH_SIZE)                  
+      311 +    accel_test_steps = max(                                   
+      312 +        1,                                                    
+      313 +        count_context_windows([BID_DIR, ACCEL_DIR], {BID_DIR: 
+          +bid_te, ACCEL_DIR: acc_te}, ACCEL_STRIDE) // BATCH_SIZE       
+      314 +    )                                                         
+      315 +                                                              
+      316 +    evaluate_domain(models["psg_infer_model"], test_psg_ds, ps
+          +g_test_steps, "psg")                                          
+      317 +    evaluate_domain(models["accel_infer_model"], test_accel_ds
+          +, accel_test_steps, "accel")                                  
+      318 +                                                              
+      319  if __name__ == "__main__":
+      320      main()
+
+  Read 1 file (ctrl+o to expand)
+
+● train.py 수정이 완료되었습니다. 이제 ml/models/의 구버전(5클래스, 하드코딩된
+  Colab 경로) 고아 스크립트를 정리합니다.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Tracked in git and clean, so removal is safely reversible via history.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Write(evaluate_checkpoint.py)
+  ⎿  Wrote 117 lines to evaluate_checkpoint.py
+       1 """
+         _inference_model.keras,
+       3 psg_inference_model.keras)를 현재 데이터 분할 기준 held-out 테스
+       4 baseline F1을 측정합니다.
+       6 이 체크포인트들은 train.py가 리팩터링되기 전 버전에서 저장된 것
+         으로 보입니다
+         s라는 다른 이름의
+       8 파일이 함께 있는 것이 그 흔적입니다). 그래서 현재 model.py 구조
+       9 않을 수 있습니다. 로드에 실패하면 그 자체가 "재학습이 필요하다"
+      10 실패 시 원인을 최대한 자세히 출력합니다.
+     … +136 lines (ctrl+o to expand)
+
+● Write(~\study\Sleep\ml\colab_preprocessing.ipynb)
+  ⎿  Wrote 215 lines to ..\colab_preprocessing.ipynb
+       1 {
+       2  "nbformat": 4,
+       3  "nbformat_minor": 5,
+       4  "metadata": {
+       5   "kernelspec": {
+       6    "display_name": "Python 3",
+       7    "name": "python3"
+       8   },
+       9   "language_info": {
+      10    "name": "python"
+     … +264 lines (ctrl+o to expand)
+
+  Read 1 file, ran 6 shell commands (ctrl+o to expand)
+
+● 로컬 Python 환경에는 ML 라이브러리가 전혀 없어(numpy조차 없음) 무거운
+  전처리/학습은 실행할 수 없었습니다. 대신 코드 변경 전부와 Colab 실행 가이드를
+  준비했고, 모든 스크립트는 py_compile로 문법 검증까지 마쳤습니다.
+
+  코드 변경
+
+  1. ml/script/train.py — Phase 0의 핵심 공백을 메웠습니다.
+     - edf_te/bid_te/acc_te(계산만 되고 미사용이던 테스트셋)로 학습 종료 후 실제
+       평가하는 evaluate_domain() 추가 → classification_report(이미 import돼
+       있었지만 호출 코드가 없었음) + confusion matrix를
+       output/psg_classification_report.txt,
+       output/accel_classification_report.txt 등으로 저장.
+     - CSVLogger 콜백 추가 — .gitignore가 이미 ml/output/train_log.csv를
+       기대하고 있었는데 실제로 기록하는 코드가 없었습니다.
+     - 클래스 분포를 stdout 대신 output/*_train_class_distribution.txt로
+       저장(save_class_distribution).
+     - 미사용 상수 SELF_TRANSITION_BOOST 제거.
+  2. ml/models/inference_on_keras.py, convert_to_tflite.py 삭제 —
+     5클래스·/content/drive/MyDrive/ml/output 하드코딩 경로의 구버전 스크립트로,
+     현재 4클래스 파이프라인과 맞지 않아 혼란만
+     줬습니다(ml/script/convert_to_tflite.py가 현재 유효 버전). git으로 추적
+     중이라 되돌릴 수 있습니다.
+  3. ml/script/evaluate_checkpoint.py (신규) —
+     output/accel_inference_model.keras/psg_inference_model.keras를 재학습 없이,
+     train.py와 동일한 70/15/15 분할의 held-out 테스트셋으로 평가합니다. 구버전
+     파이프라인 산출물이라 로드가 실패할 수도 있는데, 실패하면 원인을 출력해
+     "재학습이 필요하다"는 결론을 바로 알 수 있게 했습니다.
+  4. ml/colab_preprocessing.ipynb (신규) — 요청하신 가이드를 실행 가능한
+     노트북으로 만들었습니다.
+     - 런타임 선택: 전처리(build_dataset_hybrid.py, compute_stats.py)와
+       체크포인트 평가는 GPU/TPU 연산을 전혀 쓰지 않으므로 CPU 런타임.
+       GPU(A100>L4>T4)는 나중에 실제 train.py 학습에서만 사용.
+       TPU(v5e-1/v6e-1)는 현재 코드가 TPUStrategy 없이 커스텀 tf.data
+       제너레이터를 쓰고 있어 별도 이식 없이는 비권장으로 명시.
+     - 소요시간 비교: 로컬 PC(로컬 SSD, 라이브러리 신규설치 필요) vs Colab(Drive
+       직접 마운트 시 8.2GB I/O가 병목이 되어 훨씬 느려짐 vs zip 업로드 후 세션
+       로컬 디스크에서 처리 시 로컬과 비슷한 수준) — 표로 정리, 정확한 수치
+       대신 체감 범위로 제시(실측 없이 단정하지 않기 위함).
+     - 데이터 업로드 → mne 설치 → build_dataset_hybrid.py → compute_stats.py →
+       evaluate_checkpoint.py → (나중에 GPU로 전환) train.py → 결과 다운로드
+       순서로 바로 실행 가능한 셀 구성.
+
+  다음 단계: ml/colab_preprocessing.ipynb를 Colab에 업로드하고 ml/
+  폴더(코드+data/+output/의 기존 체크포인트)를 zip으로 Drive에 올려 실행해
+  주세요. evaluate_checkpoint.py가 성공하면 그 자체가 Accel 도메인 baseline F1이
+  되고, 실패하면 재학습이 필요하다는 뜻이니 그 결과를 알려주시면 다음
+  단계(Phase 1 특징 추가 등)를 이어가겠습니다.
+
+✻ Churned for 8m 16s · done 오후 4:49

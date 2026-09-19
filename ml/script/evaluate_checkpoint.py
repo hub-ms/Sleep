@@ -70,11 +70,17 @@ def check_architecture_compatibility(model, expected_context_len, expected_windo
 
 def evaluate_accel_checkpoint():
     print("\n===== Accel 도메인 baseline 평가 =====")
-    if not train.ACCEL_NORM_STATS_PATH.exists():
-        print(f"norm_stats 없음: {train.ACCEL_NORM_STATS_PATH} — compute_stats.py를 먼저 실행하세요.")
+    if not train.BID_NORM_STATS_PATH.exists() or not train.SLEEP_ACCEL_NORM_STATS_PATH.exists():
+        print(
+            f"norm_stats 없음: {train.BID_NORM_STATS_PATH} 또는 {train.SLEEP_ACCEL_NORM_STATS_PATH} "
+            f"— compute_stats.py를 먼저 실행하세요."
+        )
         return
-    stats = np.load(train.ACCEL_NORM_STATS_PATH, allow_pickle=True).item()
-    mean, std = stats["mean"], stats["std"]
+    # 💡 bidsleep/sleep_accel은 통계값이 다르므로 각자의 norm_stats.npy로 독립 정규화합니다.
+    bid_stats = np.load(train.BID_NORM_STATS_PATH, allow_pickle=True).item()
+    sleep_accel_stats = np.load(train.SLEEP_ACCEL_NORM_STATS_PATH, allow_pickle=True).item()
+    mean_by_dir = {train.BID_DIR: bid_stats["mean"], train.ACCEL_DIR: sleep_accel_stats["mean"]}
+    std_by_dir = {train.BID_DIR: bid_stats["std"], train.ACCEL_DIR: sleep_accel_stats["std"]}
 
     bid_sids = sorted(p.name.replace("X_", "").replace(".npy", "") for p in train.BID_DIR.glob("X_*.npy"))
     acc_sids = sorted(p.name.replace("X_", "").replace(".npy", "") for p in train.ACCEL_DIR.glob("X_*.npy"))
@@ -98,7 +104,7 @@ def evaluate_accel_checkpoint():
 
     dataset = train.build_dataset(
         [train.BID_DIR, train.ACCEL_DIR], {train.BID_DIR: bid_te, train.ACCEL_DIR: acc_te},
-        mean, std, train.ACCEL_WINDOW, train.ACCEL_CHANNELS, train.ACCEL_STRIDE, shuffle=False,
+        mean_by_dir, std_by_dir, train.ACCEL_WINDOW, train.ACCEL_CHANNELS, train.ACCEL_STRIDE, shuffle=False,
     )
     steps = max(1, train.count_context_windows(
         [train.BID_DIR, train.ACCEL_DIR], {train.BID_DIR: bid_te, train.ACCEL_DIR: acc_te}, train.ACCEL_STRIDE
@@ -119,7 +125,8 @@ def evaluate_psg_checkpoint():
         )
         return
     stats = np.load(train.PSG_NORM_STATS_PATH, allow_pickle=True).item()
-    mean, std = stats["mean"], stats["std"]
+    mean_by_dir = {train.EDF_DIR: stats["mean"]}
+    std_by_dir = {train.EDF_DIR: stats["std"]}
 
     edf_sids = sorted(p.name.replace("X_", "").replace(".npy", "") for p in train.EDF_DIR.glob("X_*.npy"))
     _, _, edf_te = split_subjects(edf_sids)
@@ -132,16 +139,23 @@ def evaluate_psg_checkpoint():
     model = load_checkpoint(train.OUTPUT_DIR / "psg_inference_model.keras")
     if model is None:
         return
+    if not check_architecture_compatibility(
+        model, train.CONTEXT_LEN, train.PSG_WINDOW, train.PSG_CHANNELS, train.N_CLASSES
+    ):
+        return
 
     dataset = train.build_dataset(
         [train.EDF_DIR], {train.EDF_DIR: edf_te},
-        mean, std, train.PSG_WINDOW, train.PSG_CHANNELS, train.PSG_STRIDE, shuffle=False,
+        mean_by_dir, std_by_dir, train.PSG_WINDOW, train.PSG_CHANNELS, train.PSG_STRIDE, shuffle=False,
     )
     steps = max(1, train.count_context_windows(
         [train.EDF_DIR], {train.EDF_DIR: edf_te}, train.PSG_STRIDE
     ) // train.BATCH_SIZE)
 
-    train.evaluate_domain(model, dataset, steps, "psg_baseline_checkpoint")
+    try:
+        train.evaluate_domain(model, dataset, steps, "psg_baseline_checkpoint")
+    except Exception as e:
+        print(f"평가 중 오류: {type(e).__name__}: {e}")
 
 
 if __name__ == "__main__":

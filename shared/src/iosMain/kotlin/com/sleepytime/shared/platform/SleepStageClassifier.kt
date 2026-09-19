@@ -4,8 +4,8 @@ actual class SleepStageClassifier {
     actual companion object {
         actual const val CONTEXT_LEN = 60
 
-        actual val COMBINED_CHANNEL_MEAN = floatArrayOf()
-        actual val COMBINED_CHANNEL_STD  = floatArrayOf()
+        actual val ACCEL_CHANNEL_MEAN = floatArrayOf()
+        actual val ACCEL_CHANNEL_STD  = floatArrayOf()
 
         actual const val CH_EEG1 = 0
         actual const val CH_EEG2 = 1

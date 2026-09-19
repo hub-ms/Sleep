@@ -2,7 +2,9 @@ import numpy as np
 from pathlib import Path
 import os
 
-BASE_DIR = Path("./")
+# 💡 cwd(현재 작업 디렉토리)가 로컬/Colab에서 다를 수 있어(ml/, ml/script/ 등) cwd에 의존하지
+# 않도록 이 파일(ml/script/compute_stats.py) 자신의 위치를 기준으로 ml/ 폴더를 찾습니다.
+BASE_DIR = Path(__file__).resolve().parent.parent
 CHANNELS = 8
 
 def to_kotlin_array(name, arr):
@@ -85,21 +87,42 @@ def main():
     bid_stats = np.load(bid_norm_path, allow_pickle=True).item() if bid_norm_path.exists() else None
     sleep_accel_stats = np.load(sleep_accel_norm_path, allow_pickle=True).item() if sleep_accel_norm_path.exists() else None
 
-    print("// Sleep-EDF Expanded")
-    print(to_kotlin_array("EDF_CHANNEL_MEAN", edf_stats["mean"]))
-    print(to_kotlin_array("EDF_CHANNEL_STD", edf_stats["std"]))
+    if edf_stats is not None:
+        print("// Sleep-EDF Expanded")
+        print(to_kotlin_array("EDF_CHANNEL_MEAN", edf_stats["mean"]))
+        print(to_kotlin_array("EDF_CHANNEL_STD", edf_stats["std"]))
+    else:
+        print(f"건너뜀: {edf_norm_path} 없음 (sleep_edf/subjects에 전처리된 .npy가 없습니다)")
 
-    print("\n// Accel Domain (BIDSleep + Sleep-Accel)")
-    print(to_kotlin_array("ACCEL_CHANNEL_MEAN", accel_stats["mean"]))
-    print(to_kotlin_array("ACCEL_CHANNEL_STD", accel_stats["std"]))
+    if bid_stats is not None:
+        print("\n// BIDSleep (단독 정규화 기준)")
+        print(to_kotlin_array("BID_CHANNEL_MEAN", bid_stats["mean"]))
+        print(to_kotlin_array("BID_CHANNEL_STD", bid_stats["std"]))
+    else:
+        print(f"건너뜀: {bid_norm_path} 없음 (bidsleep/subjects에 전처리된 .npy가 없습니다)")
 
-    combined_mean = np.concatenate([edf_stats["mean"], accel_stats["mean"]])
-    combined_std = np.concatenate([edf_stats["std"], accel_stats["std"]])
+    if sleep_accel_stats is not None:
+        print("\n// Sleep-Accel (단독 정규화 기준)")
+        print(to_kotlin_array("SLEEP_ACCEL_CHANNEL_MEAN", sleep_accel_stats["mean"]))
+        print(to_kotlin_array("SLEEP_ACCEL_CHANNEL_STD", sleep_accel_stats["std"]))
+    else:
+        print(f"건너뜀: {sleep_accel_norm_path} 없음 (sleep_accel/subjects에 전처리된 .npy가 없습니다)")
 
-
-    
-    print(to_kotlin_array("COMBINED_CHANNEL_MEAN", combined_mean))
-    print(to_kotlin_array("COMBINED_CHANNEL_STD", combined_std))
+    # 💡 온디바이스 배포 모델은 bidsleep/sleep_accel 중 하나를 고르지 않고, 두 정규화 기준의
+    # 평균을 씁니다(단순 평균 — 원본 샘플을 다시 합쳐서 재계산하는 게 아니라, 이미 계산된
+    # 두 도메인 각각의 mean/std를 그대로 평균).
+    if bid_stats is not None and sleep_accel_stats is not None:
+        deploy_mean = (bid_stats["mean"] + sleep_accel_stats["mean"]) / 2
+        deploy_std = (bid_stats["std"] + sleep_accel_stats["std"]) / 2
+        deploy_norm_path = BASE_DIR / "data" / "accel_domain" / "norm_stats.npy"
+        deploy_norm_path.parent.mkdir(parents=True, exist_ok=True)
+        np.save(deploy_norm_path, {"mean": deploy_mean, "std": deploy_std, "channel_names": accel_channel_names})
+        print(f"\n성공: {deploy_norm_path} 저장됨 (bidsleep/sleep_accel 평균)")
+        print("\n// Accel Domain 배포용 기준 (BIDSleep·Sleep-Accel 평균)")
+        print(to_kotlin_array("ACCEL_CHANNEL_MEAN", deploy_mean))
+        print(to_kotlin_array("ACCEL_CHANNEL_STD", deploy_std))
+    else:
+        print("\n건너뜀: bidsleep/sleep_accel 둘 다 있어야 평균을 계산합니다.")
 
 if __name__ == "__main__":
     main()

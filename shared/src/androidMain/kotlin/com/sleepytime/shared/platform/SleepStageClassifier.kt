@@ -116,8 +116,8 @@ actual class SleepStageClassifier {
 
                 for (ch in 0 until NUM_CHANNELS) {
                     val value = timeStep[ch]
-                    val mean = COMBINED_CHANNEL_MEAN[ch]
-                    val std = COMBINED_CHANNEL_STD[ch]
+                    val mean = ACCEL_CHANNEL_MEAN[ch]
+                    val std = ACCEL_CHANNEL_STD[ch]
 
                     // Z-score Normalization (std가 0인 경우 대비 안전 처리)
                     val normalizedValue = if (std != 0f) (value - mean) / std else 0f

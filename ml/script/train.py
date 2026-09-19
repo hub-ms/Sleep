@@ -10,7 +10,9 @@ from model import build_dual_domain_model
 tf.keras.mixed_precision.set_global_policy("mixed_bfloat16")
 
 # 경로 설정
-BASE_DIR = Path("./")
+# 💡 cwd(현재 작업 디렉토리)가 로컬/Colab에서 다를 수 있어(ml/, ml/script/ 등) cwd에 의존하지
+# 않도록 이 파일(ml/script/train.py) 자신의 위치를 기준으로 ml/ 폴더를 찾습니다.
+BASE_DIR = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = BASE_DIR / "output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -34,10 +36,13 @@ ACCEL_STRIDE = 3
 
 BATCH_SIZE = 32
 STEPS_PER_EPOCH = 600
-EPOCHS = 60
 VAL_STEPS = 40
 
-ACCEL_LOSS_WEIGHT = 0.5  # 0.8 -> 0.5 (백본 안정화)
+# 💡 2단계 학습(Stage 1: PSG 사전학습 → Stage 2: 공유 바디 고정 후 Accel 파인튜닝)의
+# 단계별 epoch 수. 이전 EPOCHS=60(단일 단계 공동학습) 예산을 두 단계로 나눴습니다.
+PSG_PRETRAIN_EPOCHS = 30
+ACCEL_FINETUNE_EPOCHS = 30
+
 FOCAL_GAMMA = 1.0
 LABEL_SMOOTHING = 0.1
 
@@ -223,16 +228,11 @@ def evaluate_domain(infer_model, dataset, steps, label):
     return report, cm
 
 
-def _combine_with_weights(psg_batch, accel_batch, psg_w, accel_w):
-    psg_x, psg_y = psg_batch
-    accel_x, accel_y = accel_batch
-    psg_sw = tf.gather(tf.constant(psg_w, dtype=tf.float32), psg_y)
-    accel_sw = tf.gather(tf.constant(accel_w, dtype=tf.float32), accel_y)
-    return (
-        {"psg_input": psg_x, "accel_input": accel_x},
-        {"psg_output": psg_y, "accel_output": accel_y},
-        {"psg_output": psg_sw, "accel_output": accel_sw}
-    )
+def _add_sample_weights(x, y, class_weights):
+    """(x, y) 배치에 클래스별 sample_weight를 붙여 (x, y, sample_weight) 3-튜플로 만듭니다.
+    model.fit()이 세 번째 원소를 자동으로 sample_weight로 사용합니다."""
+    sw = tf.gather(tf.constant(class_weights, dtype=tf.float32), y)
+    return x, y, sw
 
 # ============================================================
 # 4. Main Execution
@@ -272,43 +272,81 @@ def main():
     save_class_distribution([EDF_DIR], {EDF_DIR: edf_tr}, OUTPUT_DIR / "psg_train_class_distribution.txt")
     save_class_distribution([BID_DIR, ACCEL_DIR], {BID_DIR: bid_tr, ACCEL_DIR: acc_tr}, OUTPUT_DIR / "accel_train_class_distribution.txt")
 
-    # Datasets
-    train_ds = tf.data.Dataset.zip((
-        build_dataset([EDF_DIR], {EDF_DIR: edf_tr}, psg_m, psg_s, PSG_WINDOW, PSG_CHANNELS, PSG_STRIDE, augment=False),
-        build_dataset([BID_DIR, ACCEL_DIR], {BID_DIR: bid_tr, ACCEL_DIR: acc_tr}, accel_m, accel_s, ACCEL_WINDOW, ACCEL_CHANNELS, ACCEL_STRIDE, augment=True)
-    )).map(lambda p, a: _combine_with_weights(p, a, psg_w, acc_w)).prefetch(10)
+    # Datasets — 2단계 학습이므로 PSG/Accel을 zip해 하나로 묶지 않고 도메인별로 독립적으로 만듭니다.
+    psg_train_ds = build_dataset(
+        [EDF_DIR], {EDF_DIR: edf_tr}, psg_mean_by_dir, psg_std_by_dir, PSG_WINDOW, PSG_CHANNELS, PSG_STRIDE, augment=False
+    ).map(lambda x, y: _add_sample_weights(x, y, psg_w)).prefetch(10)
+    psg_val_ds = build_dataset(
+        [EDF_DIR], {EDF_DIR: edf_vl}, psg_mean_by_dir, psg_std_by_dir, PSG_WINDOW, PSG_CHANNELS, PSG_STRIDE, shuffle=False
+    ).prefetch(10)
 
-    val_ds = tf.data.Dataset.zip((
-        build_dataset([EDF_DIR], {EDF_DIR: edf_vl}, psg_m, psg_s, PSG_WINDOW, PSG_CHANNELS, PSG_STRIDE, shuffle=False),
-        build_dataset([BID_DIR, ACCEL_DIR], {BID_DIR: bid_vl, ACCEL_DIR: acc_vl}, accel_m, accel_s, ACCEL_WINDOW, ACCEL_CHANNELS, ACCEL_STRIDE, shuffle=False)
-    )).map(lambda p, a: ({"psg_input": p[0], "accel_input": a[0]}, {"psg_output": p[1], "accel_output": a[1]})).prefetch(10)
+    accel_train_ds = build_dataset(
+        [BID_DIR, ACCEL_DIR], {BID_DIR: bid_tr, ACCEL_DIR: acc_tr}, accel_mean_by_dir, accel_std_by_dir,
+        ACCEL_WINDOW, ACCEL_CHANNELS, ACCEL_STRIDE, augment=True
+    ).map(lambda x, y: _add_sample_weights(x, y, acc_w)).prefetch(10)
+    accel_val_ds = build_dataset(
+        [BID_DIR, ACCEL_DIR], {BID_DIR: bid_vl, ACCEL_DIR: acc_vl}, accel_mean_by_dir, accel_std_by_dir,
+        ACCEL_WINDOW, ACCEL_CHANNELS, ACCEL_STRIDE, shuffle=False
+    ).prefetch(10)
 
     # Model Build
     models = build_dual_domain_model(context_len=CONTEXT_LEN, n_classes=N_CLASSES)
-    train_model = models["training_model"]
+    psg_infer_model = models["psg_infer_model"]
+    accel_infer_model = models["accel_infer_model"]
+    context_body = models["context_body"]
 
-    # Scheduler
-    lr_sched = WarmupCosineDecay(peak_lr=4e-4, warmup_steps=STEPS_PER_EPOCH*2, decay_steps=STEPS_PER_EPOCH*EPOCHS)
-    opt = tf.keras.optimizers.AdamW(learning_rate=lr_sched, weight_decay=1e-4, clipnorm=1.0)
-
-    train_model.compile(
-        optimizer=opt,
-        loss={"psg_output": weighted_focal_loss(gamma=FOCAL_GAMMA), "accel_output": weighted_focal_loss(gamma=FOCAL_GAMMA)},
-        loss_weights={"psg_output": 1.0, "accel_output": ACCEL_LOSS_WEIGHT}
+    # ============================================================
+    # Stage 1: PSG(EEG/EOG/EMG) 사전학습 — 공유 컨텍스트 트랜스포머를 형성합니다.
+    # ============================================================
+    print("\n===== Stage 1: PSG 사전학습 (공유 컨텍스트 트랜스포머 형성) =====")
+    stage1_lr = WarmupCosineDecay(
+        peak_lr=4e-4, warmup_steps=STEPS_PER_EPOCH * 2, decay_steps=STEPS_PER_EPOCH * PSG_PRETRAIN_EPOCHS
     )
+    psg_infer_model.compile(
+        optimizer=tf.keras.optimizers.AdamW(learning_rate=stage1_lr, weight_decay=1e-4, clipnorm=1.0),
+        loss=weighted_focal_loss(gamma=FOCAL_GAMMA),
+    )
+    stage1_cbs = [
+        tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=8, restore_best_weights=True),
+        tf.keras.callbacks.CSVLogger(str(OUTPUT_DIR / "train_log_stage1_psg.csv")),
+    ]
+    psg_infer_model.fit(
+        psg_train_ds, validation_data=psg_val_ds,
+        epochs=PSG_PRETRAIN_EPOCHS, steps_per_epoch=STEPS_PER_EPOCH, validation_steps=VAL_STEPS,
+        callbacks=stage1_cbs,
+    )
+    psg_infer_model.save(OUTPUT_DIR / "psg_inference_model.keras")
 
-    cbs = [
+    # ============================================================
+    # Stage 2: 공유 바디를 고정하고 Accel 인코더만 이어서 학습합니다.
+    # 같은 세션의 accel+PSG 페어 데이터가 없어 고전적인 soft-label distillation(같은 입력을
+    # teacher/student에 동시에 넣어 출력 확률을 맞추는 방식)은 적용할 수 없습니다. 대신 PSG로
+    # 형성된 공유 표현 공간(context_body)을 고정한 채 Accel 인코더가 그 공간에 맞춰 적응하도록
+    # 하는 방식으로 지식을 전이합니다 — 온디바이스에 배포되는 accel_infer_model이 추론 시
+    # EEG 없이도 PSG에서 형성된 표현을 간접적으로 물려받습니다.
+    # ============================================================
+    print("\n===== Stage 2: 공유 바디 고정, Accel 인코더 파인튜닝 =====")
+    context_body.trainable = False
+
+    stage2_lr = WarmupCosineDecay(
+        peak_lr=4e-4, warmup_steps=STEPS_PER_EPOCH * 2, decay_steps=STEPS_PER_EPOCH * ACCEL_FINETUNE_EPOCHS
+    )
+    accel_infer_model.compile(
+        optimizer=tf.keras.optimizers.AdamW(learning_rate=stage2_lr, weight_decay=1e-4, clipnorm=1.0),
+        loss=weighted_focal_loss(gamma=FOCAL_GAMMA),
+    )
+    stage2_cbs = [
         tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=12, restore_best_weights=True),
         tf.keras.callbacks.ModelCheckpoint(str(OUTPUT_DIR / "best_model.keras"), save_best_only=True),
         # .gitignore가 이 경로를 이미 기대하고 있었지만 실제로 기록하는 콜백이 없었습니다.
         tf.keras.callbacks.CSVLogger(str(OUTPUT_DIR / "train_log.csv")),
     ]
-
-    train_model.fit(train_ds, validation_data=val_ds, epochs=EPOCHS, steps_per_epoch=STEPS_PER_EPOCH, validation_steps=VAL_STEPS, callbacks=cbs)
-
-    # Save
-    models["psg_infer_model"].save(OUTPUT_DIR / "psg_inference_model.keras")
-    models["accel_infer_model"].save(OUTPUT_DIR / "accel_inference_model.keras")
+    accel_infer_model.fit(
+        accel_train_ds, validation_data=accel_val_ds,
+        epochs=ACCEL_FINETUNE_EPOCHS, steps_per_epoch=STEPS_PER_EPOCH, validation_steps=VAL_STEPS,
+        callbacks=stage2_cbs,
+    )
+    accel_infer_model.save(OUTPUT_DIR / "accel_inference_model.keras")
 
     # 💡 Phase 0: edf_te/bid_te/acc_te는 이전에는 계산만 되고 한 번도 쓰이지 않아
     # baseline F1을 측정할 방법이 없었습니다. 학습 종료 후 held-out 테스트셋으로 실제 평가합니다.
@@ -325,8 +363,8 @@ def main():
         count_context_windows([BID_DIR, ACCEL_DIR], {BID_DIR: bid_te, ACCEL_DIR: acc_te}, ACCEL_STRIDE) // BATCH_SIZE
     )
 
-    evaluate_domain(models["psg_infer_model"], test_psg_ds, psg_test_steps, "psg")
-    evaluate_domain(models["accel_infer_model"], test_accel_ds, accel_test_steps, "accel")
+    evaluate_domain(psg_infer_model, test_psg_ds, psg_test_steps, "psg")
+    evaluate_domain(accel_infer_model, test_accel_ds, accel_test_steps, "accel")
 
 if __name__ == "__main__":
     main()

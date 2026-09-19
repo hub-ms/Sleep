@@ -7,6 +7,7 @@ import com.sleepytime.shared.domain.repository.AuthRepository
 import com.sleepytime.shared.domain.repository.SleepSessionRepository
 import com.sleepytime.shared.domain.repository.SleepSettingsRepository
 import com.sleepytime.shared.platform.AudioSystem
+import com.sleepytime.shared.platform.BedtimeReminderScheduler
 import com.sleepytime.shared.platform.MusicPlayer
 import com.sleepytime.shared.platform.SoundType
 import com.sleepytime.shared.platform.TrackingManager
@@ -46,6 +47,7 @@ class AlarmViewModel(
     private val audioSystem: AudioSystem,
     private val trackingManager: TrackingManager,
     private val settings: ObservableSettings,
+    private val reminderScheduler: BedtimeReminderScheduler,
 ) : ScreenModel {
     private val _state = MutableStateFlow(AlarmContract.State())
     val state = _state.asStateFlow()
@@ -77,6 +79,23 @@ class AlarmViewModel(
                     appVolume = savedAlarm.sound.volume,
                     systemVolume = audioSystem.getSystemAlarmVolume()
                 )
+            }
+        }
+        run {
+            val isReminderEnabled = settings.getBoolean(KEY_REMINDER_ENABLED, true)
+            val reminderHour = settings.getInt(KEY_REMINDER_HOUR, 23)
+            val reminderMinute = settings.getInt(KEY_REMINDER_MINUTE, 0)
+            _state.update {
+                it.copy(
+                    isReminderEnabled = isReminderEnabled,
+                    reminderHour = reminderHour,
+                    reminderMinute = reminderMinute
+                )
+            }
+            if (isReminderEnabled) {
+                reminderScheduler.schedule(reminderHour, reminderMinute)
+            } else {
+                reminderScheduler.cancel()
             }
         }
         audioSystem.observeVolumeChanges { systemVolume ->
@@ -226,11 +245,19 @@ class AlarmViewModel(
             is AlarmContract.Intent.ToggleSleepReminder -> {
                 settings.putBoolean(KEY_REMINDER_ENABLED, intent.enabled)
                 _state.update { it.copy(isReminderEnabled = intent.enabled) }
+                if (intent.enabled) {
+                    reminderScheduler.schedule(_state.value.reminderHour, _state.value.reminderMinute)
+                } else {
+                    reminderScheduler.cancel()
+                }
             }
             is AlarmContract.Intent.ChangeReminderTime -> {
                 settings.putInt(KEY_REMINDER_HOUR, intent.hour)
                 settings.putInt(KEY_REMINDER_MINUTE, intent.minute)
                 _state.update { it.copy(reminderHour = intent.hour, reminderMinute = intent.minute) }
+                if (_state.value.isReminderEnabled) {
+                    reminderScheduler.schedule(intent.hour, intent.minute)
+                }
             }
         }
     }

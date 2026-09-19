@@ -11,6 +11,7 @@ firebase = "34.15.0"
 androidx-media3 = "1.10.1"
 google-gson = "2.11.0"
 kakao = "2.20.6"
+channelTalk = "13.5.1"
 ktor = "3.0.1"
 koin = "4.0.0"
 coroutines = "1.9.0"
@@ -47,6 +48,8 @@ google-play-services-location = { module = "com.google.android.gms:play-services
 googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleid" }
 
 kakao-v2-user = { module = "com.kakao.sdk:v2-user", version.ref = "kakao" }
+
+channel-plugin-android = { module = "io.channel:plugin-android", version.ref = "channelTalk" }
 
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-logging = { module = "io.ktor:ktor-client-logging", version.ref = "ktor" }

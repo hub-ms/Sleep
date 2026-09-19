@@ -27,6 +27,7 @@ val kmaKey = localProperties.getProperty("kma.service.key") ?: ""
 val serverBaseUrl = localProperties.getProperty("server.base.url") ?: "http://localhost/"
 val googleClientId = localProperties.getProperty("google.oauth.client.id") ?: ""
 val kakaoKey = localProperties.getProperty("kakao.native.app.key") ?: ""
+val channelTalkPluginKey = localProperties.getProperty("channeltalk.plugin.key") ?: ""
 
 compose.resources {
     publicResClass = true
@@ -122,6 +123,7 @@ kotlin {
             implementation(libs.googleid)
             implementation(libs.kakao.v2.user)
             implementation(libs.firebase.auth)
+            implementation(libs.channel.plugin.android)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
@@ -151,6 +153,7 @@ extensions.configure<ApplicationExtension> {
         buildConfigField("String", "BASE_URL", "\"$serverBaseUrl\"")
         buildConfigField("String", "GOOGLE_OAUTH_CLIENT_ID", "\"$googleClientId\"")
         buildConfigField("String", "KAKAO_NATIVE_APP_KEY", "\"$kakaoKey\"")
+        buildConfigField("String", "CHANNELTALK_PLUGIN_KEY", "\"$channelTalkPluginKey\"")
 
         manifestPlaceholders["KAKAO_NATIVE_APP_KEY"] = kakaoKey
     }

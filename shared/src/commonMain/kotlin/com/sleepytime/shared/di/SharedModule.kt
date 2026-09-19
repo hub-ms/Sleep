@@ -16,6 +16,7 @@ import com.sleepytime.shared.ui.report.ReportViewModel
 import com.sleepytime.shared.ui.tracking.TrackingViewModel
 import com.sleepytime.shared.platform.SensorBridge
 import com.sleepytime.shared.ui.onboarding.PermissionViewModel
+import com.sleepytime.shared.ui.setting.ChatViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import org.koin.dsl.module
 import kotlin.coroutines.EmptyCoroutineContext.get
@@ -35,13 +36,14 @@ val sharedModule = module {
     single { SleepSessionDao(get()) }
 
     // ── ViewModels ────────────────────────────────────────────
-    single { AuthViewModel(get(), get(), get(), get()) }
+    single { AuthViewModel(get(), get(), get(), get(), get()) }
     single { PermissionViewModel(get()) }
     single { HomeViewModel(get(), get(), get(),
         get(),get(), get()) }
-    single { AlarmViewModel(get(), get(), get(), get(), get()) }
+    single { AlarmViewModel(get(), get(), get(), get(), get(), get(), get()) }
     single { MusicViewModel(get(), get(), get(), get()) }
     single { TrackingViewModel(get(),get(),get(),
         get(), get()) }
     single { ReportViewModel(get(), get()) }
+    single { ChatViewModel(get(), get()) }
 }

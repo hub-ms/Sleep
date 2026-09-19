@@ -6,6 +6,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.media3.common.util.UnstableApi
 import com.kakao.sdk.common.KakaoSdk
 import com.russhwolf.settings.ExperimentalSettingsApi
+import com.zoyi.channel.plugin.android.ChannelIO
 import com.sleepytime.shared.di.androidModule
 import com.sleepytime.shared.di.sharedModule
 import com.sleepytime.shared.platform.AndroidContextProvider
@@ -30,6 +31,7 @@ class SleepApp : Application() {
         Log.d("SleepApp", "onCreate 호출됨, pid=${android.os.Process.myPid()}")
         AndroidContextProvider.context = this
         KakaoSdk.init(this, BuildConfig.KAKAO_NATIVE_APP_KEY)
+        ChannelIO.initialize(this)
         startKoin {
             androidContext(this@SleepApp)
             modules(androidModule, sharedModule)

@@ -10,6 +10,7 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.HIGH_SAMPLING_RATE_SENSORS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />
     <uses-feature android:name="android.hardware.sensor.gyroscope" android:required="false" />
@@ -76,6 +77,17 @@
             android:name="com.sleepytime.shared.data.tracking.SleepTrackingService"
             android:foregroundServiceType="microphone"
             android:exported="false" />
+
+        <receiver
+            android:name="com.sleepytime.shared.platform.BedtimeReminderReceiver"
+            android:exported="false" />
+        <receiver
+            android:name="com.sleepytime.shared.platform.BootCompletedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"

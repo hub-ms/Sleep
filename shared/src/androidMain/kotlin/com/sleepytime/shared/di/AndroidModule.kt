@@ -24,6 +24,10 @@ import com.sleepytime.shared.platform.AndroidSleepMeasureManager
 import com.sleepytime.shared.platform.CsvExporter
 import com.sleepytime.shared.platform.SleepMeasureManager
 import com.sleepytime.shared.platform.AndroidAudioSystem
+import com.sleepytime.shared.platform.BedtimeReminderScheduler
+import com.sleepytime.shared.platform.AndroidBedtimeReminderScheduler
+import com.sleepytime.shared.platform.ChatSupportManager
+import com.sleepytime.shared.platform.AndroidChatSupportManager
 import com.sleepytime.shared.platform.DatabaseDriverFactory
 import com.sleepytime.shared.data.local.generated.SleepDatabase
 import com.sleepytime.shared.data.local.repository.AuthRepositoryImpl
@@ -177,6 +181,8 @@ val androidModule = module {
 
     // ── 플랫폼 서비스 ────────────────────────────────────────
     single<SocialAuthManager> { SocialAuthManager(androidContext()) }
+    single<BedtimeReminderScheduler> { AndroidBedtimeReminderScheduler(androidContext()) }
+    single<ChatSupportManager> { AndroidChatSupportManager(androidContext()) }
     // ── API ─────────────────────────────────────────────────
     single { AuthApi(get(), get()) }
 
@@ -194,7 +200,7 @@ val androidModule = module {
     }
     single<SleepMusicRepository> { SleepMusicRepositoryImpl(get()) }
     single<SleepSessionRepository> {
-        SleepSessionRepositoryImpl(get(),get(), get())
+        SleepSessionRepositoryImpl(get(),get())
     }
     single {
         AndroidTrackingManager(

@@ -53,7 +53,7 @@ import com.sleepytime.shared.ui.setting.WithdrawalReasonContent
 import com.sleepytime.shared.ui.setting.WithdrawalConfirmDetailContent
 import com.sleepytime.shared.ui.setting.SupportContent
 import com.sleepytime.shared.ui.setting.VersionHistoryContent
-import com.sleepytime.shared.ui.setting.CustomChatContent
+import com.sleepytime.shared.ui.setting.ChatViewModel
 import com.sleepytime.shared.ui.component.FaqData
 import com.sleepytime.shared.ui.theme.SleepTheme
 import com.sleepytime.shared.ui.tracking.TrackingContent
@@ -551,23 +551,11 @@ object SleepSettingScreen : Screen {
 object SupportScreen : Screen {
     @Composable
     override fun Content() {
-        val navigator = LocalNavigator.currentOrThrow
+        val chatViewModel = koinScreenModel<ChatViewModel>()
 
         SupportContent(
             allItems = FaqData.items,
-            onChatClick = { navigator.push(CustomChatScreen) },
-        )
-    }
-}
-
-/** 1:1 문의 커스텀 채팅 화면 */
-@ExperimentalMaterial3Api
-object CustomChatScreen : Screen {
-    @Composable
-    override fun Content() {
-        val navigator = LocalNavigator.currentOrThrow
-        CustomChatContent(
-            onBackClick = { navigator.pop() }
+            onChatClick = { chatViewModel.openChat() },
         )
     }
 }

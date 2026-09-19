@@ -80,7 +80,9 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sleepytime.shared.domain.model.Alarm
+import com.sleepytime.shared.enum_.PermissionType
 import com.sleepytime.shared.platform.CircleCanvas
+import com.sleepytime.shared.platform.rememberPermissionHandler
 import com.sleepytime.shared.resources.Res
 import com.sleepytime.shared.resources.ic_alarm_clock
 import com.sleepytime.shared.resources.ic_music_note
@@ -229,6 +231,7 @@ fun AlarmTopStatusSection(
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val permissionHandler = rememberPermissionHandler(onResult = { _, _ -> })
 
     Surface(
         modifier = Modifier
@@ -342,7 +345,10 @@ fun AlarmTopStatusSection(
                     subtitle = "설정하신 시간에 맞춰 수면 준비를 도와드립니다",
                     checked = alarmState.isReminderEnabled,
                     onCheckedChange = {
-                        onToggleSleepReminder(alarmState.isReminderEnabled)
+                        if (it) {
+                            permissionHandler.request(PermissionType.NOTIFICATION)
+                        }
+                        onToggleSleepReminder(it)
                         scope.launch {
                             snackbarHostState.showSnackbar(
                                 if (it) "취침 시각 알림이 켜졌습니다" else "취침 시각 알림이 꺼졌습니다",

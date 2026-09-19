@@ -54,8 +54,6 @@ import androidx.compose.ui.graphics.drawscope.DrawStyle
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextMeasurer
@@ -915,15 +913,6 @@ fun SleepTimeLineEnvironmentCard(
         if (it.isNaN() || it.isInfinite()) 0 else it.roundToInt()
     }.toMutableList()
 
-    // ChartLegend가 SleepTimeLineChart 옆으로 이동하면서 그만큼 SleepTimeLineChart의 플롯 폭이 줄어든다.
-    // EnvironmentChart와 취침/기상 시각 텍스트는 그 줄어든 만큼(범례 폭 + 둘 사이 8dp 간격)을 오른쪽에
-    // 동일하게 비워두어야 세 영역의 가로 길이가 실제로 일치한다.
-    var legendWidthPx by remember { mutableFloatStateOf(0f) }
-    val density = LocalDensity.current
-    val legendReserve = if (legendWidthPx > 0f) {
-        with(density) { (legendWidthPx + 8.dp.toPx()).toDp() }
-    } else 0.dp
-
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -946,48 +935,43 @@ fun SleepTimeLineEnvironmentCard(
                 title = "수면 단계",
                 categoryColor = MaterialTheme.colorScheme.primary,
             )
-            // 수면 단계 그래프 옆에 범례를 세로로 나란히 배치한다. ChartLegend는 각 항목을 그래프와
-            // 동일한 16dp 높이 행으로 위에서부터 쌓으므로, 각 수면 단계(깨어남/얕은수면/렘수면/깊은수면)
-            // 범례가 그래프의 해당 단계 행과 같은 높이에 정렬된다.
-            Row(
+            // 범례를 그래프 옆이 아니라 아래쪽에 가로로 배치한다. 그래프 옆에 범례가 있으면 그만큼
+            // 플롯 폭이 줄어들어 수면 단계 그래프와 소음 그래프의 가로 길이가 짧아졌기 때문에,
+            // 범례를 아래로 옮겨 두 그래프 모두 전체 너비를 그대로 사용하도록 했다.
+            SleepTimeLineChart(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                SleepTimeLineChart(
-                    modifier = Modifier.weight(1f),
-                    reportState = reportState,
-                    targetDate = targetDate,
-                )
-                ChartLegend(
-                    modifier = Modifier.onSizeChanged { legendWidthPx = it.width.toFloat() },
-                    items = listOf(
-                        LegendItem(
-                            label = stageTypes[0].stageName,
-                            color = sleepStageColors[stageTypes[0]] ?: Color.Transparent,
-                            duration = awakeMillis,
-                            percent = roundedPercents[0]
-                        ),
-                        LegendItem(
-                            label = stageTypes[1].stageName,
-                            color = sleepStageColors[stageTypes[1]] ?: Color.Transparent,
-                            duration = lightMillis,
-                            percent = roundedPercents[1]
-                        ),
-                        LegendItem(
-                            label = stageTypes[2].stageName,
-                            color = sleepStageColors[stageTypes[2]] ?: Color.Transparent,
-                            duration = remMillis,
-                            percent = roundedPercents[2]
-                        ),
-                        LegendItem(
-                            label = stageTypes[3].stageName,
-                            color = sleepStageColors[stageTypes[3]] ?: Color.Transparent,
-                            duration = deepMillis,
-                            percent = roundedPercents[3]
-                        )
+                reportState = reportState,
+                targetDate = targetDate,
+            )
+            ChartLegend(
+                horizontal = true,
+                items = listOf(
+                    LegendItem(
+                        label = stageTypes[0].stageName,
+                        color = sleepStageColors[stageTypes[0]] ?: Color.Transparent,
+                        duration = awakeMillis,
+                        percent = roundedPercents[0]
+                    ),
+                    LegendItem(
+                        label = stageTypes[1].stageName,
+                        color = sleepStageColors[stageTypes[1]] ?: Color.Transparent,
+                        duration = lightMillis,
+                        percent = roundedPercents[1]
+                    ),
+                    LegendItem(
+                        label = stageTypes[2].stageName,
+                        color = sleepStageColors[stageTypes[2]] ?: Color.Transparent,
+                        duration = remMillis,
+                        percent = roundedPercents[2]
+                    ),
+                    LegendItem(
+                        label = stageTypes[3].stageName,
+                        color = sleepStageColors[stageTypes[3]] ?: Color.Transparent,
+                        duration = deepMillis,
+                        percent = roundedPercents[3]
                     )
                 )
-            }
+            )
             // "평균 [값]" 텍스트는 TimeScoreCard로 이동했으므로 여기서는 헤더만 표시한다.
             GraphHeader(
                 icon = Res.drawable.ic_noise,
@@ -996,9 +980,7 @@ fun SleepTimeLineEnvironmentCard(
                 unit = "dB"
             )
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(end = legendReserve)
+                modifier = Modifier.fillMaxWidth()
             ) {
                 EnvironmentChart(
                     category = EnvironmentCategory.NOISE,
@@ -1012,7 +994,7 @@ fun SleepTimeLineEnvironmentCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = LABEL_WIDTH + Y_AXIS_PADDING, end = Y_AXIS_PADDING + legendReserve),
+                    .padding(start = LABEL_WIDTH + Y_AXIS_PADDING, end = Y_AXIS_PADDING),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {

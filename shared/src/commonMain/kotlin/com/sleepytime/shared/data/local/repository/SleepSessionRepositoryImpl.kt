@@ -16,7 +16,6 @@ import com.sleepytime.shared.domain.model.Stats
 import com.sleepytime.shared.domain.repository.AuthRepository
 import com.sleepytime.shared.enum_.SleepStageType
 import com.sleepytime.shared.enum_.PredictionStageType
-import com.sleepytime.shared.util.IdGenerator.generateSessionId
 import io.github.aakira.napier.Napier
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -24,10 +23,12 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
 import kotlin.concurrent.Volatile
 import kotlin.time.Duration.Companion.milliseconds
@@ -35,7 +36,6 @@ import kotlin.time.Duration.Companion.milliseconds
 class SleepSessionRepositoryImpl(
     private val sleepSessionDao: SleepSessionDao,
     private val sleepAnalyzer: SleepAnalyzer,
-    private val authRepository: AuthRepository
 ) : SleepSessionRepository {
 
     private var latestEnvironmentContext: EnvironmentFeature? = null
@@ -78,6 +78,7 @@ class SleepSessionRepositoryImpl(
             SleepSession(
                 sessionId = sessionId,
                 date = sessionDate,
+                wakeTime = analysisList.last().timestamp.toLocalDateTime(),
                 sleepMetrics = metrics,
                 stageTimeline = stageTimeline,
                 stagesDistribution = stagesDistribution,
@@ -134,10 +135,10 @@ class SleepSessionRepositoryImpl(
         sleepSessionDao.getSessionByDate(date)
 
     override suspend fun getSessionByDateRange(
-        fromDate: LocalDate,
-        toDate: LocalDate
+        fromEpochMs: LocalDate,
+        toEpochMs: LocalDate
     ): List<SleepSession> =
-        sleepSessionDao.getSessionsByDateRange(fromDate, toDate)
+        sleepSessionDao.getSessionsByDateRange(fromEpochMs, toEpochMs)
 
     override suspend fun deleteSession(sessionId: String) =
         sleepSessionDao.deleteSession(sessionId)
@@ -187,8 +188,13 @@ class SleepSessionRepositoryImpl(
     ): List<LocalDate> = sleepSessionDao.getSessionDatesByMonth(year, month)
 
     override suspend fun getLatestSession(): SleepSession? = withContext(Dispatchers.IO) { sleepSessionDao.getLatestSession() }
+    override suspend fun getRecentSessions(days: Int): List<SleepSession> {
+        val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+        val fromDate = today.minus(days, DateTimeUnit.DAY)
+        return getSessionByDateRange(fromDate, today)
+    }
 
-    private suspend fun generateStageTimeLine(
+    private fun generateStageTimeLine(
         analysisList: List<SleepAnalysis>,
         sessionId: String
     ): List<SleepStage> =

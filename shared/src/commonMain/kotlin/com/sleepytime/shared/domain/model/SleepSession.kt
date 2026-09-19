@@ -3,12 +3,14 @@ package com.sleepytime.shared.domain.model
 import com.sleepytime.shared.enum_.SleepStageType
 import com.sleepytime.shared.domain.model.SleepStage
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
 
 
 data class SleepSession(
     val sessionId: String,
     val date: LocalDate,
     val sleepMetrics: SleepMetrics,
+    val wakeTime: LocalDateTime,
 
     val environment: Environment,
     val duration: Duration,

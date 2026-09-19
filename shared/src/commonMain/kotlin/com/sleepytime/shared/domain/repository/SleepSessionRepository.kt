@@ -31,4 +31,5 @@ interface SleepSessionRepository {
     suspend fun getLatestSession(): SleepSession?
     suspend fun deleteSession(sessionId: String)
     suspend fun updateEnvironmentContext(feature: EnvironmentFeature): Result<Unit>
+    suspend fun getRecentSessions(days: Int): List<SleepSession>
 }

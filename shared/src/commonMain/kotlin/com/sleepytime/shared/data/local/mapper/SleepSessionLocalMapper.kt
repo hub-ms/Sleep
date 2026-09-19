@@ -2,6 +2,7 @@ package com.sleepytime.shared.data.local.mapper
 
 import com.sleepytime.shared.data.local.SleepSessionEntity
 import com.sleepytime.shared.domain.model.SleepSession
+import kotlinx.datetime.LocalDateTime
 
 fun SleepSessionEntity.toDomain() = SleepSession(
     sessionId = sessionId,
@@ -31,7 +32,8 @@ fun SleepSessionEntity.toDomain() = SleepSession(
     timestamp = SleepSession.Timestamp(
         createdAt = createdAt,
         updatedAt = updatedAt
-    )
+    ),
+    wakeTime = LocalDateTime(1970, 1, 1, 0, 0)
 )
 
 fun SleepSession.toEntity() = SleepSessionEntity(

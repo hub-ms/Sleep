@@ -6,10 +6,12 @@ import com.sleepytime.shared.domain.model.SleepMetrics
 import com.sleepytime.shared.domain.model.EnvironmentFeature
 import com.sleepytime.shared.domain.model.SleepSession
 import com.sleepytime.shared.domain.model.Stats
+import kotlinx.datetime.LocalDateTime
 
 fun SleepSessionResponse.toDomain() = SleepSession(
     sessionId = sessionId,
     date = date,
+    wakeTime = LocalDateTime(1970, 1, 1, 0, 0),
     sleepMetrics = SleepMetrics(),
     environment = SleepSession.Environment(
         history = emptyList(),

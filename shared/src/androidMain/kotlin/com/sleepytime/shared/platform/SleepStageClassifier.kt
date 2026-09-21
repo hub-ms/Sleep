@@ -18,8 +18,8 @@ actual class SleepStageClassifier {
         // 이 모델(accel_infer_model 기반 sleep_model.tflite)의 입력은 가속도계 데이터라
         // Accel 도메인 정규화 기준이 필요합니다.
         // compute_stats.py가 bidsleep·sleep_accel 각각의 norm_stats.npy를 단순 평균해 계산한 값입니다.
-        actual val ACCEL_CHANNEL_MEAN = floatArrayOf(-0.120757f, -0.043699f, -0.363963f, 0.044877f, 65.443787f, 24.274971f, 0.000000f, 0.449583f)
-        actual val ACCEL_CHANNEL_STD = floatArrayOf(0.378034f, 0.514663f, 0.660465f, 0.196010f, 9.678553f, 7.435197f, 1.000000f, 0.292682f)
+        actual val ACCEL_CHANNEL_MEAN = floatArrayOf(-0.120757f, -0.043699f, -0.363963f, 0.044877f, 65.443787f, 0.000867f, -0.000003f, 0.449583f)
+        actual val ACCEL_CHANNEL_STD = floatArrayOf(0.378034f, 0.514663f, 0.660465f, 0.196010f, 9.678553f, 0.002571f, 0.000835f, 0.292682f)
 
         // EDF 채널 인덱스
         actual const val CH_EEG1 = 0

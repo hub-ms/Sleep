@@ -215,6 +215,8 @@ fun String.toAnnotatedString(
 fun ReportContent(
     trackingState: TrackingContract.State,
     reportState: ReportContract.State,
+    isUserPremium: Boolean = false,
+    onUpgradeClicked: () -> Unit = {},
     onToggleCalendarExpanded: (Boolean) -> Unit,
     onDateSelected: (LocalDate) -> Unit,
     onPrevClicked: (DateTimeUnit.DateBased) -> Unit,
@@ -468,18 +470,25 @@ fun ReportContent(
                         weeklyItems = weeklyItems,
                     )
                     when(rangeItem) {
-                        "오늘" -> SleepTimeLineEnvironmentCard(
-                            reportState = reportState,
-                            sleepDurationMillis = sleepDurationMillis,
-                            targetDate = targetDate,
-                            reportData = reportState.reportData,
-                            bedTimeText = bedTimeText,
-                            wakeTimeText = wakeTimeText,
-                            values = values,
-                            labelStyle = labelStyle,
-                        )
+                        "오늘" -> if (isUserPremium) {
+                            SleepTimeLineEnvironmentCard(
+                                reportState = reportState,
+                                sleepDurationMillis = sleepDurationMillis,
+                                targetDate = targetDate,
+                                reportData = reportState.reportData,
+                                bedTimeText = bedTimeText,
+                                wakeTimeText = wakeTimeText,
+                                values = values,
+                                labelStyle = labelStyle,
+                            )
+                        } else {
+                            GatedReportSection(
+                                title = "상세 수면 단계 · 소음 분석",
+                                onUpgradeClicked = onUpgradeClicked,
+                            )
+                        }
 
-                        else -> {
+                        else -> if (isUserPremium) {
                             TimeChart(
                                 reportState = reportState,
                                 selectedMetric = "수면시간",
@@ -500,6 +509,11 @@ fun ReportContent(
                                 xLabels = xLabels,
                                 textMeasurer = textMeasurer,
                                 labelStyle = labelStyle,
+                            )
+                        } else {
+                            GatedReportSection(
+                                title = "주간 트렌드 분석",
+                                onUpgradeClicked = onUpgradeClicked,
                             )
                         }
                     }
@@ -544,6 +558,56 @@ fun ReportContent(
                     }
                 }
             )
+        }
+    }
+}
+
+@Composable
+fun GatedReportSection(
+    title: String,
+    onUpgradeClicked: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                brush = SleepTheme.gradients.surface,
+                shape = RoundedCornerShape(16.dp)
+            ),
+        shape = RoundedCornerShape(16.dp),
+        color = Color.Transparent
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(text = "🔒", style = MaterialTheme.typography.headlineMedium)
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyHighlight,
+                color = SleepTheme.textColors.primary
+            )
+            Text(
+                text = "프리미엄으로 업그레이드하고 상세 분석을 확인해보세요",
+                style = MaterialTheme.typography.caption,
+                color = SleepTheme.textColors.secondary
+            )
+            Surface(
+                modifier = Modifier.clickable { onUpgradeClicked() },
+                shape = RoundedCornerShape(50.dp),
+                color = MaterialTheme.colorScheme.primary
+            ) {
+                Text(
+                    text = "프리미엄으로 업그레이드",
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }

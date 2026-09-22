@@ -34,6 +34,7 @@ class JwtTokenProvider(
 
         return Jwts.builder()
             .subject(userId.toString())
+            .claim("userId",userId)
             .claim("tokenType","refresh")
             .claim("app","sleep-app-v1")
             .issuedAt(Date(now))
@@ -53,7 +54,9 @@ class JwtTokenProvider(
     }
     fun extractUserId(token: String): Long {
         val claims = parseClaims(token)
-        return (claims["userId"] as Number).toLong()
+        return (claims["userId"] as? Number)?.toLong()
+            ?: claims.subject?.toLongOrNull()
+            ?: throw IllegalArgumentException("토큰에 userId가 없습니다")
     }
     fun getRemainingTime(token: String): Long {
         return try {

@@ -15,4 +15,5 @@ class UserDao(private val db: SleepDatabase) {
     suspend fun getUser(): UserEntity? = queries.getUser().executeAsOneOrNull()
     fun observeUser(): Flow<UserEntity?> = queries.getUser().asFlow().mapToOneOrNull(Dispatchers.IO)
     suspend fun deleteUser() = queries.deleteUser()
+    suspend fun updatePremiumStatus(isPremium: Boolean) = queries.updatePremiumStatus(isPremium)
 }

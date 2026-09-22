@@ -42,6 +42,9 @@ import com.sleepytime.shared.ui.home.HomeViewModel
 import com.sleepytime.shared.ui.music.MusicContract
 import com.sleepytime.shared.ui.music.MusicViewModel
 import com.sleepytime.shared.ui.onboarding.OnboardingContent
+import com.sleepytime.shared.ui.paywall.PaywallContract
+import com.sleepytime.shared.ui.paywall.PaywallContent
+import com.sleepytime.shared.ui.paywall.PaywallViewModel
 import com.sleepytime.shared.ui.report.ReportContent
 import com.sleepytime.shared.ui.report.ReportContract
 import com.sleepytime.shared.ui.report.ReportViewModel
@@ -207,6 +210,7 @@ data class HomeScreen(
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val authViewModel = koinScreenModel<AuthViewModel>()
+        val authState by authViewModel.state.collectAsState()
         val homeViewModel = koinScreenModel<HomeViewModel>()
         val alarmViewModel = koinScreenModel<AlarmViewModel>()
         val musicViewModel = koinScreenModel<MusicViewModel>()
@@ -276,6 +280,8 @@ data class HomeScreen(
                         ReportContent(
                             trackingState = trackingViewModel.state.collectAsState().value,
                             reportState = reportViewModel.state.collectAsState().value,
+                            isUserPremium = authState.user?.isPremium == true,
+                            onUpgradeClicked = { navigator.push(PaywallScreen) },
                             onDateSelected = {
                                 reportViewModel.sendIntent(ReportContract.Intent.SelectDate(it))
                             },
@@ -326,6 +332,8 @@ data class HomeScreen(
                         trackingState = trackingState,
                         reportState = reportViewModel.state.collectAsState().value,
                         elapsedSleepMusicSeconds = musicViewModel.elapsedSleepMusicSeconds.collectAsState().value,
+                        isUserPremium = authState.user?.isPremium == true,
+                        onLockedTrackClicked = { navigator.push(PaywallScreen) },
                         onStartTracking = { musicTitle ->
                             // 💡 수면 시작 버튼을 누르면 항상 PermissionGuideScreen을 거칩니다.
                             // 필요한 권한이 없으면 권한 설정 UI + 안내 가이드를, 모두 허용된 상태라면
@@ -607,7 +615,6 @@ object ProfileEditScreen : Screen {
             onUpdateNickName = { authViewModel.sendIntent(AuthContract.Intent.UpdateNickname(it)) },
             onUpdateEmail = { authViewModel.sendIntent(AuthContract.Intent.UpdateEmail(it)) },
             onSaveClick = { nickname, email ->
-                authViewModel.sendIntent(AuthContract.Intent.SaveProfile(nickname, email))
                 navigator.pop()
             },
             onImageChangeClick = { option ->
@@ -689,13 +696,55 @@ object AppInfoScreen : Screen {
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
+        val authViewModel = koinScreenModel<AuthViewModel>()
+        val authState by authViewModel.state.collectAsState()
+        val paywallViewModel = koinScreenModel<PaywallViewModel>()
+        val isPremium = authState.user?.isPremium == true
         AppInfoContent(
+            subscriptionStatusLabel = if (isPremium) "프리미엄 플랜" else "무료 플랜",
+            isPremium = isPremium,
             onNavigateToVersionHistory = { navigator.push(VersionHistoryScreen) },
             onNavigateToLicenseCredit = { navigator.push(LicenseCreditScreen) },
             onNavigateToTerms = { navigator.push(TermsScreen) },
             onNavigateToPrivacy = { navigator.push(PrivacyPolicyScreen) },
-            onManageSubscription = {},
-            onRestorePurchase = {},
+            onManageSubscription = { navigator.push(PaywallScreen) },
+            onRestorePurchase = { paywallViewModel.sendIntent(PaywallContract.Intent.RestoreClicked) },
+        )
+    }
+}
+
+@OptIn(ExperimentalTime::class, ExperimentalMaterial3Api::class, ExperimentalCoroutinesApi::class, ExperimentalSettingsApi::class,
+    InternalVoyagerApi::class
+)
+object PaywallScreen : Screen {
+    @Composable
+    override fun Content() {
+        val navigator = LocalNavigator.currentOrThrow
+        val paywallViewModel = koinScreenModel<PaywallViewModel>()
+        val state by paywallViewModel.state.collectAsState()
+
+        LaunchedEffect(Unit) {
+            paywallViewModel.sendIntent(PaywallContract.Intent.LoadPaywall)
+        }
+        LaunchedEffect(Unit) {
+            paywallViewModel.effect.collect { effect ->
+                when (effect) {
+                    is PaywallContract.Effect.NavigateBack -> navigator.pop()
+                    is PaywallContract.Effect.RequireLogin -> navigator.push(LoginBenefitScreen)
+                    is PaywallContract.Effect.ShowToast -> Unit
+                }
+            }
+        }
+
+        PaywallContent(
+            state = state,
+            onSelectPlan = { paywallViewModel.sendIntent(PaywallContract.Intent.SelectPlan(it)) },
+            onSubscribeClicked = { paywallViewModel.sendIntent(PaywallContract.Intent.SubscribeClicked) },
+            onRestoreClicked = { paywallViewModel.sendIntent(PaywallContract.Intent.RestoreClicked) },
+            onDismissError = { paywallViewModel.sendIntent(PaywallContract.Intent.DismissError) },
+            onNavigateToTerms = { navigator.push(TermsScreen) },
+            onNavigateToPrivacy = { navigator.push(PrivacyPolicyScreen) },
+            onBackClick = { navigator.pop() },
         )
     }
 }

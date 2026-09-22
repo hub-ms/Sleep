@@ -6,6 +6,7 @@ import com.sleepytime.app.entity_new.UserEntity
 import com.sleepytime.app.repository_new.UserJpaRepository
 import com.sleepytime.app.repository_new.AuthInfoJpaRepository
 import com.sleepytime.app.entity_new.AuthInfoEntity
+import com.sleepytime.app.exception.LastAuthMethodException
 import com.sleepytime.app.scheduler.UserDeletionScheduler
 import com.sleepytime.shared.data.remote.dto.request.EmailVerifyRequest
 import com.sleepytime.shared.data.remote.dto.response.AuthInfoResponse
@@ -15,7 +16,6 @@ import com.sleepytime.shared.enum_.AuthProvider
 import com.sleepytime.shared.util.NicknameGenerator
 import org.slf4j.LoggerFactory
 import org.springframework.data.redis.core.RedisTemplate
-import org.springframework.security.core.Authentication
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
@@ -163,7 +163,12 @@ class AuthService(
         log.info("계정 병합: {}에서 {}로 소셜 계정 이동", existingSocial.user?.userId, targetUserId)
 
         // 1. 기존 연결 완전 삭제
+        // Hibernate는 delete()를 즉시 실행하지 않고 flush 시점까지 지연시키며, 같은 트랜잭션
+        // 안에서 delete와 insert가 (social_id, provider) 유니크 제약에 걸리는 같은 값을 다룰 때
+        // insert가 먼저 flush되면 제약 위반이 발생한다. 아래 insert 전에 delete를 즉시 반영하도록
+        // 명시적으로 flush한다.
         authInfoJpaRepository.delete(existingSocial)
+        authInfoJpaRepository.flush()
 
         // 2. 새 연결 생성
         val targetUser = userJpaRepository.findById(targetUserId)
@@ -219,8 +224,8 @@ class AuthService(
         )
     }
 
-    fun connectEmail(jwt: String, emailToken: String) {
-        val userId = jwtTokenProvider.extractUserId(jwt)
+    @Transactional
+    fun connectEmail(userId: Long, emailToken: String) {
         val email = redisTemplate.opsForValue().get("EMAIL_TOKEN:$emailToken")
             ?: throw IllegalArgumentException("유효하지 않거나 만료된 이메일 토큰입니다.")
 
@@ -232,7 +237,12 @@ class AuthService(
         }
 
         user.updateEmail(email)
+        user.emailVerified = true
+        user.connectedProviders.add(AuthProvider.EMAIL)   // ← 누락되어 UI가 갱신 안 되던 부분
+        if (user.primaryProvider == null) user.primaryProvider = AuthProvider.EMAIL
         userJpaRepository.save(user)
+
+        redisTemplate.delete("EMAIL_TOKEN:$emailToken")
     }
 
     fun refreshToken(refreshToken: String): AuthInfoResponse {
@@ -266,18 +276,14 @@ class AuthService(
         )
     }
 
-    fun logout(authentication: Authentication, accessToken: String?) {
-        val identifier = authentication.name
-        redisTemplate.delete("REFRESH_TOKEN:$identifier")
+    /** 변경: (Authentication, String?) -> (Long, String?) */
+    fun logout(userId: Long, accessToken: String?) {
+        redisTemplate.delete("REFRESH_TOKEN:$userId")
         accessToken?.let { token ->
             val expiration = jwtTokenProvider.getRemainingTime(token)
             if (expiration > 0L) {
-                redisTemplate.opsForValue().set(
-                    "BLACKLIST:$token",
-                    "logout",
-                    expiration,
-                    TimeUnit.MILLISECONDS
-                )
+                redisTemplate.opsForValue()
+                    .set("BLACKLIST:$token", "logout", expiration, TimeUnit.MILLISECONDS)
             }
         }
     }
@@ -291,57 +297,69 @@ class AuthService(
         userJpaRepository.save(user)
     }
 
+    /** 변경: accessToken: String -> String? */
     @Transactional
-    fun withdraw(userId: Long, accessToken: String, reason: String? = null) {
-        val user = userJpaRepository.findById(userId).orElseThrow { IllegalArgumentException("No existing user") }
+    fun withdraw(userId: Long, accessToken: String?, reason: String? = null) {
+        val user = userJpaRepository.findById(userId)
+            .orElseThrow { IllegalArgumentException("No existing user") }
 
         user.isDeleted = true
         user.deletedAt = LocalDateTime.now()
         user.deleteAfter = LocalDateTime.now().plusDays(7)
-        // logic to save withdrawal reason could be added here if a separate table existed
-
         userJpaRepository.save(user)
 
-        val expiration = jwtTokenProvider.getRemainingTime(accessToken)
-        if (expiration > 0L) {
-            redisTemplate.opsForValue().set(
-                "BLACKLIST:$accessToken",
-                "withdraw",
-                expiration,
-                TimeUnit.MILLISECONDS
-            )
+        redisTemplate.delete("REFRESH_TOKEN:$userId")   // ← 탈퇴 후 재발급으로 계속 쓰던 구멍 차단
+        accessToken?.let { token ->
+            val expiration = jwtTokenProvider.getRemainingTime(token)
+            if (expiration > 0L) {
+                redisTemplate.opsForValue()
+                    .set("BLACKLIST:$token", "withdraw", expiration, TimeUnit.MILLISECONDS)
+            }
         }
     }
 
-    fun changePrimaryProvider(token: String, provider: AuthProvider) {
-        val userId = jwtTokenProvider.extractUserId(token)
-        val user = userJpaRepository.findById(userId).orElseThrow {
-            IllegalArgumentException("User not found")
-        }
+    @Transactional
+    fun changePrimaryProvider(userId: Long, provider: AuthProvider) {
+        val user = userJpaRepository.findById(userId)
+            .orElseThrow { IllegalArgumentException("User not found") }
+        require(provider in user.connectedProviders) { "연결되지 않은 로그인 수단입니다: $provider" }
         user.primaryProvider = provider
         userJpaRepository.save(user)
     }
 
-    fun disconnectProvider(token: String, provider: AuthProvider) {
-        val userId = jwtTokenProvider.extractUserId(token)
-        val user = userJpaRepository.findById(userId).orElseThrow {
-            IllegalArgumentException("User not found")
-        }
-        user.connectedProviders.remove(provider)
+    @Transactional
+    fun disconnectSocial(userId: Long, provider: AuthProvider) {
+        val user = userJpaRepository.findById(userId)
+            .orElseThrow { IllegalArgumentException("User not found") }
 
+        if (user.connectedProviders.size <= 1) {
+            throw LastAuthMethodException()      // 컨트롤러가 409로 변환 → 앱의 차단 모달
+        }
+
+        authInfoJpaRepository.findByUserIdAndProvider(userId, provider)
+            ?.let { authInfoJpaRepository.delete(it) }   // ← 실제 레코드 삭제 (재로그인 시 부활 방지)
+
+        user.connectedProviders.remove(provider)
         if (user.primaryProvider == provider) {
             user.primaryProvider = user.connectedProviders.firstOrNull()
         }
         userJpaRepository.save(user)
     }
 
-    fun disconnectEmail(token: String) {
-        val userId = jwtTokenProvider.extractUserId(token)
-        val user = userJpaRepository.findById(userId).orElseThrow {
-            IllegalArgumentException("User not found")
-        }
+    /** 변경: (token: String) -> (userId: Long) */
+    @Transactional
+    fun disconnectEmail(userId: Long) {
+        val user = userJpaRepository.findById(userId)
+            .orElseThrow { IllegalArgumentException("User not found") }
+
+        if (user.connectedProviders.size <= 1) throw LastAuthMethodException()
+
         user.email = null
         user.emailVerified = false
+        user.connectedProviders.remove(AuthProvider.EMAIL)
+        if (user.primaryProvider == AuthProvider.EMAIL) {
+            user.primaryProvider = user.connectedProviders.firstOrNull()
+        }
         userJpaRepository.save(user)
     }
 
@@ -376,5 +394,32 @@ class AuthService(
         userJpaRepository.save(user)
 
         return user.toResponse()
+    }
+
+    /** 신규: GET /auth/email/verify-token */
+    @Transactional
+    fun loginWithEmailToken(emailToken: String): AuthInfoResponse {
+        val email = redisTemplate.opsForValue().get("EMAIL_TOKEN:$emailToken")
+            ?: throw IllegalArgumentException("유효하지 않거나 만료된 이메일 토큰입니다.")
+
+        val user = userJpaRepository.findByEmail(email)
+            ?: userJpaRepository.save(
+                UserEntity(email = email, nickname = email.substringBefore("@"))
+            )
+
+        user.connectedProviders.add(AuthProvider.EMAIL)
+        if (user.primaryProvider == null) user.primaryProvider = AuthProvider.EMAIL
+        user.emailVerified = true
+        userJpaRepository.save(user)
+
+        redisTemplate.delete("EMAIL_TOKEN:$emailToken")   // 1회용
+
+        return AuthInfoResponse(
+            accessToken = jwtTokenProvider.getAccessToken(user.userId),
+            refreshToken = jwtTokenProvider.getRefreshToken(user.userId),
+            user = user.toResponse(),
+            authId = user.email ?: user.userId.toString(),
+            provider = AuthProvider.EMAIL,
+        )
     }
 }

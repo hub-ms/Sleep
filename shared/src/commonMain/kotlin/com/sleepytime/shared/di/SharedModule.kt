@@ -12,6 +12,7 @@ import com.sleepytime.shared.ui.alarm.AlarmViewModel
 import com.sleepytime.shared.ui.auth.AuthViewModel
 import com.sleepytime.shared.ui.home.HomeViewModel
 import com.sleepytime.shared.ui.music.MusicViewModel
+import com.sleepytime.shared.ui.paywall.PaywallViewModel
 import com.sleepytime.shared.ui.report.ReportViewModel
 import com.sleepytime.shared.ui.tracking.TrackingViewModel
 import com.sleepytime.shared.platform.SensorBridge
@@ -46,4 +47,5 @@ val sharedModule = module {
         get(), get()) }
     single { ReportViewModel(get(), get()) }
     single { ChatViewModel(get(), get()) }
+    single { PaywallViewModel(get(), get(), get()) }
 }

@@ -28,6 +28,7 @@ import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import com.russhwolf.settings.ExperimentalSettingsApi
+import com.zoyi.channel.plugin.android.ChannelIO
 import com.sleepytime.shared.ui.navigation.EmailAuthScreen
 import com.sleepytime.shared.ui.navigation.OnboardingScreen
 import com.sleepytime.shared.ui.navigation.TrackingScreen
@@ -65,6 +66,9 @@ class MainActivity : ComponentActivity() {
         setTheme(R.style.Theme_SleepyTime)
         super.onCreate(savedInstanceState)
         instance = WeakReference(this)
+        if (ChannelIO.hasStoredPushNotification(this)) {
+            ChannelIO.openStoredPushNotification(this)
+        }
         lifecycleScope.launch {
             generateAllSimulationFiles()
         }

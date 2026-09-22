@@ -114,9 +114,12 @@ fun SettingContent(
     }
 }
 @Composable
-fun SettingCard(content: @Composable ColumnScope.() -> Unit) {
+fun SettingCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
     Card(
-        modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars),
+        modifier = modifier.windowInsetsPadding(WindowInsets.navigationBars),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)

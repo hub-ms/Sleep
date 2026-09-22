@@ -51,7 +51,6 @@ object AuthContract {
 
         data class UpdateNickname(val nickname: String) : Intent()
         data class UpdateEmail(val email: String) : Intent()
-        data class SaveProfile(val nickname: String, val email: String?) : Intent()
         object ResetProfileImage : Intent()
         data class UpdateProfileImage(val imageBytes: ByteArray) : Intent()
 

@@ -31,10 +31,13 @@ import com.sleepytime.shared.platform.AndroidChatSupportManager
 import com.sleepytime.shared.platform.DatabaseDriverFactory
 import com.sleepytime.shared.data.local.generated.SleepDatabase
 import com.sleepytime.shared.data.local.repository.AuthRepositoryImpl
+import com.sleepytime.shared.data.local.repository.BillingRepositoryImpl
 import com.sleepytime.shared.data.local.repository.SleepMusicRepositoryImpl
 import com.sleepytime.shared.data.local.repository.SleepSessionRepositoryImpl
 import com.sleepytime.shared.data.local.repository.TokenRepositoryImpl
 import com.sleepytime.shared.data.remote.api.AuthApi
+import com.sleepytime.shared.data.remote.api.BillingApi
+import com.sleepytime.shared.platform.PlayBillingManager
 import com.sleepytime.shared.data.remote.dto.response.AuthInfoResponse
 import com.sleepytime.shared.platform.AesGcmSecureStorage
 import com.sleepytime.shared.platform.AndroidTrackingManager
@@ -185,6 +188,11 @@ val androidModule = module {
     single<ChatSupportManager> { AndroidChatSupportManager(androidContext()) }
     // ── API ─────────────────────────────────────────────────
     single { AuthApi(get(), get()) }
+    single { BillingApi(get()) }
+
+    // ── 결제 ─────────────────────────────────────────────────
+    single { PlayBillingManager(androidContext()) }
+    single<BillingRepository> { BillingRepositoryImpl(get(), get()) }
 
     // ── Repository ──────────────────────────────────────────
     single<TokenRepository> { TokenRepositoryImpl(get(), get(), get()) }

@@ -123,7 +123,9 @@ kotlin {
             implementation(libs.googleid)
             implementation(libs.kakao.v2.user)
             implementation(libs.firebase.auth)
+            implementation(libs.firebase.messaging)
             implementation(libs.channel.plugin.android)
+            implementation(libs.billing.ktx)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
@@ -173,7 +175,12 @@ extensions.configure<ApplicationExtension> {
 
     buildTypes {
         getByName("release") {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
     sourceSets {

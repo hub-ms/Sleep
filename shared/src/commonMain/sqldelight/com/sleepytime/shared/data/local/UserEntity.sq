@@ -22,3 +22,6 @@ SELECT * FROM UserEntity LIMIT 1;
 
 deleteUser:
 DELETE FROM UserEntity;
+
+updatePremiumStatus:
+UPDATE UserEntity SET isPremium = ? WHERE userId = (SELECT userId FROM UserEntity LIMIT 1);

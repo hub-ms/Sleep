@@ -362,7 +362,9 @@ fun AccountConnectItem(
 
             if (isConnected) {
                 Button(
-                    modifier = Modifier.height(32.dp),
+                    modifier = Modifier
+                        .border(2.dp, MaterialTheme.colorScheme.error, RoundedCornerShape(16.dp))
+                        .height(32.dp),
                     onClick = {
                         when(provider) {
                             AuthProvider.KAKAO, AuthProvider.GOOGLE, AuthProvider.APPLE -> onSocialDisConnect(provider)
@@ -370,7 +372,7 @@ fun AccountConnectItem(
                         }
                     },
                     shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error.copy(0.4f))
                 ) {
                     Text(
                         text = "연결 해제",

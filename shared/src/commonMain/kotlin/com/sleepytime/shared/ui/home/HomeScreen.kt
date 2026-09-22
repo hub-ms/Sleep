@@ -42,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -107,12 +108,14 @@ fun HomeContent(
     trackingState: TrackingContract.State,
     reportState: ReportContract.State,
     elapsedSleepMusicSeconds: Int,
+    isUserPremium: Boolean = false,
     onStartTracking: (String?) -> Unit,
     onTogglePlaying: () -> Unit,
     onMusicSelected: (SleepMusic?) -> Unit,
     onToggleFavorite: (SleepMusic) -> Unit,
     onNavigateToSleepSetting: () -> Unit,
     onSetTimer: (Int?) -> Unit,
+    onLockedTrackClicked: () -> Unit = {},
 ) {
     val (baseSectionStyle, baseBodyStyle, _) = rememberSleepTimeStyles()
 
@@ -179,11 +182,13 @@ fun HomeContent(
         )
         MusicBrowserSection(
             musicState = musicState,
+            isUserPremium = isUserPremium,
             onMusicSelected = { music ->
                 onMusicSelected(music)
                 showMusicList.value = false
             },
             onToggleFavorite = onToggleFavorite,
+            onLockedTrackClicked = onLockedTrackClicked,
         )
         SleepStartButton(
             musicState = musicState,
@@ -197,8 +202,10 @@ fun HomeContent(
 fun MusicBrowserSection(
     modifier: Modifier = Modifier,
     musicState: MusicContract.State,
+    isUserPremium: Boolean = false,
     onMusicSelected: (SleepMusic?) -> Unit,
     onToggleFavorite: (SleepMusic) -> Unit,
+    onLockedTrackClicked: () -> Unit = {},
 ) {
     var selectedCategory by remember { mutableStateOf(MusicCategory.NATURE) }
     val categories = listOf(
@@ -258,10 +265,12 @@ fun MusicBrowserSection(
                     MusicCompactCard(
                         music = music,
                         isSelected = music == musicState.selectedMusic,
+                        isUserPremium = isUserPremium,
                         onMusicSelected = {
                             onMusicSelected(it)
                         },
-                        onToggleFavorite = onToggleFavorite
+                        onToggleFavorite = onToggleFavorite,
+                        onLockedTrackClicked = onLockedTrackClicked,
                     )
                 }
             }
@@ -273,16 +282,21 @@ fun MusicBrowserSection(
 fun MusicCompactCard(
     music: SleepMusic,
     isSelected: Boolean,
+    isUserPremium: Boolean = false,
     onMusicSelected: (SleepMusic?) -> Unit,
     onToggleFavorite: (SleepMusic) -> Unit,
+    onLockedTrackClicked: () -> Unit = {},
 ) {
     val image = remember(music.imageName) { ResourceMapper.getDrawableRes(music.imageName) }
+    val isLocked = music.isPremium && !isUserPremium
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clickable {
-                if (isSelected) {
+                if (isLocked) {
+                    onLockedTrackClicked()
+                } else if (isSelected) {
                     onMusicSelected(null)
                 } else {
                     onMusicSelected(music)
@@ -307,23 +321,31 @@ fun MusicCompactCard(
                             MaterialTheme.colorScheme.primary,
                             RoundedCornerShape(16.dp)
                         ) else Modifier
-                    ),
+                    )
+                    .then(if (isLocked) Modifier.alpha(0.5f) else Modifier),
                 contentScale = ContentScale.Crop
             )
-            IconButton(
-                modifier = Modifier
-                    .size(36.dp)
-                    .align(Alignment.TopEnd),
-                onClick = {
-                    onToggleFavorite(music)
-                },
-            ) {
-                Icon(
-                    painter = if(music.isFavorite) painterResource(Res.drawable.ic_favorite_filled) else painterResource(Res.drawable.ic_favorite_outline),
-                    contentDescription = if(music.isFavorite) "즐겨찾기 해제" else "즐겨찾기 등록",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
+            if (isLocked) {
+                Text(
+                    text = "🔒",
+                    style = MaterialTheme.typography.titleLarge,
                 )
+            } else {
+                IconButton(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .align(Alignment.TopEnd),
+                    onClick = {
+                        onToggleFavorite(music)
+                    },
+                ) {
+                    Icon(
+                        painter = if (music.isFavorite) painterResource(Res.drawable.ic_favorite_filled) else painterResource(Res.drawable.ic_favorite_outline),
+                        contentDescription = if (music.isFavorite) "즐겨찾기 해제" else "즐겨찾기 등록",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
         }
         Text(

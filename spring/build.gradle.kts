@@ -34,6 +34,11 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation(libs.kotlinx.datetime)
 
+    // Google Play 서버사이드 구독 검증 (Android Publisher API) + RTDN(Pub/Sub) OIDC 토큰 검증
+    implementation("com.google.apis:google-api-services-androidpublisher:v3-rev20260817-2.0.0")
+    implementation("com.google.auth:google-auth-library-oauth2-http:1.52.0")
+    implementation("com.google.api-client:google-api-client:2.9.1")
+
     runtimeOnly("org.postgresql:postgresql:42.7.10")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 }

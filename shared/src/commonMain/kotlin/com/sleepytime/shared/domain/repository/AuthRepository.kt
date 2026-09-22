@@ -17,7 +17,6 @@ interface AuthRepository {
         socialToken: String
     ): Result<Unit>
     suspend fun sendAuthCode(email: String): Result<Unit>
-    suspend fun verifyAuthCode(email: String, code: String): Result<UserResponse>
     suspend fun verifyEmailToken(token: String): Result<User>
     suspend fun connectEmail(jwt: String, emailToken: String): Result<HttpResponse>
     suspend fun refreshToken(refreshToken: String): Result<AuthInfoResponse>
@@ -30,12 +29,20 @@ interface AuthRepository {
     suspend fun withdraw(reason: String? = null): Result<Unit>
 
     suspend fun changePrimaryProvider(jwt: String, provider: AuthProvider): Result<HttpResponse>
-    suspend fun disconnectProvider(jwt: String, provider: AuthProvider): Result<HttpResponse>
+    suspend fun disconnectSocial(jwt: String, provider: AuthProvider): Result<HttpResponse>
     suspend fun disconnectEmail(jwt: String): Result<HttpResponse>
 
-    suspend fun updateProfile(nickname: String?, email: String?, imageBytes: ByteArray?): Result<Unit>
+    suspend fun updateProfile(
+        nickname: String? = null,
+        email: String? = null,
+        imageBytes: ByteArray? = null,
+        resetImage: Boolean = false,
+        socialProvider: AuthProvider? = null,
+        socialAccessToken: String? = null,
+    ): Result<User>
 
     suspend fun resetLocalUserData(): Result<Unit>
     suspend fun saveSocialUser(provider: AuthProvider, userResponse: UserResponse): Result<User>
-    suspend fun refreshSocialProfile(provider: AuthProvider, accessToken: String): Result<Unit>
+
+    suspend fun getChannelTalkHash(): Result<String>
 }

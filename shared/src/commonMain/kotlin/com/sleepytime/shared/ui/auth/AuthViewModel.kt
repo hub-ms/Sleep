@@ -168,7 +168,7 @@ class AuthViewModel(
         is AuthContract.Intent.SocialDisConnectClicked -> {
             val jwt = tokenRepository.getAccessToken()
             if (jwt != null) {
-                authRepository.disconnectProvider(jwt = jwt, provider = intent.provider)
+                authRepository.disconnectSocial(jwt = jwt, provider = intent.provider)
                     .onSuccess {
                         _state.update { it.copy(connectedProviders = it.connectedProviders - intent.provider) }
                     }.onFailure { error ->
@@ -226,34 +226,20 @@ class AuthViewModel(
         is AuthContract.Intent.UpdateEmail -> {
             _state.update { it.copy(user = it.user?.copy(email = intent.email)) }
         }
-
-        is AuthContract.Intent.SaveProfile -> {
-            screenModelScope.launch {
-                authRepository.updateProfile(intent.nickname, intent.email, null)
-                    .onSuccess {
-                        _state.update { it.copy(message = "프로필이 저장되었습니다.") }
-                    }
-                    .onFailure { error ->
-                        _state.update { it.copy(message = error.message ?: "저장 실패") }
-                    }
-            }
-        }
-
         is AuthContract.Intent.ResetProfileImage -> {
             screenModelScope.launch {
-                // 💡 여기서 null을 보내면 서버에서 기본 이미지로 처리하도록 규약 (필요시 수정)
-                authRepository.updateProfile(null, null, null)
-                    .onSuccess {
-                        _state.update { it.copy(message = "기본 이미지로 설정되었습니다.") }
-                    }
+                authRepository.updateProfile(resetImage = true)
+                .onSuccess { user ->
+                    _state.update { it.copy(user = user, message = "기본 이미지로 설정되었습니다.") }
+                }
             }
         }
 
         is AuthContract.Intent.UpdateProfileImage -> {
             screenModelScope.launch {
-                authRepository.updateProfile(null, null, intent.imageBytes)
-                    .onSuccess {
-                        _state.update { it.copy(message = "프로필 이미지가 변경되었습니다.") }
+                authRepository.updateProfile(imageBytes = intent.imageBytes)
+                    .onSuccess { user ->
+                        _state.update { it.copy(user = user, message = "프로필 이미지가 변경되었습니다.") }
                     }
                     .onFailure { error ->
                         _state.update { it.copy(message = error.message ?: "이미지 변경 실패") }
@@ -395,10 +381,12 @@ class AuthViewModel(
                         }
                         .onFailure { error ->
                             _state.update { it.copy(isLoading = false, message = error.message) }
+                            Napier.e("소셜 연결 실패: ${error.message}")
                         }
                 }
                 .onFailure { error ->
                     _state.update { it.copy(isLoading = false, message = error.message) }
+                    Napier.e("소셜 토큰 획득 실패: ${error.message}")
                 }
         }
     }
@@ -486,12 +474,14 @@ class AuthViewModel(
 
             socialAuthService.getSocialToken(provider)
                 .onSuccess { token ->
-                    authRepository.refreshSocialProfile(provider, token)
-                        .onFailure { error ->
-                            // 💡 수정: 갱신 실패해도 세션을 만료시키지 않고 로그만 출력
-                            Napier.w("소셜 프로필 자동 갱신 실패 (네트워크 또는 토큰 만료): ${error.message}")
-                            // 아무 동작 하지 않음 (기존 세션 유지)
-                        }
+                    authRepository.updateProfile(
+                        socialProvider = provider,
+                        socialAccessToken = token,
+                    )
+                    .onSuccess { user -> _state.update { it.copy(user = user) } }   // 갱신된 이미지 반영
+                    .onFailure { error ->
+                        Napier.w("소셜 프로필 자동 갱신 실패: ${error.message}")
+                    }
                 }
                 .onFailure { error ->
                     // 카카오톡 로그인 세션이 끊겨있을 경우 등

@@ -105,15 +105,6 @@ class AuthRepositoryImpl(
         val token = socialAuthManager.getAppleToken() ?: throw Exception("Apple Login Cancelled")
         socialLogin(AuthProvider.APPLE, token).getOrThrow()
     }
-
-    override suspend fun verifyAuthCode(email: String, code: String): Result<UserResponse> =
-        authApi.verifyAuthCode(EmailVerifyRequest(email, code))
-            .onSuccess { response ->
-                settings.putString(SOCIAL_PROVIDER, "EMAIL")
-                saveTokensAndUser(response)
-            }
-            .map { it.user }
-
     override suspend fun verifyEmailToken(token: String): Result<User> =
         authApi.verifyEmailToken(token)
             .onSuccess { response ->
@@ -151,8 +142,8 @@ class AuthRepositoryImpl(
         authApi.changePrimaryProvider(provider)
             .onSuccess { settings.putString(SOCIAL_PROVIDER, provider.name) }
 
-    override suspend fun disconnectProvider(jwt: String, provider: AuthProvider): Result<HttpResponse> =
-        authApi.disconnectProvider(provider)
+    override suspend fun disconnectSocial(jwt: String, provider: AuthProvider): Result<HttpResponse> =
+        authApi.disconnectSocial(provider)
 
     override suspend fun disconnectEmail(jwt: String): Result<HttpResponse> = authApi.disconnectEmail()
 
@@ -164,19 +155,25 @@ class AuthRepositoryImpl(
     override suspend fun updateProfile(
         nickname: String?,
         email: String?,
-        imageBytes: ByteArray?
-    ): Result<Unit> = runCatching {
-        authApi.updateProfile(nickname, email, imageBytes).getOrThrow()
-
-        // 💡 성공 시 로컬 정보 동기화를 위해 유저 정보 재조회 (이미지 URL이 서버에서 바뀌었을 수 있음)
-        val userResponse = authApi.getUserInfo().getOrNull()
-        userResponse?.let {
-            val domainUser = it.responseToUser()
-            userDao.upsertUser(domainUser.toUserEntity())
-            settings.putString("key_user_nickname", domainUser.nickname)
-            domainUser.profileImageUrl?.let { url -> settings.putString("key_user_profile_img", url) }
-        }
+        imageBytes: ByteArray?,
+        resetImage: Boolean,
+        socialProvider: AuthProvider?,
+        socialAccessToken: String?,
+    ): Result<User> = authApi.updateProfile(
+        nickname = nickname,
+        email = email,
+        imageBytes = imageBytes,
+        resetImage = resetImage,
+        socialProvider = socialProvider,
+        socialAccessToken = socialAccessToken,
+    ).map { response ->
+        val user = response.responseToUser()
+        userDao.upsertUser(user.toUserEntity())   // 로컬 캐시 갱신 (DAO 메서드명은 프로젝트에 맞게)
+        user
     }
+
+    override suspend fun getChannelTalkHash(): Result<String> =
+        authApi.getChannelTalkHash().map { it.memberHash }
 
     override suspend fun saveSocialUser(provider: AuthProvider, userResponse: UserResponse): Result<User> = runCatching {
         val user = userResponse.responseToUser()
@@ -185,14 +182,6 @@ class AuthRepositoryImpl(
         user.email?.let { settings.putString("key_user_email", it) }
         user
     }.onFailure { e -> Napier.e("소셜 유저 저장 실패: ${e.message}") }
-
-    override suspend fun refreshSocialProfile(provider: AuthProvider, socialAccessToken: String): Result<Unit> =
-        authApi.refreshSocialProfile(provider, socialAccessToken)
-            .map { userResponse ->
-                val domainUser = userResponse.responseToUser()
-                userDao.upsertUser(domainUser.toUserEntity())
-                settings.putString("key_user_profile_img", domainUser.profileImageUrl.orEmpty())
-            }
 
     private suspend fun clearLocalSession() {
         tokenRepository.clearAccessToken()

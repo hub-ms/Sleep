@@ -35,6 +35,7 @@ fun AppInfoContent(
     currentVersion: String = "1.0.4",
     isLatestVersion: Boolean = true,
     subscriptionStatusLabel: String = "무료 플랜",
+    isPremium: Boolean = false,
     onNavigateToVersionHistory: () -> Unit = {},
     onNavigateToLicenseCredit: () -> Unit = {},
     onNavigateToTerms: () -> Unit = {},
@@ -44,20 +45,22 @@ fun AppInfoContent(
 ) {
     val uriHandler = LocalUriHandler.current
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState())
             .navigationBarsPadding()
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        contentAlignment = Alignment.Center,
     ) {
-        // ===== 헤더 =====
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+
             Surface(
-                modifier = Modifier.size(100.dp),
+                modifier = Modifier.size(150.dp),
                 shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
             ) {
@@ -69,14 +72,12 @@ fun AppInfoContent(
                     )
                 }
             }
-            Spacer(Modifier.height(8.dp))
             Text(
                 text = "SleepyTime",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             )
-            Spacer(Modifier.height(8.dp))
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = Color.White.copy(alpha = 0.05f)
@@ -93,62 +94,64 @@ fun AppInfoContent(
                 )
             }
         }
-        SettingSection {
-            InfoLinkItem(
-                title = "구독 상태",
-                trailingText = subscriptionStatusLabel,
-                onClick = {
-                    onManageSubscription()
-                    uriHandler.openUri(PLAY_STORE_SUBSCRIPTIONS_URL)
-                }
-            )
-            InfoLinkItem(
-                title = "구매 복원",
-                onClick = {
-                    onRestorePurchase()
-                }
-            )
-            InfoLinkItem(
-                title = "버전 히스토리",
-                onClick = onNavigateToVersionHistory
-            )
-            InfoLinkItem(
-                title = "오픈소스 라이선스 및 음원 크레딧",
-                onClick = onNavigateToLicenseCredit
-            )
-            InfoLinkItem(
-                title = "플레이스토어에 리뷰 남기기",
-                onClick = {
-                    uriHandler.openUri(PLAY_STORE_REVIEW_URL)
-                }
-            )
-        }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        Column(
+            modifier = Modifier.align(Alignment.BottomCenter),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = "이용약관",
-                style = MaterialTheme.typography.caption,
-                textDecoration = TextDecoration.Underline,
-                color = Color.Gray,
-                modifier = Modifier.clickable { onNavigateToTerms() }
-            )
-            Text(
-                text = "개인정보 처리방침",
-                style = MaterialTheme.typography.caption,
-                textDecoration = TextDecoration.Underline,
-                color = Color.Gray,
-                modifier = Modifier.clickable { onNavigateToPrivacy() }
-            )
+            SettingSection {
+                InfoLinkItem(
+                    title = "구독 상태",
+                    trailingText = subscriptionStatusLabel,
+                    onClick = {
+                        if (isPremium) {
+                            uriHandler.openUri(PLAY_STORE_SUBSCRIPTIONS_URL)
+                        } else {
+                            onManageSubscription()
+                        }
+                    }
+                )
+                InfoLinkItem(
+                    title = "오픈소스 라이선스 및 음원 크레딧",
+                    onClick = onNavigateToLicenseCredit
+                )
+                InfoLinkItem(
+                    title = "플레이스토어에 리뷰 남기기",
+                    onClick = {
+                        uriHandler.openUri(PLAY_STORE_REVIEW_URL)
+                    }
+                )
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "이용약관",
+                    style = MaterialTheme.typography.caption,
+                    textDecoration = TextDecoration.Underline,
+                    color = Color.Gray,
+                    modifier = Modifier.clickable { onNavigateToTerms() }
+                )
+                Text(
+                    text = "개인정보 처리방침",
+                    style = MaterialTheme.typography.caption,
+                    textDecoration = TextDecoration.Underline,
+                    color = Color.Gray,
+                    modifier = Modifier.clickable { onNavigateToPrivacy() }
+                )
+            }
         }
     }
 }
 @Composable
 private fun SettingSection(
+    modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    SettingCard {
+    SettingCard(
+        modifier = modifier
+    ) {
         content()
     }
 }

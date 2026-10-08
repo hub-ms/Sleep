@@ -1,4 +1,4 @@
-﻿package com.sleepytime.shared.ui.theme
+﻿package com.soundsleeper.app.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
@@ -7,10 +7,10 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import com.sleepytime.shared.resources.Res
-import com.sleepytime.shared.resources.pretendard_bold
-import com.sleepytime.shared.resources.pretendard_medium
-import com.sleepytime.shared.resources.pretendard_regular
+import com.soundsleeper.app.resources.Res
+import com.soundsleeper.app.resources.pretendard_bold
+import com.soundsleeper.app.resources.pretendard_medium
+import com.soundsleeper.app.resources.pretendard_regular
 import org.jetbrains.compose.resources.Font
 
 @Composable
@@ -22,7 +22,7 @@ fun rememberPretendard(): FontFamily {
 }
 
 @Composable
-fun SleepTypography(): Typography {
+fun sleepTypography(): Typography {
     val pretendard = rememberPretendard()
     return remember(pretendard) {
         Typography(

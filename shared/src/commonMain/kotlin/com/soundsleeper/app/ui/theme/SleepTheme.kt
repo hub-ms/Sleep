@@ -80,8 +80,13 @@ val LocalSleepStageColors = staticCompositionLocalOf { DefaultSleepStageColors }
 fun SleepAppTheme(
     content: @Composable () -> Unit
 ) {
+    // typography 를 넘기지 않으면 Pretendard 정의(sleepTypography)가 아무 데도 닿지 않아
+    // 앱 전체가 Material 기본 폰트로 그려진다. 실제로 그 상태였다.
+    // sleepTypography 는 titleLarge/bodyLarge/bodyMedium/labelSmall 넷만 재정의하므로
+    // headlineSmall·labelMedium 등을 쓰는 자리는 여전히 Material 기본값을 쓴다.
     MaterialTheme(
         colorScheme = SleepDarkColors,
+        typography = sleepTypography(),
     ) {
         CompositionLocalProvider(
             LocalSleepScoreColors provides DefaultSleepScoreColors,

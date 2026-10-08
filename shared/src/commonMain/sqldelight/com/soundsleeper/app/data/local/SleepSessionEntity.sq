@@ -1,7 +1,6 @@
-import com.sleepytime.shared.domain.model.EnvironmentFeature;
-import com.sleepytime.shared.domain.model.SleepMetrics;
-import com.sleepytime.shared.domain.model.SleepStage;
-import com.sleepytime.shared.enum_.SleepStageType;
+import com.soundsleeper.app.domain.model.EnvironmentFeature;
+import com.soundsleeper.app.domain.model.SleepStage;
+import com.soundsleeper.app.enum_.SleepStageType;
 import kotlin.Float;
 import kotlin.Int;
 import kotlin.collections.List;
@@ -11,8 +10,6 @@ import kotlinx.datetime.LocalDate;
 CREATE TABLE SleepSessionEntity (
     sessionId TEXT NOT NULL PRIMARY KEY,
     date TEXT AS LocalDate NOT NULL,
-
-    sleepMetrics TEXT AS SleepMetrics NOT NULL,
 
     environmentHistory TEXT AS List<EnvironmentFeature.Snapshot> NOT NULL,
     environmentStats TEXT AS EnvironmentFeature.Statistics NOT NULL,
@@ -54,4 +51,8 @@ WHERE date LIKE :yearMonthPattern;
 getLatestSession: SELECT * FROM SleepSessionEntity
 ORDER BY createdAt DESC
 LIMIT 1;
+
+getSessionById:
+SELECT * FROM SleepSessionEntity
+WHERE sessionId = :sessionId;
 deleteSession: DELETE FROM SleepSessionEntity WHERE sessionId = ?;

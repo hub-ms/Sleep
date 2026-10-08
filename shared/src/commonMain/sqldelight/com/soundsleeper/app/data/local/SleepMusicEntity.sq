@@ -1,4 +1,4 @@
-import com.sleepytime.shared.enum_.MusicCategory;
+import com.soundsleeper.app.enum_.MusicCategory;
 import kotlin.Boolean;
 import kotlin.Float;
 
@@ -37,3 +37,9 @@ WHERE musicName = ?;
 
 getMusicByName:
 SELECT * FROM SleepMusicEntity WHERE musicName = ?;
+
+markPremiumMusic:
+UPDATE SleepMusicEntity SET isPremium = 1 WHERE musicName IN ?;
+
+markFreeMusic:
+UPDATE SleepMusicEntity SET isPremium = 0 WHERE musicName NOT IN ?;

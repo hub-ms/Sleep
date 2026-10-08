@@ -1,0 +1,129 @@
+-- 스키마 버전 2 -> 3
+--
+-- 알람 설정이 Alarm 에서 SleepSetting 으로 재정리되면서 테이블 이름과 컬럼 이름이 바뀌고
+-- 취침 알림(reminder) 컬럼이 추가됐다. 또 SleepSessionEntity 에서 sleepMetrics 컬럼이 빠졌다.
+-- 마이그레이션 없이 배포하면 이미 앱을 쓰던 기기의 DB 는 버전 2에 머물러 있어서
+-- 새 표가 만들어지지 않고 "no such table: SleepSettingEntity" 로 죽는다.
+-- 기존 알람 설정과 수면 기록은 모두 그대로 옮긴다.
+
+-- 1) AlarmEntity -> SleepSettingEntity
+--    hour/minute/isEnabled 가 alarmHour/alarmMinute/isAlarmEnabled 로 바뀌었고
+--    isReminderEnabled/reminderHour/reminderMinute 가 새로 생겼다(새 컬럼은 기본값 사용).
+CREATE TABLE IF NOT EXISTS SleepSettingEntity(
+    alarmId INTEGER NOT NULL PRIMARY KEY CHECK(alarmId = 1),
+    alarmHour INTEGER NOT NULL DEFAULT 7,
+    alarmMinute INTEGER NOT NULL DEFAULT 30,
+    isAlarmEnabled INTEGER NOT NULL DEFAULT 0,
+    isVibrationEnabled INTEGER NOT NULL DEFAULT 0,
+    isSmartAlarmEnabled INTEGER NOT NULL DEFAULT 0,
+    smartAlarmRange INTEGER NOT NULL DEFAULT 20,
+    sound TEXT NOT NULL DEFAULT '',
+    isReminderEnabled INTEGER NOT NULL DEFAULT 0,
+    reminderHour INTEGER NOT NULL DEFAULT 23,
+    reminderMinute INTEGER NOT NULL DEFAULT 0
+);
+
+INSERT OR REPLACE INTO SleepSettingEntity (
+    alarmId,
+    alarmHour,
+    alarmMinute,
+    isAlarmEnabled,
+    isVibrationEnabled,
+    isSmartAlarmEnabled,
+    smartAlarmRange,
+    sound
+)
+SELECT
+    1,
+    hour,
+    minute,
+    isEnabled,
+    isVibrationEnabled,
+    isSmartAlarmEnabled,
+    smartAlarmRange,
+    sound
+FROM AlarmEntity;
+
+DROP INDEX IF EXISTS alarm_isEnabled;
+DROP INDEX IF EXISTS alarm_time;
+DROP TABLE IF EXISTS AlarmEntity;
+
+CREATE INDEX IF NOT EXISTS alarm_isEnabled ON SleepSettingEntity(isAlarmEnabled);
+CREATE INDEX IF NOT EXISTS alarm_time ON SleepSettingEntity(alarmHour, alarmMinute);
+
+-- 2) SleepSessionEntity 에서 sleepMetrics 컬럼 제거.
+--    minSdk 31(SQLite 3.32)에는 ALTER TABLE ... DROP COLUMN 이 없으므로
+--    새 표로 옮겨 담는 방식으로 처리한다. 컬럼 순서는 현재 .sq 와 똑같이 맞춘다
+--    (insertSession 이 `VALUES ?` 로 위치 기반 삽입을 하기 때문에 순서가 어긋나면 안 된다).
+CREATE TABLE SleepSessionEntity_new (
+    sessionId TEXT NOT NULL PRIMARY KEY,
+    date TEXT NOT NULL,
+
+    environmentHistory TEXT NOT NULL,
+    environmentStats TEXT NOT NULL,
+    environmentFlags TEXT NOT NULL,
+
+    awakeMinutes REAL NOT NULL,
+    lightMinutes REAL NOT NULL,
+    deepMinutes REAL NOT NULL,
+    remMinutes REAL NOT NULL,
+    targetMinutes REAL NOT NULL,
+    sleepLatencyMinutes REAL NOT NULL,
+    stageTimeline TEXT NOT NULL,
+    stagesDistribution TEXT NOT NULL,
+
+    wakeCount INTEGER NOT NULL,
+    sleepEfficiency INTEGER NOT NULL,
+
+    sensorCsv TEXT NOT NULL,
+    environmentCsv TEXT NOT NULL,
+    createdAt INTEGER NOT NULL,
+    updatedAt INTEGER NOT NULL
+);
+
+INSERT INTO SleepSessionEntity_new (
+    sessionId,
+    date,
+    environmentHistory,
+    environmentStats,
+    environmentFlags,
+    awakeMinutes,
+    lightMinutes,
+    deepMinutes,
+    remMinutes,
+    targetMinutes,
+    sleepLatencyMinutes,
+    stageTimeline,
+    stagesDistribution,
+    wakeCount,
+    sleepEfficiency,
+    sensorCsv,
+    environmentCsv,
+    createdAt,
+    updatedAt
+)
+SELECT
+    sessionId,
+    date,
+    environmentHistory,
+    environmentStats,
+    environmentFlags,
+    awakeMinutes,
+    lightMinutes,
+    deepMinutes,
+    remMinutes,
+    targetMinutes,
+    sleepLatencyMinutes,
+    stageTimeline,
+    stagesDistribution,
+    wakeCount,
+    sleepEfficiency,
+    sensorCsv,
+    environmentCsv,
+    createdAt,
+    updatedAt
+FROM SleepSessionEntity;
+
+DROP TABLE SleepSessionEntity;
+
+ALTER TABLE SleepSessionEntity_new RENAME TO SleepSessionEntity;

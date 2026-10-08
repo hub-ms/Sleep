@@ -1,9 +1,13 @@
-package com.sleepytime.shared.domain.model
+package com.soundsleeper.app.domain.model
 
-import com.sleepytime.shared.resources.Res
-import com.sleepytime.shared.resources.title_alarm_bird
+import com.soundsleeper.app.resources.Res
+import com.soundsleeper.app.resources.title_alarm_bird
 import kotlinx.serialization.Serializable
 
+data class SleepSetting(
+    val alarm: Alarm,
+    val reminder: Reminder
+)
 data class Alarm(
     val hour: Int,
     val minute: Int,
@@ -32,4 +36,8 @@ data class Alarm(
         }
     }
 }
-
+data class Reminder(
+    val hour: Int,
+    val minute: Int,
+    val isEnabled: Boolean,
+)

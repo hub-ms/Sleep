@@ -1,10 +1,10 @@
-package com.sleepytime.app.controller_new
+package com.soundsleeper.app.controller_new
 
-import com.sleepytime.app.service_new.BillingException
-import com.sleepytime.app.service_new.SubscriptionService
-import com.sleepytime.shared.data.remote.dto.request.PurchaseVerifyRequest
-import com.sleepytime.shared.data.remote.dto.request.RestorePurchasesRequest
-import com.sleepytime.shared.data.remote.dto.response.SubscriptionResponse
+import com.soundsleeper.app.exception.BillingException
+import com.soundsleeper.app.service_new.SubscriptionService
+import com.soundsleeper.app.data.remote.dto.request.PurchaseVerifyRequest
+import com.soundsleeper.app.data.remote.dto.request.RestorePurchasesRequest
+import com.soundsleeper.app.data.remote.dto.response.SubscriptionResponse
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal

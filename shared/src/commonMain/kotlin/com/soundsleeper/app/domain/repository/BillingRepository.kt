@@ -1,7 +1,7 @@
-package com.sleepytime.shared.domain.repository
+package com.soundsleeper.app.domain.repository
 
-import com.sleepytime.shared.domain.model.BillingPurchaseResult
-import com.sleepytime.shared.domain.model.SubscriptionStatus
+import com.soundsleeper.app.domain.model.BillingPurchaseResult
+import com.soundsleeper.app.domain.model.SubscriptionStatus
 
 interface BillingRepository {
     suspend fun verifyPurchase(purchase: BillingPurchaseResult): Result<SubscriptionStatus>

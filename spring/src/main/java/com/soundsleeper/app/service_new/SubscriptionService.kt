@@ -1,12 +1,13 @@
-package com.sleepytime.app.service_new
+package com.soundsleeper.app.service_new
 
-import com.sleepytime.app.entity_new.SubscriptionEntity
-import com.sleepytime.app.entity_new.SubscriptionStatusType
-import com.sleepytime.app.repository_new.SubscriptionJpaRepository
-import com.sleepytime.app.repository_new.UserJpaRepository
-import com.sleepytime.shared.data.remote.dto.request.PurchaseVerifyRequest
-import com.sleepytime.shared.data.remote.dto.request.RestorePurchasesRequest
-import com.sleepytime.shared.data.remote.dto.response.SubscriptionResponse
+import com.soundsleeper.app.entity_new.SubscriptionEntity
+import com.soundsleeper.app.entity_new.SubscriptionStatusType
+import com.soundsleeper.app.exception.BillingException
+import com.soundsleeper.app.repository_new.SubscriptionJpaRepository
+import com.soundsleeper.app.repository_new.UserJpaRepository
+import com.soundsleeper.app.data.remote.dto.request.PurchaseVerifyRequest
+import com.soundsleeper.app.data.remote.dto.request.RestorePurchasesRequest
+import com.soundsleeper.app.data.remote.dto.response.SubscriptionResponse
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -84,7 +85,7 @@ class SubscriptionService(
     }
 
     @Transactional
-    fun handleRtdn(purchaseToken: String) {
+    fun handleRtdn(purchaseToken: String, notificationType: Int) {
         val existing = subscriptionRepository.findByPurchaseToken(purchaseToken)
         if (existing == null) {
             log.info("RTDN 수신: 매칭되는 구독 레코드가 없어 건너뜀 (purchaseToken=$purchaseToken)")
@@ -103,6 +104,7 @@ class SubscriptionService(
             status = mapSubscriptionState(purchase.subscriptionState)
             expiryTime = lineItem?.expiryTime?.let { toLocalDateTime(it) }
             autoRenewing = lineItem?.autoRenewingPlan?.autoRenewEnabled ?: false
+            latestNotificationType = notificationType
             updatedAt = LocalDateTime.now()
         }
         subscriptionRepository.save(existing)

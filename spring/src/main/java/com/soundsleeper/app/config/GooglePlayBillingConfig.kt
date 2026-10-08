@@ -1,4 +1,4 @@
-package com.sleepytime.app.config
+package com.soundsleeper.app.config
 
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
 import com.google.api.client.json.gson.GsonFactory
@@ -12,8 +12,6 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Lazy
 import java.io.FileInputStream
 
-// AndroidPublisher 빈은 @Lazy로 등록한다. serviceAccountKeyPath가 아직 준비되지 않은
-// 로컬 개발 환경에서도, 실제로 결제 검증 기능을 호출하기 전까지는 서버가 정상 기동되어야 하기 때문이다.
 @Configuration
 @EnableConfigurationProperties(GooglePlayProperties::class)
 class GooglePlayBillingConfig(
@@ -31,6 +29,6 @@ class GooglePlayBillingConfig(
             GoogleNetHttpTransport.newTrustedTransport(),
             GsonFactory.getDefaultInstance(),
             HttpCredentialsAdapter(credentials)
-        ).setApplicationName("SleepyTime").build()
+        ).setApplicationName("SoundSleeper").build()
     }
 }

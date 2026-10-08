@@ -1,7 +1,7 @@
-package com.sleepytime.shared.platform
+package com.soundsleeper.app.platform
 
-import com.sleepytime.shared.domain.model.BillingProductDetails
-import com.sleepytime.shared.domain.model.BillingPurchaseResult
+import com.soundsleeper.app.domain.model.BillingProductDetails
+import com.soundsleeper.app.domain.model.BillingPurchaseResult
 
 actual class PlayBillingManager {
     actual suspend fun queryProductDetails(productIds: List<String>): List<BillingProductDetails> = emptyList()

@@ -1,4 +1,4 @@
-package com.sleepytime.shared.data.remote.dto.request
+package com.soundsleeper.app.data.remote.dto.request
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

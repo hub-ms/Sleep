@@ -1,8 +1,8 @@
-package com.sleepytime.shared.data.remote.api
+package com.soundsleeper.app.data.remote.api
 
-import com.sleepytime.shared.data.remote.dto.request.PurchaseVerifyRequest
-import com.sleepytime.shared.data.remote.dto.request.RestorePurchasesRequest
-import com.sleepytime.shared.data.remote.dto.response.SubscriptionResponse
+import com.soundsleeper.app.data.remote.dto.request.PurchaseVerifyRequest
+import com.soundsleeper.app.data.remote.dto.request.RestorePurchasesRequest
+import com.soundsleeper.app.data.remote.dto.response.SubscriptionResponse
 import io.github.aakira.napier.Napier
 import io.ktor.client.*
 import io.ktor.client.call.*

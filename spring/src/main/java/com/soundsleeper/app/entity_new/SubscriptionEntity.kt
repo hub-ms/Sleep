@@ -1,4 +1,4 @@
-package com.sleepytime.app.entity_new
+package com.soundsleeper.app.entity_new
 
 import jakarta.persistence.*
 import java.time.LocalDateTime

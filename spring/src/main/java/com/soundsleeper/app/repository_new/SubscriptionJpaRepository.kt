@@ -1,7 +1,7 @@
-package com.sleepytime.app.repository_new
+package com.soundsleeper.app.repository_new
 
-import com.sleepytime.app.entity_new.SubscriptionEntity
-import com.sleepytime.app.entity_new.SubscriptionStatusType
+import com.soundsleeper.app.entity_new.SubscriptionEntity
+import com.soundsleeper.app.entity_new.SubscriptionStatusType
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.stereotype.Repository
 

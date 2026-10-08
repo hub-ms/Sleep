@@ -1,4 +1,4 @@
-package com.sleepytime.app.service_new
+package com.soundsleeper.app.exception
 
 sealed class BillingException(message: String, cause: Throwable? = null) : RuntimeException(message, cause) {
     class InvalidToken(cause: Throwable) : BillingException("Invalid or unrecognized purchase token", cause)

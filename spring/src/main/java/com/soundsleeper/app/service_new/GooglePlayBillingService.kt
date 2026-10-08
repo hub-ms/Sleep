@@ -1,9 +1,9 @@
-package com.sleepytime.app.service_new
+package com.soundsleeper.app.service_new
 
 import com.google.api.services.androidpublisher.AndroidPublisher
 import com.google.api.services.androidpublisher.model.SubscriptionPurchaseV2
 import com.google.api.services.androidpublisher.model.SubscriptionPurchasesAcknowledgeRequest
-import com.sleepytime.app.config.GooglePlayProperties
+import com.soundsleeper.app.config.GooglePlayProperties
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.stereotype.Service
 

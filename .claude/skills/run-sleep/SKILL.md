@@ -48,7 +48,7 @@ Individual steps (reuse a device you already booted):
 | `driver.sh build-app` | `gradlew.bat :androidApp:assembleDebug` |
 | `driver.sh build-release` | `gradlew.bat :androidApp:assembleRelease` (minified; currently **unsigned** — no release signingConfig exists) |
 | `driver.sh install-app` | `adb install -r` the debug APK |
-| `driver.sh launch-app` | `adb shell am start` on `com.soundsleeper.app/com.sleepytime.shared.MainActivity` |
+| `driver.sh launch-app` | `adb shell am start` on `com.somniotune.app/com.somniotune.app.MainActivity` |
 | `driver.sh ss [path]` | `adb exec-out screencap -p` to a PNG (default `.artifacts/run-skill/screenshot.png`) |
 | `driver.sh tap X Y` / `driver.sh text STR` | `adb shell input tap/text` |
 | `driver.sh emulator-stop` | `adb emu kill` |

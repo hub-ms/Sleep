@@ -32,11 +32,11 @@ import numpy as np
 BASE_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = BASE_DIR.parent
 CLASSIFIER_KT = (
-    REPO_ROOT / "shared" / "src" / "androidMain" / "kotlin" / "com" / "sleepytime" / "shared"
+    REPO_ROOT / "shared" / "src" / "androidMain" / "kotlin" / "com" / "somniotune" / "app"
     / "platform" / "SleepStageClassifier.kt"
 )
 PARITY_FIXTURE_OUT = (
-    REPO_ROOT / "shared" / "src" / "commonTest" / "kotlin" / "com" / "sleepytime" / "shared"
+    REPO_ROOT / "shared" / "src" / "commonTest" / "kotlin" / "com" / "somniotune" / "app"
     / "util" / "ParityFixture.kt"
 )
 
@@ -919,7 +919,7 @@ def run_export_parity_fixture():
         for frame in mel
     )
 
-    body = f'''package com.sleepytime.shared.util
+    body = f'''package com.somniotune.app.util
 
 /**
  * 자동 생성 파일 — 직접 수정하지 마세요.

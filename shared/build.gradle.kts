@@ -11,7 +11,7 @@ plugins {
 
 compose.resources {
     publicResClass = true
-    packageOfResClass = "com.soundsleeper.app.resources"
+    packageOfResClass = "com.somniotune.app.resources"
     generateResClass = auto
 }
 
@@ -23,12 +23,12 @@ kotlin {
         freeCompilerArgs.add("-Xexpect-actual-classes")
     }
     android {
-        namespace = "com.soundsleeper.app"
+        namespace = "com.somniotune.app"
         compileSdk = 37
         minSdk = 31
 
         // 기본값이 false다. 켜지 않으면 src/androidMain/res가 AAR에 들어가지 않아
-        // :androidApp 매니페스트의 @style/Theme.SoundSleeper 등이 해석되지 않는다.
+        // :androidApp 매니페스트의 @style/Theme.SomnioTune 등이 해석되지 않는다.
         androidResources {
             enable = true
         }
@@ -123,7 +123,7 @@ kotlin {
 sqldelight {
     databases {
         create("SleepDatabase") {
-            packageName.set("com.soundsleeper.app.data.local.generated")
+            packageName.set("com.somniotune.app.data.local.generated")
         }
     }
 }

@@ -25,7 +25,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "SoundSleeper"
+rootProject.name = "SomnioTune"
 include(":shared")
 include(":androidApp")
 include(":spring")

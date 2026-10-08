@@ -22,13 +22,13 @@ val revenueCatApiKey = localProperties.getProperty("revenuecat.api.key") ?: ""
 
 extensions.configure<ApplicationExtension> {
     // AGP는 모듈/라이브러리마다 고유한 namespace를 요구한다. 앱의 코드와 리소스는 전부
-    // :shared(namespace = com.soundsleeper.app)에 있고 이 모듈은 얇은 래퍼라서,
+    // :shared(namespace = com.somniotune.app)에 있고 이 모듈은 얇은 래퍼라서,
     // 충돌을 피하는 쪽을 여기로 잡았다. 설치되는 패키지명은 아래 applicationId 그대로다.
-    namespace = "com.soundsleeper.app.android"
+    namespace = "com.somniotune.app.android"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.soundsleeper.app"
+        applicationId = "com.somniotune.app"
         minSdk = 31
         targetSdk = 37
         versionCode = 1

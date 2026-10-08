@@ -49,7 +49,7 @@ tasks.register<JavaExec>("runSpringApp") {
 
     val main = sourceSets.main.get()
     classpath = main.runtimeClasspath
-    mainClass.set("com.soundsleeper.app.SleepApplicationKt")
+    mainClass.set("com.somniotune.app.SleepApplicationKt")
     standardInput = System.`in`
 }
 

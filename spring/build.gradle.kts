@@ -1,3 +1,5 @@
+import org.springframework.boot.gradle.tasks.bundling.BootJar
+
 plugins {
     alias(libs.plugins.kotlinJvm)
     alias(libs.plugins.kotlinSpring)
@@ -20,27 +22,25 @@ dependencies {
     }
 
 
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
-    implementation("io.jsonwebtoken:jjwt-api:0.12.5")
-    runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.5")
-    runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.5")
-    implementation("org.springframework.boot:spring-boot-starter-web")
-    implementation("org.springframework.boot:spring-boot-starter-mail")
-    implementation("org.jetbrains.kotlin:kotlin-reflect")
-    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
-    implementation("org.springframework.boot:spring-boot-starter-validation")
-    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-    implementation("org.springframework.boot:spring-boot-starter-security")
-    implementation("org.springframework.boot:spring-boot-starter-data-redis")
+    implementation(libs.jackson.module.kotlin)
+    implementation(libs.jjwt.api)
+    runtimeOnly(libs.jjwt.impl)
+    runtimeOnly(libs.jjwt.jackson)
+    implementation(libs.spring.boot.starter.web)
+    implementation(libs.spring.boot.starter.mail)
+    implementation(libs.kotlin.reflect)
+    implementation(libs.spring.boot.starter.validation)
+    implementation(libs.spring.boot.starter.data.jpa)
+    implementation(libs.spring.boot.starter.security)
+    implementation(libs.spring.boot.starter.data.redis)
     implementation(libs.kotlinx.datetime)
 
     // Google Play 서버사이드 구독 검증 (Android Publisher API) + RTDN(Pub/Sub) OIDC 토큰 검증
-    implementation("com.google.apis:google-api-services-androidpublisher:v3-rev20260817-2.0.0")
-    implementation("com.google.auth:google-auth-library-oauth2-http:1.52.0")
-    implementation("com.google.api-client:google-api-client:2.9.1")
+    implementation(libs.google.api.services.androidpublisher)
+    implementation(libs.google.auth.library.oauth2.http)
+    implementation(libs.google.api.client)
 
-    runtimeOnly("org.postgresql:postgresql:42.7.10")
-    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    runtimeOnly(libs.postgresql)
 }
 
 tasks.register<JavaExec>("runSpringApp") {
@@ -49,6 +49,10 @@ tasks.register<JavaExec>("runSpringApp") {
 
     val main = sourceSets.main.get()
     classpath = main.runtimeClasspath
-    mainClass.set("com.sleepytime.app.SleepApplicationKt")
+    mainClass.set("com.soundsleeper.app.SleepApplicationKt")
     standardInput = System.`in`
+}
+
+tasks.withType<BootJar>().configureEach {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }

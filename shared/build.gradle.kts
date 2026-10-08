@@ -1,68 +1,53 @@
-import com.android.build.api.dsl.ApplicationExtension
-import java.util.Properties
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
-    alias(libs.plugins.androidApplication)
-
+    alias(libs.plugins.androidKotlinMultiplatformLibrary)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
-
     alias(libs.plugins.kotlinSerialization)
-    alias(libs.plugins.ksp)
     alias(libs.plugins.sqlDelight)
-
-    alias(libs.plugins.googleGmsServices)
     alias(libs.plugins.aboutLibraries)
-    id("kotlin-parcelize")
 }
-
-val localProperties = Properties().apply {
-    val file = rootProject.file("local.properties")
-    if (file.exists()) {
-        file.inputStream().use { load(it) }
-    }
-}
-val kmaKey = localProperties.getProperty("kma.service.key") ?: ""
-val serverBaseUrl = localProperties.getProperty("server.base.url") ?: "http://localhost/"
-val googleClientId = localProperties.getProperty("google.oauth.client.id") ?: ""
-val kakaoKey = localProperties.getProperty("kakao.native.app.key") ?: ""
-val channelTalkPluginKey = localProperties.getProperty("channeltalk.plugin.key") ?: ""
 
 compose.resources {
     publicResClass = true
-    packageOfResClass = "com.sleepytime.shared.resources"
+    packageOfResClass = "com.soundsleeper.app.resources"
     generateResClass = auto
 }
 
 kotlin {
-    androidTarget()
+    // androidTarget()을 호출하지 않는다. com.android.kotlin.multiplatform.library 플러그인의
+    // 아래 android { } 블록이 android 타깃을 직접 만든다(둘을 같이 쓰면 중복 등록이 된다).
     jvm()
-    listOf(
-        iosX64(),
-        iosArm64(),
-        iosSimulatorArm64()
-    ).forEach { iosTarget ->
-        iosTarget.binaries.framework {
-            baseName = "shared"
-            isStatic = true
+    compilerOptions {
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
+    android {
+        namespace = "com.soundsleeper.app"
+        compileSdk = 37
+        minSdk = 31
+
+        // 기본값이 false다. 켜지 않으면 src/androidMain/res가 AAR에 들어가지 않아
+        // :androidApp 매니페스트의 @style/Theme.SoundSleeper 등이 해석되지 않는다.
+        androidResources {
+            enable = true
+        }
+
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
         }
     }
-
     sourceSets {
         commonMain.dependencies {
-            val composeVersion = libs.versions.compose.multiplatform.get()
-
-            implementation("org.jetbrains.compose.components:components-resources:$composeVersion")
-            implementation("org.jetbrains.compose.runtime:runtime:$composeVersion")
-            implementation("org.jetbrains.compose.foundation:foundation:$composeVersion")
-            implementation("org.jetbrains.compose.material3:material3:$composeVersion")
-            implementation("org.jetbrains.compose.ui:ui:$composeVersion")
-            implementation("org.jetbrains.compose.components:components-ui-tooling-preview:$composeVersion")
+            implementation(libs.compose.components.resources)
+            implementation(libs.compose.runtime)
+            implementation(libs.compose.foundation)
+            implementation(libs.compose.material3)
+            implementation(libs.compose.material.icons.extended)
+            implementation(libs.compose.ui)
+            implementation(libs.compose.components.ui.tooling.preview)
             implementation(libs.ktor.client.auth)
-
-            implementation(libs.androidx.lifecycle.viewmodel.compose)
-            implementation(libs.androidx.lifecycle.viewmodel.savedstate)
 
             implementation(libs.benasher44.uuid)
 
@@ -91,16 +76,16 @@ kotlin {
 
             implementation(libs.coil.compose)
             implementation(libs.coil.network)
-            implementation(libs.annotations)
 
-            implementation(libs.firebase.bom)
+            implementation(project.dependencies.platform(libs.firebase.bom))
             implementation(libs.aboutlibraries.compose)
+
+            // Lottie 애니메이션 (온보딩/페이월 일러스트)
+            implementation(libs.compottie)
+            implementation(libs.compottie.resources)
         }
         androidMain.dependencies {
-            implementation(libs.google.gson)
             implementation(libs.sqldelight.android.driver)
-
-            implementation(libs.koin.test)
 
             implementation(libs.koin.android)
             implementation(libs.kotlinx.coroutines.android)
@@ -111,11 +96,11 @@ kotlin {
             implementation(libs.androidx.media3.common)
 
             implementation(libs.ktor.client.okhttp)
-            implementation(libs.kotlinx.coroutines.play.services)
 
             implementation(libs.androidx.activity.compose)
+            // 앱 내 언어 전환(AppCompatDelegate.setApplicationLocales)에 필요하다.
+            implementation(libs.androidx.appcompat)
 
-            implementation(libs.google.play.services.location)
             implementation(libs.tensorflow.lite)
 
             implementation(libs.androidx.credentials)
@@ -123,11 +108,15 @@ kotlin {
             implementation(libs.googleid)
             implementation(libs.kakao.v2.user)
             implementation(libs.firebase.auth)
+            implementation(libs.firebase.messaging)
+            implementation(libs.firebase.crashlytics)
             implementation(libs.channel.plugin.android)
+            implementation(libs.billing.ktx)
+            implementation(libs.revenuecat.purchases)
         }
-        iosMain.dependencies {
-            implementation(libs.ktor.client.darwin)
-            implementation(libs.sqldelight.native.driver)
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
         }
     }
 }
@@ -135,54 +124,7 @@ kotlin {
 sqldelight {
     databases {
         create("SleepDatabase") {
-            packageName.set("com.sleepytime.shared.data.local.generated")
+            packageName.set("com.soundsleeper.app.data.local.generated")
         }
     }
 }
-
-extensions.configure<ApplicationExtension> {
-    namespace = "com.sleepytime.shared"
-    compileSdk = 36
-    defaultConfig {
-        applicationId = "com.sleepytime.app"
-        minSdk = 31
-        targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
-        buildConfigField("String", "KMA_SERVICE_KEY", "\"$kmaKey\"")
-        buildConfigField("String", "BASE_URL", "\"$serverBaseUrl\"")
-        buildConfigField("String", "GOOGLE_OAUTH_CLIENT_ID", "\"$googleClientId\"")
-        buildConfigField("String", "KAKAO_NATIVE_APP_KEY", "\"$kakaoKey\"")
-        buildConfigField("String", "CHANNELTALK_PLUGIN_KEY", "\"$channelTalkPluginKey\"")
-
-        manifestPlaceholders["KAKAO_NATIVE_APP_KEY"] = kakaoKey
-    }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-    buildFeatures {
-        compose = true
-        buildConfig = true
-    }
-    packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
-    }
-
-    buildTypes {
-        getByName("release") {
-            isMinifyEnabled = false
-        }
-    }
-    sourceSets {
-        getByName("main") {
-            manifest.srcFile("src/androidMain/AndroidManifest.xml")
-            res.directories.add("src/androidMain/res")
-            java.directories.add("src/androidMain/kotlin")
-            assets.directories.add("src/androidMain/assets")
-        }
-    }
-}
-

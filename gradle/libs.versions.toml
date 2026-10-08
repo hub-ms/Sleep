@@ -1,40 +1,49 @@
 [versions]
-agp = "8.7.3"
-kotlin = "2.1.21"
-compose-multiplatform = "1.7.1"
-androidx-activityCompose = "1.9.3"
-androidx-appcompat = "1.7.0"
-androidx-core-ktx = "1.15.0"
-androidx-lifecycle = "2.8.4"
-androidx-navigation = "2.8.0-alpha10"
-firebase = "34.15.0"
-androidx-media3 = "1.10.1"
-google-gson = "2.11.0"
-kakao = "2.20.6"
+agp = "9.4.1"
+kotlin = "2.4.20"
+compose-multiplatform = "1.12.1"
+compose-material3 = "1.9.0"
+androidx-activityCompose = "1.13.0"
+androidx-appcompat = "1.8.0"
+firebase = "34.19.0"
+androidx-media3 = "1.11.1"
+kakao = "2.25.0"
 channelTalk = "13.5.1"
-ktor = "3.0.1"
-koin = "4.0.0"
-coroutines = "1.9.0"
-serialization = "1.7.3"
+ktor = "3.6.0"
+koin = "4.2.2"
+coroutines = "1.11.0"
+serialization = "1.11.0"
 napier = "2.7.1"
-tensorflow-lite = "2.16.1"
-firebase-auth = "23.1.0"
-google-play-services-location = "21.3.0"
-google-play-services-auth = "21.2.0"
-androidx-credentials = "1.3.0"
-googleid = "1.1.1"
-kotlinx-datetime = "0.6.1"
-multiplatform-settings = "1.2.0"
-voyager = "1.1.0-beta03"
-ksp = "2.1.21-2.0.2"
-sqlDelight = "2.0.2"
-coil = "3.0.4"
-annotation = "26.1.0"
+tensorflow-lite = "2.17.0"
+firebase-auth = "23.2.1"
+firebase-messaging = "24.1.2"
+firebase-crashlytics = "20.1.1"
+androidx-credentials = "1.6.0"
+googleid = "1.2.1"
+kotlinx-datetime = "0.8.0"
+multiplatform-settings = "1.3.0"
+voyager = "2.2.21-1.10.3"
+ksp = "2.3.12"
+sqlDelight = "2.4.0"
+coil = "3.6.3"
 uuid = "0.8.4"
-aboutLibraries = "11.6.3"
+aboutLibraries = "15.2.0"
+billing = "9.1.0"
+revenuecat = "10.24.2"
+compottie = "2.3.3"
+
+# ---- spring ----
+jjwt = "0.13.0"
+google-api-services-androidpublisher = "v3-rev20260817-2.0.0"
+google-auth-oauth2-http = "1.54.0"
+google-api-client = "2.9.1"
+postgresql = "42.7.13"
+coreKtx = "1.19.1"
+lifecycleViewmodelKtx = "2.11.0"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activityCompose" }
+androidx-appcompat = { module = "androidx.appcompat:appcompat", version.ref = "androidx-appcompat" }
 androidx-media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "androidx-media3" }
 androidx-media3-ui = { module = "androidx.media3:media3-ui", version.ref = "androidx-media3" }
 androidx-media3-session = { module = "androidx.media3:media3-session", version.ref = "androidx-media3" }
@@ -43,13 +52,12 @@ androidx-credentials = { module = "androidx.credentials:credentials", version.re
 androidx-credentials-play-services-auth = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "androidx-credentials" }
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }
 
-google-gson = { module = "com.google.code.gson:gson", version.ref = "google-gson" }
-google-play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "google-play-services-location" }
 googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleid" }
 
 kakao-v2-user = { module = "com.kakao.sdk:v2-user", version.ref = "kakao" }
 
 channel-plugin-android = { module = "io.channel:plugin-android", version.ref = "channelTalk" }
+revenuecat-purchases = { module = "com.revenuecat.purchases:purchases", version.ref = "revenuecat" }
 
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-logging = { module = "io.ktor:ktor-client-logging", version.ref = "ktor" }
@@ -62,12 +70,10 @@ ktor-client-auth = { module = "io.ktor:ktor-client-auth", version.ref = "ktor" }
 koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
 koin-android = { module = "io.insert-koin:koin-android", version.ref = "koin" }
 koin-compose = { module = "io.insert-koin:koin-compose", version.ref = "koin" }
-koin-test = { module = "io.insert-koin:koin-test", version.ref = "koin" }
 
 
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
-kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "coroutines" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 
 napier = { module = "io.github.aakira:napier", version.ref = "napier" }
@@ -83,28 +89,59 @@ coil-network = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "
 
 
 firebase-auth = { module = "com.google.firebase:firebase-auth-ktx", version.ref = "firebase-auth" }
+firebase-messaging = { module = "com.google.firebase:firebase-messaging-ktx", version.ref = "firebase-messaging" }
+# KTX는 Crashlytics에서 사실상 deprecated(메인 모듈로 흡수)이므로 -ktx를 쓰지 않는다.
+firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics", version.ref = "firebase-crashlytics" }
 voyager-screenmodel = { module = "cafe.adriel.voyager:voyager-screenmodel", version.ref ="voyager" }
 voyager-navigator = { module = "cafe.adriel.voyager:voyager-navigator", version.ref ="voyager" }
 voyager-koin = { module = "cafe.adriel.voyager:voyager-koin", version.ref ="voyager" }
-
-androidx-lifecycle-viewmodel-compose = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "androidx-lifecycle" }
-androidx-lifecycle-viewmodel-savedstate = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-viewmodel-savedstate", version.ref = "androidx-lifecycle" }
 
 sqldelight-android-driver = { module = "app.cash.sqldelight:android-driver", version.ref = "sqlDelight" }
 sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", version.ref = "sqlDelight" }
 sqldelight-coroutines-extensions = { module = "app.cash.sqldelight:coroutines-extensions", version.ref = "sqlDelight" }
 
-annotations = { module = "org.jetbrains:annotations", version.ref = "annotation" }
+# ---- test ----
+# kotlin-test는 카탈로그에 넣지 않고 kotlin("test")로 쓴다(Kotlin 플러그인 버전을 자동 추종).
+kotlinx-coroutines-test  = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebase" }
+billing-ktx = { module = "com.android.billingclient:billing-ktx", version.ref = "billing" }
 aboutlibraries-compose = { module = "com.mikepenz:aboutlibraries-compose-m3", version.ref = "aboutLibraries" }
+compottie = { module = "io.github.alexzhirkevich:compottie", version.ref = "compottie" }
+compottie-resources = { module = "io.github.alexzhirkevich:compottie-resources", version.ref = "compottie" }
 
+compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose-multiplatform" }
+compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose-multiplatform" }
+compose-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "compose-material3" }
+compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "compose-multiplatform" }
+compose-components-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "compose-multiplatform" }
+compose-components-ui-tooling-preview = { module = "org.jetbrains.compose.components:components-ui-tooling-preview", version.ref = "compose-multiplatform" }
+compose-material-icons-extended = { module = "org.jetbrains.compose.material:material-icons-extended", version = "1.7.3" }
+
+# ---- spring ----
+jackson-module-kotlin = { module = "com.fasterxml.jackson.module:jackson-module-kotlin" }
+jjwt-api = { module = "io.jsonwebtoken:jjwt-api", version.ref = "jjwt" }
+jjwt-impl = { module = "io.jsonwebtoken:jjwt-impl", version.ref = "jjwt" }
+jjwt-jackson = { module = "io.jsonwebtoken:jjwt-jackson", version.ref = "jjwt" }
+spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
+spring-boot-starter-mail = { module = "org.springframework.boot:spring-boot-starter-mail" }
+spring-boot-starter-validation = { module = "org.springframework.boot:spring-boot-starter-validation" }
+spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa" }
+spring-boot-starter-security = { module = "org.springframework.boot:spring-boot-starter-security" }
+spring-boot-starter-data-redis = { module = "org.springframework.boot:spring-boot-starter-data-redis" }
+kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect" }
+google-api-services-androidpublisher = { module = "com.google.apis:google-api-services-androidpublisher", version.ref = "google-api-services-androidpublisher" }
+google-auth-library-oauth2-http = { module = "com.google.auth:google-auth-library-oauth2-http", version.ref = "google-auth-oauth2-http" }
+google-api-client = { module = "com.google.api-client:google-api-client", version.ref = "google-api-client" }
+postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-lifecycle-viewmodel-ktx = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-ktx", version.ref = "lifecycleViewmodelKtx" }
 
 
 
 [plugins]
+androidKotlinMultiplatformLibrary = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
 androidApplication = { id = "com.android.application", version.ref = "agp" }
-androidLibrary = { id = "com.android.library", version.ref = "agp" }
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
@@ -114,7 +151,8 @@ ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 kotlinJvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlinSpring = { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
 kotlinJpa = { id = "org.jetbrains.kotlin.plugin.jpa", version.ref = "kotlin" }
-springBoot = { id = "org.springframework.boot", version = "4.0.6" }
+springBoot = { id = "org.springframework.boot", version = "4.1.1" }
 springDependencyManagement = { id = "io.spring.dependency-management", version = "1.1.7" }
-googleGmsServices = { id = "com.google.gms.google-services", version = "4.4.0" }
+googleGmsServices = { id = "com.google.gms.google-services", version = "4.5.0" }
+firebaseCrashlytics = { id = "com.google.firebase.crashlytics", version = "3.0.8" }
 aboutLibraries = { id = "com.mikepenz.aboutlibraries.plugin", version.ref = "aboutLibraries" }

@@ -1,0 +1,19 @@
+<resources>
+    <!--
+      minSdk = 31 이므로 values-v31 하나로 모든 지원 기기를 덮는다.
+
+      부모를 DayNight 에서 고정 테마로 바꿨다. Compose 쪽은 SleepTheme 이 darkColorScheme
+      으로 고정되어 있는데 XML 테마만 DayNight 이어서, 라이트 모드 기기에서는
+      windowBackground 가 AppCompat 기본값(#FAFAFA, 거의 흰색)으로 해석됐다.
+
+      그리고 windowBackground 를 명시한다. 예전에는 이 항목이 아예 없었고
+      windowSplashScreenBackground 도 transparent 여서, 앱을 켜면 프로세스 시작부터
+      Compose 첫 프레임까지 흰 창이 그대로 보였다 — 이것이 "스플래시 이전 흰 화면"의 원인이다.
+    -->
+    <style name="Theme.SoundSleeper" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/app_background</item>
+        <item name="android:windowSplashScreenBackground">@color/app_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_transparent</item>
+        <item name="android:windowSplashScreenAnimationDuration">0</item>
+    </style>
+</resources>

@@ -1,0 +1,61 @@
+import com.soundsleeper.app.domain.model.Alarm;
+import kotlin.Boolean;
+import kotlin.Int;
+
+CREATE TABLE IF NOT EXISTS SleepSettingEntity(
+    alarmId INTEGER NOT NULL PRIMARY KEY CHECK(alarmId = 1),
+    alarmHour INTEGER AS Int NOT NULL DEFAULT 7,
+    alarmMinute INTEGER AS Int NOT NULL DEFAULT 30,
+    isAlarmEnabled INTEGER AS Boolean NOT NULL DEFAULT 0,
+    isVibrationEnabled INTEGER AS Boolean NOT NULL DEFAULT 0,
+    isSmartAlarmEnabled INTEGER AS Boolean NOT NULL DEFAULT 0,
+    smartAlarmRange INTEGER AS Int NOT NULL DEFAULT 20,
+    sound TEXT AS Alarm.Sound NOT NULL DEFAULT '',
+    isReminderEnabled INTEGER AS Boolean NOT NULL DEFAULT 0,
+    reminderHour INTEGER AS Int NOT NULL DEFAULT 23,
+    reminderMinute INTEGER AS Int NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS alarm_isEnabled ON SleepSettingEntity(isAlarmEnabled);
+CREATE INDEX IF NOT EXISTS alarm_time ON SleepSettingEntity(alarmHour, alarmMinute);
+
+upsertAlarm:
+INSERT OR REPLACE INTO SleepSettingEntity (
+    alarmId,
+    alarmHour,
+    alarmMinute,
+    isAlarmEnabled,
+    isVibrationEnabled,
+    isSmartAlarmEnabled,
+    smartAlarmRange,
+    sound
+) VALUES (
+    1, ?, ?, ?, ?, ?, ?, ?
+);
+
+getAlarm:
+SELECT * FROM SleepSettingEntity WHERE alarmId = 1;
+
+updateAlarmTime:
+UPDATE SleepSettingEntity SET alarmHour = ?, alarmMinute = ? WHERE alarmId = 1;
+
+updateEnabled:
+UPDATE SleepSettingEntity SET isAlarmEnabled = ? WHERE alarmId = 1;
+
+updateVibrationEnabled:
+UPDATE SleepSettingEntity SET isVibrationEnabled = ? WHERE alarmId = 1;
+
+updateSmartAlarmEnabled:
+UPDATE SleepSettingEntity SET isSmartAlarmEnabled = ? WHERE alarmId = 1;
+
+updateSmartAlarmRange:
+UPDATE SleepSettingEntity SET smartAlarmRange = ? WHERE alarmId = 1;
+
+updateSound:
+UPDATE SleepSettingEntity SET sound = ? WHERE alarmId = 1;
+
+updateReminderTime:
+UPDATE SleepSettingEntity SET reminderHour = ?, reminderMinute = ? WHERE alarmId = 1;
+
+updateReminderEnabled:
+UPDATE SleepSettingEntity SET isReminderEnabled = ? WHERE alarmId = 1;

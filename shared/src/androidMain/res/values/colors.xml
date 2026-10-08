@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      프로세스 시작부터 Compose 첫 프레임이 그려지기 전까지 노출되는 창 배경색.
+      런처 적응형 아이콘의 배경(@color/ic_launcher_background)과 같은 값이지만,
+      용도가 달라 이름을 따로 둔다 — 아이콘 배경을 바꿀 때 창 배경이 함께 끌려가면 안 된다.
+      SleepTheme.background(BackgroundDark)와 같은 값으로 맞춰 두어야 번쩍임이 없다.
+    -->
+    <color name="app_background">#030418</color>
+</resources>

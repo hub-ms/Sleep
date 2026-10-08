@@ -21,6 +21,13 @@ import com.soundsleeper.app.util.DateTimeUtil.to24TimeString
 import kotlin.time.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+// 밤 -> 아침으로 넘어가는 기상 화면의 그라데이션.
+// 배경 팔레트가 #030418 로 더 어두워지면서 기존 시작색(#1A237E)이 너무 밝아
+// 화면 위쪽이 들떠 보였다. 시작을 낮추고 끝을 수면 단계 deep 색과 맞춘다.
+private val WakeNight = Color(0xFF0B1033)
+private val WakeDawn = Color(0xFF2B3A8F)
+private val WakeMorning = Color(0xFF8B6FD4)
+
 @Composable
 fun WakeUpContent(
     onStopAlarm: () -> Unit,
@@ -55,9 +62,9 @@ fun WakeUpContent(
             .background(
                 brush = Brush.verticalGradient(
                     colors = listOf(
-                        Color(0xFF1A237E), // 깊은 밤
-                        Color(0xFF3949AB), // 새벽녘
-                        Color(0xFF9575CD)  // 아침 햇살 느낌
+                        WakeNight,  // 깊은 밤
+                        WakeDawn,   // 새벽녘
+                        WakeMorning // 아침 햇살 느낌
                     )
                 )
             ),
@@ -171,7 +178,7 @@ private fun HoldToWakeButton(
         // 글자는 버튼과 같이 커지면 금세 화면을 넘어가므로 원래 크기로 따로 올린다.
         Text(
             text = "일어나기",
-            color = Color(0xFF3949AB),
+            color = WakeDawn,
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.alpha(1f - progress.value)

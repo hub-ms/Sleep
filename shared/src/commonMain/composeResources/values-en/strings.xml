@@ -87,7 +87,7 @@
     <string name="survey_opt_reduce_snoring_goal">Reduce snoring or sleep apnea</string>
     <string name="survey_previous_question">Previous question</string>
     <string name="survey_done">Done</string>
-    <string name="splash_title">Turn off the tiring day\nand turn on your own night</string>
+    <string name="splash_title">Turn off today\'s noise\nand fall asleep with SomnioTune</string>
     <string name="diagnosis_result_title">Your sleep check is done</string>
     <string name="diagnosis_result_description">Log in to see your personal sleep report right away</string>
     <string name="diagnosis_result_cta">See my result</string>

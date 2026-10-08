@@ -16,8 +16,8 @@ import com.soundsleeper.app.enum_.SleepStageType
 /** 수면 점수 매핑 컬러 구조체 */
 @Immutable
 data class SleepScoreColors(
-    val excellent: Color = Color(0xFF00BFA5),
-    val good: Color = Color(0xFF1E88E5),
+    val excellent: Color = Color(0xFF2BC9A8),
+    val good: Color = Color(0xFF4D9BF0),
     val fair: Color = Color(0xFFFFA726),
     val poor: Color = Color(0xFFEF5350)
 )
@@ -31,10 +31,10 @@ fun SleepScoreColors.getColorForScore(score: Int): Color = when {
 /** 수면 단계(그래프용) 매핑 컬러 구조체 */
 @Immutable
 data class SleepStageColors(
-    val awake: Color = Color(0xFFFFA726), // 주황 - 어두운 배경에서도 눈에 잘 띄는 경고성 색상
-    val light: Color = Color(0xFF42A5F5), // 선명한 파랑 - REM/DEEP과 명확히 구분되는 채도/밝기
+    val awake: Color = Color(0xFFFFB04D), // 주황 - 어두운 배경에서도 눈에 잘 띄는 경고성 색상
+    val light: Color = Color(0xFF5AA9F5), // 선명한 파랑 - REM/DEEP과 명확히 구분되는 채도/밝기
     val rem: Color = Color(0xFFF06292),   // 핑크 - 기존 청록은 LIGHT와 가깝고 헷갈렸음
-    val deep: Color = Color(0xFF7E57C2)   // 진보라 - 기존 남색은 어두운 배경과 대비가 낮았음
+    val deep: Color = Color(0xFF8B6FD4)   // 진보라 - 기존 남색은 어두운 배경과 대비가 낮았음
 )
 fun SleepStageColors.getColorForStage(stageType: SleepStageType): Color = when (stageType) {
     SleepStageType.AWAKE -> awake
@@ -46,9 +46,12 @@ fun SleepStageColors.getColorForStage(stageType: SleepStageType): Color = when (
 // ==========================================
 // 2. 기초 원시 색상 및 Material3 매핑
 // ==========================================
-internal val BackgroundDark = Color(0xFF0C0C55)
-internal val SurfaceDark = Color(0xFF282878)
-internal val PrimaryDark = Color(0xFF75A3FF)
+// 런처 적응형 아이콘의 배경(#030418)에 맞춘 값들. 앱을 켠 순간의 창 배경
+// (androidMain/res/values/colors.xml 의 app_background)과 BackgroundDark 가 같아야
+// 스플래시 전환에서 색이 튀지 않는다.
+internal val BackgroundDark = Color(0xFF030418)
+internal val SurfaceDark = Color(0xFF141A33)
+internal val PrimaryDark = Color(0xFF7FA8FF)
 internal val SecondaryDark = Color(0xFF5FD0B6)
 
 val SleepDarkColors = darkColorScheme(
@@ -60,7 +63,8 @@ val SleepDarkColors = darkColorScheme(
     onBackground = Color(0xFFFFFFFF),
     onSurface = Color(0xFFFFFFFF),
     onPrimary = Color(0xFFFFFFFF),
-    onSecondary = Color(0xFF0C0C55),
+    // 배경색을 손으로 복제해 두면 팔레트를 바꿀 때 한쪽만 바뀐다. 상수를 그대로 참조한다.
+    onSecondary = BackgroundDark,
 )
 
 val DefaultSleepScoreColors = SleepScoreColors()

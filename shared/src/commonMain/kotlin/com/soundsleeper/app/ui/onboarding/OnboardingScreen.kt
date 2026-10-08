@@ -6,14 +6,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -40,8 +38,10 @@ import com.soundsleeper.app.resources.auth_email_login
 import com.soundsleeper.app.resources.auth_guest_browse
 import com.soundsleeper.app.resources.auth_terms_prefix
 import com.soundsleeper.app.resources.auth_terms_suffix
-import com.soundsleeper.app.resources.bg_onboarding
+import com.soundsleeper.app.resources.bg_splash
 import com.soundsleeper.app.resources.common_background_image_description
+import com.soundsleeper.app.resources.common_privacy_policy
+import com.soundsleeper.app.resources.common_terms_of_service
 import com.soundsleeper.app.resources.onboarding_cta_last
 import com.soundsleeper.app.resources.onboarding_page3_description
 import com.soundsleeper.app.resources.onboarding_page3_title
@@ -59,6 +59,9 @@ import org.jetbrains.compose.resources.stringResource
  * 가치 제안 화면. 예전에는 3장짜리 페이저였지만, 처음 보는 사람에게는 "그래서 무엇을
  * 하면 되는지"(해결) 한 장만으로도 충분하고, 장이 많을수록 설문·가입 전에 이탈할 자리가
  * 늘어난다. 로그인은 별도 화면이고, 그 사이에 설문이 들어간다.
+ *
+ * 문구와 버튼은 화면 아래쪽에 모아 둔다. 위에 붙여 두면 배경 일러스트를 가리고,
+ * 엄지가 닿는 자리에서 멀어진다.
  */
 @Composable
 fun OnboardingContent(
@@ -69,13 +72,16 @@ fun OnboardingContent(
         OnboardingBackground()
         Column(
             modifier = Modifier
-                .navigationBarsPadding()
-                .windowInsetsPadding(WindowInsets.systemBars)
+                // systemBars 가 내비게이션 바까지 포함하므로 navigationBarsPadding 을
+                // 따로 겹쳐 주지 않는다 — 예전에는 둘을 함께 적용해 아래 여백이 두 번 들어갔다.
+                .systemBarsPadding()
                 .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(horizontal = 24.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // 위쪽을 비워 문구+CTA 블록을 아래로 내린다.
+            Spacer(Modifier.weight(1f))
             Text(
                 text = stringResource(Res.string.onboarding_page3_title),
                 style = MaterialTheme.typography.sectionTitle,
@@ -100,14 +106,21 @@ fun OnboardingContent(
                     .clickable { onSkip() }
                     .padding(vertical = 10.dp, horizontal = 4.dp)
             )
+            Spacer(Modifier.height(16.dp))
         }
     }
 }
 
+/**
+ * 온보딩 흐름 전체(가치 제안 → 설문 → 진단 결과 → 가입)가 공유하는 배경.
+ *
+ * 스플래시와 같은 이미지를 쓴다. 예전에는 `bg_onboarding` 을 따로 두어 앱을 켠 직후
+ * 배경이 한 번 바뀌었다 — 같은 장면이 이어지는 편이 흐름이 끊기지 않는다.
+ */
 @Composable
 fun OnboardingBackground() {
     Image(
-        painter = painterResource(Res.drawable.bg_onboarding),
+        painter = painterResource(Res.drawable.bg_splash),
         contentDescription = stringResource(Res.string.common_background_image_description),
         modifier = Modifier.fillMaxSize(),
         contentScale = ContentScale.Crop,
@@ -115,10 +128,13 @@ fun OnboardingBackground() {
 }
 
 /**
- * 마지막 페이지의 로그인 블록.
+ * 가입/로그인 화면의 로그인 블록.
  *
  * 카카오/구글은 풀폭 CTA로 올려 위계를 주고, 이메일과 게스트 시작은 텍스트 링크로 내렸다.
  * 애플 로그인 버튼은 온보딩에서만 제거했다 — 계정 설정의 애플 연동과 로그인 혜택 화면은 그대로다.
+ *
+ * 예전에는 `Modifier.fillMaxSize()` 만 걸려 있어 로그인 버튼이 화면 최상단에 붙었다.
+ * 아래로 모으고 좌우·하단 여백을 준다.
  */
 @Composable
 fun AuthActions(
@@ -127,10 +143,15 @@ fun AuthActions(
     onEmailLogin: () -> Unit,
     onNavigateToTerms: () -> Unit,
     onNavigateToPrivacy: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = modifier
+            .systemBarsPadding()
+            .fillMaxSize()
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.Bottom),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         LoginButton(
@@ -180,16 +201,18 @@ fun AuthActions(
             color = Color.White.copy(alpha = 0.9f),
             textDecoration = TextDecoration.Underline
         )
+        val termsLabel = stringResource(Res.string.common_terms_of_service)
+        val privacyLabel = stringResource(Res.string.common_privacy_policy)
         Text(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             text = buildAnnotatedString {
                 append(stringResource(Res.string.auth_terms_prefix))
                 withLink(LinkAnnotation.Clickable("terms") { onNavigateToTerms() }) {
-                    withStyle(linkStyle) { append("이용약관") }
+                    withStyle(linkStyle) { append(termsLabel) }
                 }
                 append(", ")
                 withLink(LinkAnnotation.Clickable("privacy") { onNavigateToPrivacy() }) {
-                    withStyle(linkStyle) { append("개인정보 처리방침") }
+                    withStyle(linkStyle) { append(privacyLabel) }
                 }
                 append(stringResource(Res.string.auth_terms_suffix))
             },
@@ -216,10 +239,11 @@ fun OnboardingButton(
         colors = ButtonDefaults.buttonColors(
             containerColor = primary,
             contentColor = Color.White,
-            // 조건을 못 채웠을 때 "눌러도 안 된다"가 보이게 한다. M3 기본 비활성 색은
-            // 이 어두운 배경에서 활성 상태와 잘 구분되지 않는다.
-            disabledContainerColor = primary.copy(alpha = 0.25f),
-            disabledContentColor = Color.White.copy(alpha = 0.5f)
+            // 조건을 못 채웠을 때 "눌러도 안 된다"가 보이게 한다. 예전에는 흐린 primary 라
+            // 활성 버튼의 옅은 버전처럼 보여서 눌리는 버튼으로 읽혔다. 무채색으로 바꿔
+            // 비활성임을 분명히 한다.
+            disabledContainerColor = Color.White.copy(alpha = 0.10f),
+            disabledContentColor = Color.White.copy(alpha = 0.35f)
         )
     ) {
         Text(

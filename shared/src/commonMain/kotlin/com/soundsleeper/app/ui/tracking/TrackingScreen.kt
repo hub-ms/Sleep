@@ -51,6 +51,7 @@ import com.soundsleeper.app.ui.component.CurrentMusicCard
 import com.soundsleeper.app.ui.component.SleepAlertDialog
 import com.soundsleeper.app.ui.home.MusicBrowserSection
 import com.soundsleeper.app.ui.music.MusicContract
+import com.soundsleeper.app.ui.theme.SleepTheme
 import com.soundsleeper.app.ui.theme.SleepTheme.primary
 import com.soundsleeper.app.ui.theme.SleepTheme.secondary
 import com.soundsleeper.app.ui.theme.bodyText
@@ -124,7 +125,7 @@ fun TrackingContent(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0A0A0A))
+            .background(SleepTheme.background)
     ) {
         HorizontalPager(
             state = pagerState,
@@ -343,7 +344,7 @@ fun TrackingContent(
         ModalBottomSheet(
             onDismissRequest = { showHelp = false },
             sheetState = helpSheetState,
-            containerColor = Color(0xFF1A1A1A),
+            containerColor = SleepTheme.surface,
             contentColor = Color.White,
             dragHandle = {
                 Box(

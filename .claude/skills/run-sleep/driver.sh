@@ -19,9 +19,10 @@ AVDMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager.bat"
 export SKIP_JDK_VERSION_CHECK=1
 
 AVD_NAME="run_skill_phone"
-APK="$ROOT/shared/build/outputs/apk/debug/shared-debug.apk"
-APP_ID="com.sleepytime.app"
-MAIN_ACTIVITY="$APP_ID/com.sleepytime.shared.MainActivity"
+APK="$ROOT/androidApp/build/outputs/apk/debug/androidApp-debug.apk"
+APK_RELEASE="$ROOT/androidApp/build/outputs/apk/release/androidApp-release.apk"
+APP_ID="com.soundsleeper.app"
+MAIN_ACTIVITY="$APP_ID/com.soundsleeper.app.MainActivity"
 OUT_DIR="$ROOT/.artifacts/run-skill"
 SPRING_LOG="$OUT_DIR/spring_boot.log"
 SPRING_PID_FILE="$OUT_DIR/spring.pid"
@@ -60,7 +61,11 @@ cmd_emulator_stop() {
 }
 
 cmd_build_app() {
-  ./gradlew.bat :shared:assembleDebug --console=plain
+  ./gradlew.bat :androidApp:assembleDebug --console=plain
+}
+
+cmd_build_release() {
+  ./gradlew.bat :androidApp:assembleRelease --console=plain
 }
 
 cmd_install_app() {
@@ -93,6 +98,55 @@ cmd_all_android() {
   cmd_launch_app
   sleep 5
   cmd_ss "$OUT_DIR/launch.png"
+}
+
+# --- tests ---
+
+# 단위 테스트. Postgres/Redis/에뮬레이터 없이 돌아가야 한다 — 그래서 커밋 전 게이트로 쓸 수 있다.
+cmd_unit() {
+  ./gradlew.bat :shared:jvmTest --console=plain
+}
+
+# 커밋 전 기본 게이트: 조립 + 단위 테스트.
+# 에뮬레이터(기동 수 분)와 Spring(DB/Redis 필요)은 의도적으로 제외한다.
+cmd_verify() {
+  echo "== [1/3] compile =="
+  ./gradlew.bat :shared:compileKotlinJvm :spring:compileKotlin --console=plain || return 1
+  echo "== [2/3] assemble debug apk =="
+  cmd_build_app || return 1
+  echo "== [3/3] unit tests =="
+  if ! cmd_unit; then
+    echo "단위 테스트 실패. 리포트: shared/build/reports/tests/jvmTest/index.html" >&2
+    return 1
+  fi
+  echo "VERIFY OK"
+}
+
+cmd_instr() {
+  # :shared는 com.android.kotlin.multiplatform.library 모듈이고 device test를 opt-in하지
+  # 않았다(shared/src/androidDeviceTest가 없다). 그래서 connectedDebugAndroidTest 같은
+  # 태스크는 아예 존재하지 않는다. 필요해지면 shared/build.gradle.kts의 android { } 안에
+  # withDeviceTestBuilder { sourceSetTreeName = "test" } 를 추가하고 이 함수를 되살린다.
+  echo "instrumented 테스트가 설정되어 있지 않다. :shared:jvmTest(driver.sh unit)를 쓸 것." >&2
+  return 1
+}
+
+# minify된 release 빌드를 실제로 설치해 띄워 본다.
+# proguard keep 규칙 누락으로 생기는 런타임 실패는 debug 빌드에서는 절대 재현되지 않는다.
+cmd_release_smoke() {
+  cmd_build_release || return 1
+  if [ ! -f "$APK_RELEASE" ]; then
+    echo "release APK가 없다. 서명 설정이 없으면 *-unsigned.apk 로 나온다:" >&2
+    ls -1 "$ROOT/androidApp/build/outputs/apk/release/" >&2 || true
+    return 1
+  fi
+  "$ADB" install -r "$APK_RELEASE" || return 1
+  "$ADB" logcat -c
+  cmd_launch_app
+  sleep 8
+  cmd_ss "$OUT_DIR/release_smoke.png"
+  echo "-- release 빌드 치명 오류 --"
+  "$ADB" logcat -d | grep -E "FATAL|ClassNotFoundException|NoSuchMethodError|NoClassDefFoundError|SerializationException|NoDefinitionFound|UnsatisfiedLinkError" | head -20 || echo "(없음)"
 }
 
 # --- Spring backend ---
@@ -132,6 +186,11 @@ case "$cmd" in
   emulator-start) cmd_emulator_start ;;
   emulator-stop) cmd_emulator_stop ;;
   build-app) cmd_build_app ;;
+  build-release) cmd_build_release ;;
+  unit) cmd_unit ;;
+  verify) cmd_verify ;;
+  instr) cmd_instr ;;
+  release-smoke) cmd_release_smoke ;;
   install-app) cmd_install_app ;;
   launch-app) cmd_launch_app ;;
   ss) cmd_ss "$@" ;;
@@ -142,7 +201,7 @@ case "$cmd" in
   spring-stop) cmd_spring_stop ;;
   spring-smoke) cmd_spring_smoke ;;
   *)
-    echo "Usage: driver.sh <avd-setup|emulator-start|emulator-stop|build-app|install-app|launch-app|ss [path]|tap x y|text str|all-android|spring-start|spring-stop|spring-smoke>" >&2
+    echo "Usage: driver.sh <avd-setup|emulator-start|emulator-stop|build-app|build-release|install-app|launch-app|ss [path]|tap x y|text str|all-android|unit|verify|instr|release-smoke|spring-start|spring-stop|spring-smoke>" >&2
     exit 1
     ;;
 esac

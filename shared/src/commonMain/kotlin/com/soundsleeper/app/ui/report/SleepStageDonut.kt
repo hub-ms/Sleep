@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -102,8 +103,9 @@ fun SleepStageDonut(
     breakdown: List<LegendItem>,
     centerMillis: Long,
     modifier: Modifier = Modifier,
-    diameter: Dp = 132.dp,
+    diameter: Dp = 140.dp,
     strokeWidth: Dp = 20.dp,
+    contentPadding: Dp = 10.dp,
 ) {
     if (breakdown.isEmpty()) return
 
@@ -139,7 +141,12 @@ fun SleepStageDonut(
             }
         }
 
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        // 가운데 글자가 링 안쪽에 바짝 붙어 있었다. 여백을 주고, 그만큼 잃은 글자 공간을
+        // diameter 를 132 -> 140dp 로 올려 보전한다.
+        Column(
+            modifier = Modifier.padding(contentPadding),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             Text(
                 text = formatSleepDurationFromMillis(
                     centerMillis,

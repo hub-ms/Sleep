@@ -15,9 +15,12 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -135,14 +138,27 @@ fun PaywallContent(
             // 스크롤되는 내용이 상태바 밑으로 지나가면 시계·아이콘과 글자가 겹친다.
             .statusBarsPadding()
             .navigationBarsPadding()
-            // 스크롤 없이 한 화면에 모두 들어오도록 간격을 촘촘히 둔다.
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Box(
-            modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center
-        ) {
+        // 닫기 버튼이 제 줄을 차지하고 있어 48dp 를 그냥 먹었다. 헤더와 겹쳐 그 높이를 되찾는다.
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(end = 48.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = stringResource(Res.string.paywall_header_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Text(
+                    text = stringResource(Res.string.paywall_header_subtitle),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White
+                )
+            }
             IconButton(
                 modifier = Modifier.align(Alignment.TopEnd),
                 onClick = onBackClick
@@ -155,57 +171,53 @@ fun PaywallContent(
                 )
             }
         }
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                text = stringResource(Res.string.paywall_header_title),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-            Text(
-                text = stringResource(Res.string.paywall_header_subtitle),
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White
-            )
-        }
+        // 플랜 카드와 비교표는 이 안에 둔다. 예전에는 루트가 스크롤되지 않아서 큰 시스템
+        // 폰트나 영어 문자열에서 아래 내용이 잘려 보이지도 않고 닿을 수도 없었다.
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
 
-        // 여기 있던 "프리미엄 수면 음악 / 상세 리포트" 아이콘 블록은 아래 비교표가 같은
-        // 내용을 더 정확하게(무료에서도 되는지까지) 말하고 있어 같은 말을 두 번 하는
-        // 셈이었다. 헤드라인에서 바로 가격으로 이어진다.
+            // 여기 있던 "프리미엄 수면 음악 / 상세 리포트" 아이콘 블록은 아래 비교표가 같은
+            // 내용을 더 정확하게(무료에서도 되는지까지) 말하고 있어 같은 말을 두 번 하는
+            // 셈이었다. 헤드라인에서 바로 가격으로 이어진다.
 
-        // 월간/연간을 위아래가 아니라 나란히 놓는다. 두 가격이 한눈에 비교되고,
-        // 아래 비교표와 좌우 위치도 맞는다.
-        if (state.products.isEmpty() && state.isLoading) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                repeat(2) {
-                    Surface(
-                        modifier = Modifier.weight(1f).height(120.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        Color.White.copy(alpha = 0.05f)
-                    ) {}
+            // 월간/연간을 위아래가 아니라 나란히 놓는다. 두 가격이 한눈에 비교되고,
+            // 아래 비교표와 좌우 위치도 맞는다.
+            if (state.products.isEmpty() && state.isLoading) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    repeat(2) {
+                        Surface(
+                            modifier = Modifier.weight(1f).height(120.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            Color.White.copy(alpha = 0.05f)
+                        ) {}
+                    }
+                }
+            } else {
+                // 연간 카드에만 배지와 절약률이 붙어 그대로 두면 두 카드 높이가 어긋난다.
+                // IntrinsicSize.Min 으로 둘 중 큰 쪽에 높이를 맞춘다.
+                Row(
+                    modifier = Modifier.height(IntrinsicSize.Min),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    state.products.forEach { product ->
+                        PlanCard(
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            product = product,
+                            isSelected = product.productId == state.selectedProductId,
+                            isRecommended = product.productId == BillingProducts.YEARLY,
+                            savingsPercent = if (product.productId == BillingProducts.YEARLY) savingsPercent else null,
+                            onClick = { onSelectPlan(product.productId) }
+                        )
+                    }
                 }
             }
-        } else {
-            // 연간 카드에만 배지와 절약률이 붙어 그대로 두면 두 카드 높이가 어긋난다.
-            // IntrinsicSize.Min 으로 둘 중 큰 쪽에 높이를 맞춘다.
-            Row(
-                modifier = Modifier.height(IntrinsicSize.Min),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                state.products.forEach { product ->
-                    PlanCard(
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                        product = product,
-                        isSelected = product.productId == state.selectedProductId,
-                        isRecommended = product.productId == BillingProducts.YEARLY,
-                        savingsPercent = if (product.productId == BillingProducts.YEARLY) savingsPercent else null,
-                        onClick = { onSelectPlan(product.productId) }
-                    )
-                }
-            }
-        }
 
-        PlanComparison()
+            PlanComparison()
+        }
 
         state.errorMessage?.let { message ->
             Surface(
@@ -368,24 +380,6 @@ private fun PlanCard(
                     }
                 }
             }
-//            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-//                if (product.hasFreeTrial) {
-//                    Surface(
-//                        shape = RoundedCornerShape(6.dp),
-//                        color = secondary
-//                    ) {
-//                        Text(
-//                            text = stringResource(Res.string.paywall_badge_free_trial),
-//                            modifier = Modifier.padding(
-//                                horizontal = 6.dp,
-//                                vertical = 2.dp
-//                            ),
-//                            style = MaterialTheme.typography.labelSmall,
-//                            color = MaterialTheme.colorScheme.onSecondary
-//                        )
-//                    }
-//                }
-//            }
             Text(
                 text = product.formattedPrice,
                 color = primary,
@@ -440,15 +434,15 @@ private fun PlanComparison() {
         Color.White.copy(alpha = 0.05f)
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            // 8개 행이 한 화면에 들어오도록 간격과 여백을 좁혔다.
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Text(
                 text = stringResource(Res.string.paywall_comparison_title),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
-                color = Color.White,
-                modifier = Modifier.padding(bottom = 4.dp)
+                color = Color.White
             )
             ComparisonHeaderRow()
             featureComparisons.forEach { feature ->
@@ -501,7 +495,7 @@ private fun ComparisonFeatureRow(
     freeAvailable: Boolean,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 24.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(

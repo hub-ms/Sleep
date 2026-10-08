@@ -5,7 +5,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.LaunchedEffect
@@ -29,6 +28,7 @@ import com.zoyi.channel.plugin.android.ChannelIO
 import com.soundsleeper.app.ui.navigation.EmailAuthScreen
 import com.soundsleeper.app.ui.navigation.SplashScreen
 import com.soundsleeper.app.ui.navigation.TrackingScreen
+import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 import com.soundsleeper.app.enum_.AppLanguage
@@ -46,7 +46,16 @@ import kotlin.time.ExperimentalTime
 @ExperimentalCoroutinesApi
 @ExperimentalSettingsApi
 @InternalVoyagerApi
-class MainActivity : ComponentActivity() {
+/**
+ * AppCompatActivity 를 쓰는 이유는 하나다 — 언어 즉시 전환.
+ *
+ * AppCompatDelegate.setApplicationLocales 는 API 33+ 에서는 프레임워크 LocaleManager 로
+ * 위임되지만, minSdk 31 이므로 API 31·32 기기는 AppCompat 백포트 경로를 탄다. 그 백포트는
+ * AppCompatActivity 의 attachBaseContext 래핑과 델리게이트가 등록된 Activity 재생성으로
+ * 동작한다. 예전에는 ComponentActivity 라서 둘 다 없었고, 그래서 그 기기들에서는 설정만
+ * 저장되고 화면은 그대로 남았다.
+ */
+class MainActivity : AppCompatActivity() {
     companion object {
         var instance: WeakReference<Activity>? = null
     }

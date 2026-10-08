@@ -16,6 +16,19 @@ compose.resources {
     generateResClass = auto
 }
 
+// 오픈소스 라이선스 화면이 빈 목록으로 떠 있었다. 플러그인은 정상적으로 돌아
+// res/raw/aboutlibraries.json 을 만들지만 내용이 {"libraries":[],"licenses":{}} 30바이트였다.
+//
+// 기본 수집기는 Android variant 의 런타임 클래스패스를 훑는다. 이 모듈은 androidTarget() 없이
+// com.android.kotlin.multiplatform.library 를 쓰므로 그 variant 모델이 없어 의존성을 하나도
+// 해석하지 못한다. all = true 는 variant 대신 프로젝트의 모든 구성을 훑게 하는 우회로다.
+aboutLibraries {
+    collect {
+        all.set(true)
+        includePlatform.set(true)
+    }
+}
+
 kotlin {
     // androidTarget()을 호출하지 않는다. com.android.kotlin.multiplatform.library 플러그인의
     // 아래 android { } 블록이 android 타깃을 직접 만든다(둘을 같이 쓰면 중복 등록이 된다).

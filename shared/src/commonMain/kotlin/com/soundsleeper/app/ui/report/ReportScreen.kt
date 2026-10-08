@@ -41,6 +41,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -444,13 +445,13 @@ fun ReportContent(
     )
     val textMeasurer = rememberTextMeasurer()
     val showPreviewOverlay = !reportState.hasAnySession && !reportState.isAwaitingSession
-    Box(
-        modifier = Modifier
-            .fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
+                // 측정 이력이 전혀 없을 때는 본문 전체를 흐리게 해서, 보이는 수치가
+                // 자기 기록이 아니라는 것을 한눈에 알리고 하단 안내로 설명한다.
+                // minSdk 31 이므로 Modifier.blur 는 항상 동작한다.
+                .blur(if (showPreviewOverlay) PREVIEW_BLUR_RADIUS else 0.dp)
                 .padding(16.dp)
                 .fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -552,21 +553,28 @@ fun ReportContent(
                     }
                 }
             }
-            when {
-                reportState.isAwaitingSession -> PreviewNoticeBar(
-                    modifier = Modifier.fillMaxWidth(),
-                    title = stringResource(Res.string.report_preparing_title),
-                    description = stringResource(Res.string.report_preparing_description),
-                )
-                // 열려던 세션이 끝내 없었던 경우. 데모 데이터를 자기 기록으로 오해하지 않도록
-                // 왜 비어 있는지를 먼저 알린다.
-                reportState.sessionUnavailable -> PreviewNoticeBar(
-                    modifier = Modifier.fillMaxWidth(),
-                    title = stringResource(Res.string.report_session_unavailable_title),
-                    description = stringResource(Res.string.report_session_unavailable_description),
-                )
-                showPreviewOverlay -> PreviewNoticeBar(modifier = Modifier.fillMaxWidth())
-            }
+        }
+        // 예전에는 이 안내가 위 Column 의 마지막 자식이었다. 그러면 16dp 패딩 안에 갇히고
+        // weight(1f) 영역과 높이를 다퉜다. Box 하단에 직접 붙여 그 수직 공간을 돌려준다.
+        // 본문에만 블러가 걸리므로 안내 문구는 선명하게 읽힌다.
+        val noticeModifier = Modifier
+            .align(Alignment.BottomCenter)
+            .fillMaxWidth()
+            .padding(16.dp)
+        when {
+            reportState.isAwaitingSession -> PreviewNoticeBar(
+                modifier = noticeModifier,
+                title = stringResource(Res.string.report_preparing_title),
+                description = stringResource(Res.string.report_preparing_description),
+            )
+            // 열려던 세션이 끝내 없었던 경우. 데모 데이터를 자기 기록으로 오해하지 않도록
+            // 왜 비어 있는지를 먼저 알린다.
+            reportState.sessionUnavailable -> PreviewNoticeBar(
+                modifier = noticeModifier,
+                title = stringResource(Res.string.report_session_unavailable_title),
+                description = stringResource(Res.string.report_session_unavailable_description),
+            )
+            showPreviewOverlay -> PreviewNoticeBar(modifier = noticeModifier)
         }
         if (reportState.showDeleteDialog && reportState.pendingDeleteSessionId != null) {
             AlertDialog(
@@ -600,8 +608,10 @@ fun GatedReportSection(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            // 예전에는 페이지 배경과 같은 색이어서 카드로 보이지 않았고 둥근 모서리도
+            // 드러나지 않았다. surface 로 올려 캘린더 아래 영역이 카드로 읽히게 한다.
             .background(
-                color = SleepTheme.background,
+                color = SleepTheme.surface,
                 shape = RoundedCornerShape(16.dp)
             ),
         shape = RoundedCornerShape(16.dp),
@@ -758,6 +768,9 @@ private fun rememberCalendarExpandConnection(
  * 터치 슬롭보다 충분히 커서 날짜를 누르다 손이 살짝 흔들려도 전환되지 않는다.
  * 달력을 직접 끄는 제스처와 리포트 카드 스크롤 연동이 같은 값을 써야 조작감이 일관된다.
  */
+/** 프리뷰(측정 이력 없음) 상태에서 본문에 거는 블러 반경. */
+private val PREVIEW_BLUR_RADIUS = 6.dp
+
 private val CALENDAR_EXPAND_THRESHOLD = 40.dp
 
 /**
@@ -1183,8 +1196,10 @@ fun DailyReportCard(
         modifier = Modifier
             .fillMaxWidth()
             .wrapContentHeight()
+            // 예전에는 페이지 배경과 같은 색이어서 카드로 보이지 않았고 둥근 모서리도
+            // 드러나지 않았다. surface 로 올려 캘린더 아래 영역이 카드로 읽히게 한다.
             .background(
-                color = SleepTheme.background,
+                color = SleepTheme.surface,
                 shape = RoundedCornerShape(16.dp)
             ),
         shape = RoundedCornerShape(16.dp),
@@ -1298,8 +1313,10 @@ fun WeeklyReportCard(
         modifier = Modifier
             .fillMaxWidth()
             .wrapContentHeight()
+            // 예전에는 페이지 배경과 같은 색이어서 카드로 보이지 않았고 둥근 모서리도
+            // 드러나지 않았다. surface 로 올려 캘린더 아래 영역이 카드로 읽히게 한다.
             .background(
-                color = SleepTheme.background,
+                color = SleepTheme.surface,
                 shape = RoundedCornerShape(16.dp)
             ),
         shape = RoundedCornerShape(16.dp),
@@ -2097,8 +2114,10 @@ private fun ReportInfoCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            // 예전에는 페이지 배경과 같은 색이어서 카드로 보이지 않았고 둥근 모서리도
+            // 드러나지 않았다. surface 로 올려 캘린더 아래 영역이 카드로 읽히게 한다.
             .background(
-                color = SleepTheme.background,
+                color = SleepTheme.surface,
                 shape = RoundedCornerShape(16.dp)
             ),
         shape = RoundedCornerShape(16.dp),

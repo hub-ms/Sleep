@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  앱이 지원하는 언어 목록. AndroidManifest 의 android:localeConfig 가 이 파일을 가리킨다.
+  이것이 없으면 API 33+ 의 시스템 "앱별 언어" 설정 화면에 앱이 나타나지 않는다.
+  순서는 commonMain/composeResources 의 values(ko 기본) / values-en 과 맞춘다.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="ko" />
+    <locale android:name="en" />
+</locale-config>

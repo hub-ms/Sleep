@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -34,6 +35,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -49,6 +52,7 @@ import com.soundsleeper.app.resources.Res
 import com.soundsleeper.app.resources.ic_caret_left
 import com.soundsleeper.app.resources.ic_caret_up
 import com.soundsleeper.app.ui.theme.IconSize
+import com.soundsleeper.app.ui.component.ScreenTopBar
 import com.soundsleeper.app.ui.theme.SleepTheme.background
 import com.soundsleeper.app.ui.theme.SleepTheme.primary
 import com.soundsleeper.app.ui.theme.SleepTheme.surface
@@ -59,6 +63,13 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 private val bodyLineHeight = 22.sp
 
+/**
+ * 약관·개인정보처리방침 화면.
+ *
+ * Notion 에 공개된 원문을 웹뷰로 먼저 띄운다. 그래야 앱을 다시 배포하지 않고 문구를 고칠 수
+ * 있다. 페이지를 띄우지 못하면(네트워크 단절, 문서 미발행, 웹뷰 없는 플랫폼) 번들 JSON 기반
+ * 네이티브 화면으로 떨어진다 — 기존 3단 폴백(원격 → 캐시 → 번들)이 그대로 뒤를 받친다.
+ */
 @Composable
 fun LegalContent(
     type: LegalType,
@@ -66,6 +77,30 @@ fun LegalContent(
     onRetry: () -> Unit,
     onBackClick: (() -> Unit)? = null,
 ) {
+    // 한 번 실패하면 이 화면에 머무는 동안 다시 웹뷰를 시도하지 않는다. 재시도를 반복하면
+    // 네이티브 화면이 띄워졌다 사라지는 깜빡임이 생긴다.
+    var webFailed by remember(type) { mutableStateOf(false) }
+
+    if (!webFailed && type.notionUrl.isNotBlank()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(background)
+                .statusBarsPadding()
+                .navigationBarsPadding()
+        ) {
+            if (onBackClick != null) {
+                ScreenTopBar(title = type.path, onBackClick = onBackClick)
+            }
+            LegalWebView(
+                url = type.notionUrl,
+                onLoadFailed = { webFailed = true },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        return
+    }
+
     when (state) {
         LegalUiState.Loading -> Box(Modifier.fillMaxSize(), Alignment.Center) {
             CircularProgressIndicator()

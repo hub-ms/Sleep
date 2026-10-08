@@ -71,6 +71,7 @@ import com.soundsleeper.app.ui.component.SegmentedControl
 import com.soundsleeper.app.ui.component.SelectableChipGroup
 import com.soundsleeper.app.ui.component.SleepAlertDialog
 import com.soundsleeper.app.ui.music.MusicContract
+import com.soundsleeper.app.ui.theme.IconSize
 import com.soundsleeper.app.ui.theme.SleepTheme.primary
 import com.soundsleeper.app.ui.theme.caption
 import com.soundsleeper.app.ui.theme.sectionTitle
@@ -500,7 +501,7 @@ fun CustomBottomTabBar(
                 verticalArrangement = Arrangement.Center
             ) {
                 Box(
-                    modifier = Modifier.clickable { onBottomTabSelected(tab.key) }.size(32.dp),
+                    modifier = Modifier.clickable { onBottomTabSelected(tab.key) }.size(IconSize.Default),
                     contentAlignment = Alignment.Center
                 ) {
                     if (homeState.selectedTab == tab.key) {
@@ -508,14 +509,14 @@ fun CustomBottomTabBar(
                             painter = tab.icon,
                             contentDescription = null,
                             tint = iconColor,
-                            modifier = Modifier.size(32.dp).blur(4.dp)
+                            modifier = Modifier.size(IconSize.Default).blur(4.dp)
                         )
                     }
                     Icon(
                         painter = tab.icon,
                         contentDescription = tab.title,
                         tint = iconColor,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(IconSize.Default)
                     )
                 }
                 Text(

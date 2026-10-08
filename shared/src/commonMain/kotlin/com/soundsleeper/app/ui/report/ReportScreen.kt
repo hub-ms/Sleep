@@ -129,6 +129,7 @@ import com.soundsleeper.app.ui.component.EnvironmentChart
 import com.soundsleeper.app.ui.component.EnvironmentValues
 import com.soundsleeper.app.ui.component.SelectableChipGroup
 import com.soundsleeper.app.ui.component.toStatus
+import com.soundsleeper.app.ui.theme.IconSize
 import com.soundsleeper.app.ui.theme.SleepTheme
 import com.soundsleeper.app.ui.theme.SleepTheme.primary
 import com.soundsleeper.app.ui.theme.SleepTheme.secondary
@@ -535,7 +536,7 @@ fun ReportContent(
 
                 if (!reportState.isPreview) {
                     IconButton(
-                        modifier = Modifier.size(36.dp),
+                        modifier = Modifier.size(40.dp),
                         onClick = {
                             reportState.reportData?.let {
                                 onReportDeleteClicked(it.sessionId)
@@ -543,7 +544,7 @@ fun ReportContent(
                         }
                     ) {
                         Icon(
-                            modifier = Modifier.size(24.dp),
+                            modifier = Modifier.size(IconSize.Default),
                             painter = painterResource(Res.drawable.ic_report),
                             contentDescription = stringResource(Res.string.report_delete_report),
                             tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f)

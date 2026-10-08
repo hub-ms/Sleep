@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.unit.dp
+import com.soundsleeper.app.ui.theme.IconSize
 import com.soundsleeper.app.ui.theme.SleepTheme.primary
 import com.soundsleeper.app.ui.theme.SleepTheme.surface
 import com.soundsleeper.app.ui.theme.bodyText
@@ -40,7 +41,7 @@ fun <T> SelectableChipGroup(
             ) {
                 when (val resolved = itemContent(item)) {
                     is Painter -> Icon(
-                        modifier = Modifier.size(24.dp),
+                        modifier = Modifier.size(IconSize.Default),
                         painter = resolved,
                         contentDescription = null,
                         tint = primary

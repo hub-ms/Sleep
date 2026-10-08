@@ -51,6 +51,7 @@ import com.soundsleeper.app.ui.component.CurrentMusicCard
 import com.soundsleeper.app.ui.component.SleepAlertDialog
 import com.soundsleeper.app.ui.home.MusicBrowserSection
 import com.soundsleeper.app.ui.music.MusicContract
+import com.soundsleeper.app.ui.theme.IconSize
 import com.soundsleeper.app.ui.theme.SleepTheme
 import com.soundsleeper.app.ui.theme.SleepTheme.primary
 import com.soundsleeper.app.ui.theme.SleepTheme.secondary
@@ -179,7 +180,7 @@ fun TrackingContent(
                         onClick = { showHelp = true }
                     ) {
                         Icon(
-                            modifier = Modifier.size(24.dp),
+                            modifier = Modifier.size(IconSize.Default),
                             painter = painterResource(Res.drawable.ic_help),
                             tint = Color.White.copy(0.6f),
                             contentDescription = stringResource(Res.string.tracking_help_description)
@@ -302,7 +303,7 @@ fun TrackingContent(
                     // 예전에는 IconButton(onClick = {}) 이라 눌러도 아무 일이 없었다. 누를 수
                     // 있어 보이는 모양이 반응하지 않으면 제스처를 못 찾은 사용자가 더 헤맨다.
                     Icon(
-                        modifier = Modifier.size(24.dp),
+                        modifier = Modifier.size(IconSize.Default),
                         painter = painterResource(Res.drawable.ic_caret_up),
                         tint = Color.White.copy(0.4f),
                         contentDescription = null

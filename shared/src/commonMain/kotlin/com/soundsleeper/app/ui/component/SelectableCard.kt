@@ -21,10 +21,19 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.soundsleeper.app.resources.Res
 import com.soundsleeper.app.resources.ic_check
+import com.soundsleeper.app.ui.theme.IconSize
 import com.soundsleeper.app.ui.theme.SleepTheme.primary
 import com.soundsleeper.app.ui.theme.bodyText
 import org.jetbrains.compose.resources.painterResource
 
+/**
+ * 하나를 고르는 카드. 설문 선택지와 언어 설정에서 쓴다.
+ *
+ * 예전에는 선택 여부에 따라 면 색이 primary 40% ↔ LightGray 40% 로 함께 바뀌어,
+ * 고르는 순간 카드 전체가 다른 색으로 변했다. 선택 표시는 테두리 하나로 충분하고,
+ * 면 색까지 바뀌면 목록 안에서 어느 것이 선택됐는지보다 색 변화가 먼저 눈에 들어온다.
+ * 면 색은 고정하고 테두리 색만 바꾼다.
+ */
 @Composable
 fun SelectableCard(
     text: String,
@@ -36,16 +45,17 @@ fun SelectableCard(
             .fillMaxWidth()
             .selectable(selected = isSelected, onClick = onClick, role = Role.RadioButton),
         shape = RoundedCornerShape(16.dp),
-        color = if (isSelected) primary.copy(0.4f) else Color.LightGray.copy(0.4f),
+        // 선택 여부와 무관하게 고정한다.
+        color = Color.White.copy(alpha = 0.06f),
         border = BorderStroke(
-            width = 1.dp,
-            color = if (isSelected) primary else Color.LightGray
+            width = 2.dp,
+            color = if (isSelected) primary else Color.White.copy(alpha = 0.18f)
         )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(20.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -63,11 +73,10 @@ fun SelectableCard(
                         painter = painterResource(Res.drawable.ic_check),
                         contentDescription = null,
                         tint = primary,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(IconSize.Default)
                     )
                 }
             }
-
         }
     }
 }

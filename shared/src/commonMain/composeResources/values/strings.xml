@@ -316,7 +316,6 @@
     <string name="bedtime_reminder_label">취침 알림</string>
     <string name="wake_label">기상</string>
 
-    <string name="alarm_disabled_hint">알람을 먼저 활성화해주세요</string>
     <string name="volume_level_label">볼륨 크기</string>
 
     <string name="permission_guide_start">시작하기</string>

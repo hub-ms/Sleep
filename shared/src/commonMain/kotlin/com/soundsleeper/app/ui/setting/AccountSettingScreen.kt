@@ -127,6 +127,8 @@ import com.soundsleeper.app.resources.ic_kakao
 import com.soundsleeper.app.resources.ic_profile
 import com.soundsleeper.app.ui.auth.AuthContract
 import com.soundsleeper.app.ui.component.SelectableCard
+import com.soundsleeper.app.ui.component.ScreenTopBar
+import com.soundsleeper.app.ui.theme.IconSize
 import com.soundsleeper.app.ui.theme.SleepTheme.background
 import com.soundsleeper.app.ui.theme.SleepTheme.primary
 import com.soundsleeper.app.ui.theme.SleepTheme.surface
@@ -393,12 +395,12 @@ fun InfoItem(label: String, value: String, onCopy: (() -> Unit)?) {
             Text(text = value, style = MaterialTheme.typography.bodyLarge, color = Color.White)
         }
         if (onCopy == null) return@Row
-        IconButton(onClick = onCopy, modifier = Modifier.size(32.dp)) {
+        IconButton(onClick = onCopy, modifier = Modifier.size(40.dp)) {
             Icon(
                 painter = painterResource(Res.drawable.ic_copy),
                 contentDescription = stringResource(Res.string.account_copy_description, label),
                 tint = Color.White,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(IconSize.Default)
             )
         }
     }
@@ -428,7 +430,7 @@ fun AccountConnectItem(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Image(
-                    modifier = Modifier.size(24.dp),
+                    modifier = Modifier.size(IconSize.Default),
                     painter = painterResource(getAuthProviderIconRes(provider)),
                     contentDescription = null,
                 )
@@ -553,23 +555,10 @@ fun ProfileEditContent(
             .navigationBarsPadding(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBackClick) {
-                Icon(
-                    painter = painterResource(Res.drawable.ic_caret_left),
-                    contentDescription = stringResource(Res.string.common_back),
-                    tint = Color.White
-                )
-            }
-            Text(
-                text = stringResource(Res.string.account_edit_profile),
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White
-            )
-        }
+        ScreenTopBar(
+            title = stringResource(Res.string.account_edit_profile),
+            onBackClick = onBackClick,
+        )
 
         Spacer(Modifier.height(32.dp))
 
@@ -947,7 +936,8 @@ fun WithdrawalConfirmDetailContent(
             Icon(
                 painter = painterResource(Res.drawable.ic_caret_left),
                 contentDescription = stringResource(Res.string.common_back),
-                tint = Color.White
+                tint = Color.White,
+                modifier = Modifier.size(IconSize.Default)
             )
         }
 

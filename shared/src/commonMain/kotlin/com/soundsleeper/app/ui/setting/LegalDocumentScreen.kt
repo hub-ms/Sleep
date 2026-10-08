@@ -48,6 +48,7 @@ import com.soundsleeper.app.enum_.LegalType
 import com.soundsleeper.app.resources.Res
 import com.soundsleeper.app.resources.ic_caret_left
 import com.soundsleeper.app.resources.ic_caret_up
+import com.soundsleeper.app.ui.theme.IconSize
 import com.soundsleeper.app.ui.theme.SleepTheme.background
 import com.soundsleeper.app.ui.theme.SleepTheme.primary
 import com.soundsleeper.app.ui.theme.SleepTheme.surface
@@ -119,7 +120,7 @@ private fun LegalDocumentContent(
                             painter = painterResource(Res.drawable.ic_caret_left),
                             contentDescription = "뒤로가기",
                             tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(IconSize.Default)
                         )
                         Text(
                             text = "뒤로",
@@ -197,7 +198,7 @@ private fun LegalDocumentContent(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        modifier = Modifier.size(24.dp),
+                        modifier = Modifier.size(IconSize.Default),
                         painter = painterResource(Res.drawable.ic_caret_up),
                         contentDescription = null,
                         tint = Color.White

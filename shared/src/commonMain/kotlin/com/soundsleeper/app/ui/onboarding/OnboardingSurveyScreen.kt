@@ -58,6 +58,7 @@ import com.soundsleeper.app.resources.survey_q2_title
 import com.soundsleeper.app.resources.survey_q3_description
 import com.soundsleeper.app.resources.survey_q3_title
 import com.soundsleeper.app.ui.component.SelectableCard
+import com.soundsleeper.app.ui.theme.IconSize
 import com.soundsleeper.app.ui.theme.SleepTheme.primary
 import com.soundsleeper.app.ui.theme.caption
 import com.soundsleeper.app.ui.theme.sectionTitle
@@ -186,7 +187,7 @@ fun OnboardingSurveyContent(
                                 scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
                             }
                             .padding(end = 12.dp)
-                            .size(20.dp)
+                            .size(IconSize.Default)
                     )
                 }
                 SurveyProgress(

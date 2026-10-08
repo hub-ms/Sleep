@@ -52,6 +52,7 @@ import com.soundsleeper.app.resources.mypage_title
 import com.soundsleeper.app.ui.auth.AuthViewModel
 import com.soundsleeper.app.ui.component.AuthMethod
 import com.soundsleeper.app.ui.component.LoginButton
+import com.soundsleeper.app.ui.theme.IconSize
 import com.soundsleeper.app.ui.theme.SleepTheme.primary
 import com.soundsleeper.app.ui.theme.SleepTheme.surface
 import com.soundsleeper.app.ui.theme.bodyText
@@ -249,7 +250,7 @@ fun SettingItem(
                     painter = icon,
                     contentDescription = null,
                     tint = primary,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(IconSize.Default)
                 )
 
                 Spacer(Modifier.width(12.dp))
@@ -279,7 +280,7 @@ fun SettingItem(
             ),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(IconSize.Default)
         )
     }
 }

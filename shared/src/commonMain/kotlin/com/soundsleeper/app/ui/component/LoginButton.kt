@@ -25,6 +25,7 @@ import com.soundsleeper.app.resources.Res
 import com.soundsleeper.app.resources.ic_email
 import com.soundsleeper.app.resources.ic_google
 import com.soundsleeper.app.resources.ic_kakao
+import com.soundsleeper.app.ui.theme.IconSize
 import com.soundsleeper.app.ui.theme.bodyHighlight
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
@@ -82,7 +83,7 @@ private fun LoginButtonContent(
             Image(
                 painter = painterResource(ui.iconRes),
                 contentDescription = null,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(IconSize.Default)
             )
         }
         LoginButtonType.FullWidth -> {
@@ -97,7 +98,7 @@ private fun LoginButtonContent(
                         .align(Alignment.CenterStart)
                         // contentPadding 이 0이라 아이콘이 버튼 왼쪽 모서리에 붙어 있었다.
                         .padding(start = 20.dp)
-                        .size(24.dp)
+                        .size(IconSize.Default)
                 )
                 Text(
                     modifier = Modifier.align(Alignment.Center),

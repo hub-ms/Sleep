@@ -281,7 +281,6 @@
     <string name="sleep_setting_open_label">Open sleep settings</string>
     <string name="bedtime_reminder_label">Bedtime Reminder</string>
     <string name="wake_label">Wake</string>
-    <string name="alarm_disabled_hint">Turn on the alarm first</string>
     <string name="volume_level_label">Volume</string>
 
     <string name="permission_guide_start">Get Started</string>

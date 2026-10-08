@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 import com.soundsleeper.app.platform.EmailLauncher
+import com.soundsleeper.app.ui.theme.IconSize
 import com.soundsleeper.app.ui.theme.SleepTheme
 import com.soundsleeper.app.resources.Res
 import com.soundsleeper.app.resources.common_confirm_short
@@ -216,7 +217,7 @@ fun ConditionItem(text: String, isMet: Boolean) {
         Icon(
             painter = painterResource(Res.drawable.ic_check),
             contentDescription = null,
-            modifier = Modifier.size(16.dp),
+            modifier = Modifier.size(IconSize.Inline),
             tint = if (isMet) secondary else Color.White
         )
         Spacer(modifier = Modifier.width(8.dp))

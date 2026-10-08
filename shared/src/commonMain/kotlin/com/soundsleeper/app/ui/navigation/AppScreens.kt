@@ -915,6 +915,7 @@ object SleepSettingScreen : Screen {
             },
             onToggleSleepReminder = { alarmViewModel.sendIntent(AlarmContract.Intent.ToggleSleepReminder(it)) },
             onStopAlarmPreview = { alarmViewModel.sendIntent(AlarmContract.Intent.StopAlarmPreview) },
+            onBackClick = { navigator.pop() },
         )
     }
 }

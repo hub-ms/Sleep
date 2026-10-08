@@ -81,7 +81,6 @@ import com.soundsleeper.app.enum_.PermissionType
 import com.soundsleeper.app.platform.CircleCanvas
 import com.soundsleeper.app.platform.rememberPermissionHandler
 import com.soundsleeper.app.resources.Res
-import com.soundsleeper.app.resources.alarm_disabled_hint
 import com.soundsleeper.app.resources.alarm_sound_label
 import com.soundsleeper.app.resources.alarm_sound_selection_description
 import com.soundsleeper.app.resources.alarm_time_setting_description
@@ -105,8 +104,11 @@ import com.soundsleeper.app.resources.sleep_setting_open_label
 import com.soundsleeper.app.resources.smart_alarm_range_minutes
 import com.soundsleeper.app.resources.volume_level_label
 import com.soundsleeper.app.resources.wake_label
+import com.soundsleeper.app.resources.mypage_sleep_alarm_setting
+import com.soundsleeper.app.ui.component.ScreenTopBar
 import com.soundsleeper.app.ui.component.SegmentedControl
 import com.soundsleeper.app.ui.component.ToggleSettingItem
+import com.soundsleeper.app.ui.theme.IconSize
 import com.soundsleeper.app.ui.theme.SleepTheme.background
 import com.soundsleeper.app.ui.theme.SleepTheme.primary
 import com.soundsleeper.app.ui.theme.SleepTheme.secondary
@@ -150,26 +152,32 @@ fun SleepSettingContent(
     onSelectSmartAlarmRange: (Int) -> Unit,
     onToggleSleepReminder: (Boolean) -> Unit,
     onStopAlarmPreview: () -> Unit = {},
+    onBackClick: () -> Unit = {},
 ) {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(background)
-            .navigationBarsPadding()
+            // systemBarsPadding 이 내비게이션 바까지 포함하므로 navigationBarsPadding 을
+            // 겹쳐 주지 않는다 - 예전에는 둘을 함께 걸어 아래 여백이 두 번 들어갔다.
             .systemBarsPadding()
     ) {
         Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // 예전에는 상단바가 아예 없어서 시스템 뒤로가기 말고는 나갈 길이 없었다.
+            ScreenTopBar(
+                title = stringResource(Res.string.mypage_sleep_alarm_setting),
+                onBackClick = onBackClick,
+            )
             AlarmStatusCard(
                 alarmState = alarmState,
+                modifier = Modifier.padding(horizontal = 16.dp),
             )
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -215,6 +223,7 @@ fun SleepSettingContent(
                 }
             }
             AlarmTopStatusSection(
+                modifier = Modifier.padding(horizontal = 16.dp),
                 alarmState = alarmState,
                 onToggleAlarm = onToggleAlarm,
                 onSelectAlarmSound = onSelectAlarmSound,
@@ -232,6 +241,7 @@ fun SleepSettingContent(
 @Composable
 @ExperimentalMaterial3Api
 fun AlarmTopStatusSection(
+    modifier: Modifier = Modifier,
     alarmState: AlarmContract.State,
     onToggleAlarm: () -> Unit,
     onSelectAlarmSound: (Alarm.Sound) -> Unit,
@@ -255,7 +265,7 @@ fun AlarmTopStatusSection(
     val sleepReminderOffMessage = stringResource(Res.string.sleep_reminder_off_message)
 
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .wrapContentHeight()
             .background(
@@ -320,7 +330,7 @@ fun AlarmTopStatusSection(
                             color = Color.White
                         )
                         Icon(
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(IconSize.Default),
                             painter = painterResource(Res.drawable.ic_caret_right),
                             contentDescription = stringResource(Res.string.alarm_sound_selection_description),
                             tint = Color.White
@@ -424,7 +434,7 @@ fun AlarmTopStatusSection(
                         )
                         if (sound.id == alarmState.selectedAlarmSound.id) {
                             Icon(
-                                modifier = Modifier.size(24.dp),
+                                modifier = Modifier.size(IconSize.Default),
                                 painter = painterResource(Res.drawable.ic_check),
                                 contentDescription = stringResource(Res.string.selected_sound_description),
                                 tint = primary
@@ -457,7 +467,7 @@ fun PickerStateIcon(
         label = "pickerIconTint"
     )
     Box(
-        modifier = modifier.size(24.dp),
+        modifier = modifier.size(IconSize.Default),
         contentAlignment = Alignment.Center
     ) {
         if (isEnabled) {
@@ -465,14 +475,14 @@ fun PickerStateIcon(
                 painter = painter,
                 contentDescription = null,
                 tint = activeColor,
-                modifier = Modifier.size(24.dp).blur(4.dp)
+                modifier = Modifier.size(IconSize.Default).blur(4.dp)
             )
         }
         Icon(
             painter = painter,
             contentDescription = contentDescription,
             tint = tint,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(IconSize.Default)
         )
     }
 }
@@ -491,9 +501,10 @@ fun PickerStateIcon(
 fun AlarmStatusCard(
     alarmState: AlarmContract.State,
     onClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .wrapContentHeight()
             .background(
@@ -531,10 +542,16 @@ fun AlarmStatusCard(
                 )
             }
             // 알람음은 취침·기상 어느 쪽에도 속하지 않으므로 두 칸 아래 전폭 한 줄로 둔다.
-            AlarmSoundRow(
-                alarmState = alarmState,
-                selectedAlarm = alarmState.selectedAlarmSound,
-            )
+            //
+            // 알람이 꺼져 있으면 이 줄 자체를 그리지 않는다. 예전에는 꺼진 상태에서도
+            // 줄이 남아 "알람을 먼저 활성화해주세요"를 보여 줬는데, 기상 칸이 이미 "꺼짐"을
+            // 말하고 있어 같은 사실을 두 번 적는 셈이었다.
+            if (alarmState.isAlarmEnabled) {
+                AlarmSoundRow(
+                    alarmState = alarmState,
+                    selectedAlarm = alarmState.selectedAlarmSound,
+                )
+            }
         }
     }
 }
@@ -597,7 +614,7 @@ private fun StatusColumn(
                 painter = icon,
                 contentDescription = null,
                 tint = iconTint,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(IconSize.Inline)
             )
             Text(
                 text = label,
@@ -632,9 +649,7 @@ private fun AlarmSoundRow(
         )
         Text(
             modifier = Modifier.basicMarquee(),
-            text = if (alarmState.isAlarmEnabled) stringResource(
-                ResourceMapper.getAlarmTitleRes(selectedAlarm.id)
-            ) else stringResource(Res.string.alarm_disabled_hint),
+            text = stringResource(ResourceMapper.getAlarmTitleRes(selectedAlarm.id)),
             style = MaterialTheme.typography.bodyMedium,
             color = Color.White,
             maxLines = 1
@@ -669,7 +684,7 @@ fun BouncingPreviewIcon(
 
     Icon(
         modifier = Modifier
-            .size(24.dp)
+            .size(IconSize.Default)
             .graphicsLayer {
                 translationY = offsetY.value
             },
@@ -901,8 +916,10 @@ fun VerticalVolumeDial(
     val handleSize = 32.dp
     val handleSizePx = with(LocalDensity.current) { handleSize.toPx() }
 
-    val trackColor = surface
-    val dotColor = Color.White.copy(alpha = 0.6f)
+    // 트랙이 surface 색이면 이 슬라이더가 놓인 카드(AlarmTopStatusSection)도 surface 라
+    // 배경에 녹아 트랙이 보이지 않았다. 팔레트가 더 어두워지면서 더 심해졌다.
+    val trackColor = Color.White.copy(alpha = 0.12f)
+    val dotColor = Color.White.copy(alpha = 0.35f)
     val progressBrush = Brush.horizontalGradient(
         colors = listOf(primary, secondary)
     )

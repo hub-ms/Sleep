@@ -77,6 +77,7 @@ import com.soundsleeper.app.resources.paywall_savings_monthly_equivalent
 import com.soundsleeper.app.resources.report_ai_advice_title
 import com.soundsleeper.app.resources.report_self_comparison_title
 import com.soundsleeper.app.resources.report_snoring_analysis_title
+import com.soundsleeper.app.ui.theme.IconSize
 import com.soundsleeper.app.ui.theme.SleepTheme
 import com.soundsleeper.app.ui.theme.SleepTheme.primary
 import com.soundsleeper.app.ui.theme.bodyText
@@ -149,7 +150,8 @@ fun PaywallContent(
                 Icon(
                     painter = painterResource(Res.drawable.ic_close),
                     contentDescription = stringResource(Res.string.common_back),
-                    tint = Color.White
+                    tint = Color.White,
+                    modifier = Modifier.size(IconSize.Default)
                 )
             }
         }
@@ -514,7 +516,7 @@ private fun ComparisonFeatureRow(
                     painter = painterResource(Res.drawable.ic_check),
                     contentDescription = stringResource(Res.string.paywall_feature_available_free),
                     tint = Color.White,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(IconSize.Dense)
                 )
             } else {
                 Icon(
@@ -530,7 +532,7 @@ private fun ComparisonFeatureRow(
                 painter = painterResource(Res.drawable.ic_check),
                 contentDescription = stringResource(Res.string.paywall_feature_available_premium),
                 tint = primary,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(IconSize.Dense)
             )
         }
     }

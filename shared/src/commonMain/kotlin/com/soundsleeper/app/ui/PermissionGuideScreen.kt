@@ -61,6 +61,7 @@ import com.soundsleeper.app.resources.permission_guide_title
 import com.soundsleeper.app.ui.component.BedsideChargerIllustration
 import com.soundsleeper.app.ui.component.ChargingPhoneIllustration
 import com.soundsleeper.app.ui.onboarding.PermissionContract
+import com.soundsleeper.app.ui.theme.IconSize
 import com.soundsleeper.app.ui.theme.SleepTheme.background
 import com.soundsleeper.app.ui.theme.SleepTheme.primary
 import com.soundsleeper.app.ui.theme.caption
@@ -270,7 +271,7 @@ private fun PermissionExplainRow(icon: DrawableResource, text: String) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            modifier = Modifier.size(24.dp),
+            modifier = Modifier.size(IconSize.Default),
             painter = painterResource(icon),
             contentDescription = null,
             tint = Color.White

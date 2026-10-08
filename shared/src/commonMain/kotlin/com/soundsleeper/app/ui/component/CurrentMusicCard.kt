@@ -37,6 +37,7 @@ import com.soundsleeper.app.resources.ic_bookmark_outlined
 import com.soundsleeper.app.resources.ic_pause
 import com.soundsleeper.app.resources.ic_play
 import com.soundsleeper.app.ui.music.MusicContract
+import com.soundsleeper.app.ui.theme.IconSize
 import com.soundsleeper.app.ui.theme.SleepTheme.primary
 import com.soundsleeper.app.ui.theme.SleepTheme.surface
 import com.soundsleeper.app.util.DateTimeUtil.formatSleepMusicSeconds
@@ -187,7 +188,7 @@ private fun SelectedMusicContent(
                         ),
                         contentDescription = null,
                         tint = Color.White,
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(IconSize.Default)
                     )
                 }
 

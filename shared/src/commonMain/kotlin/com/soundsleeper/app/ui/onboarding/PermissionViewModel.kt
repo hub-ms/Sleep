@@ -1,47 +1,21 @@
-package com.sleepytime.shared.ui.onboarding
+package com.soundsleeper.app.ui.onboarding
 
-import cafe.adriel.voyager.core.model.ScreenModel
-import cafe.adriel.voyager.core.model.screenModelScope
+import com.soundsleeper.app.ui.common.AppScopedScreenModel
 import com.russhwolf.settings.ObservableSettings
-import com.sleepytime.shared.enum_.PermissionType
-import com.sleepytime.shared.util.PreferencesKeys
+import com.soundsleeper.app.enum_.PermissionType
+import com.soundsleeper.app.util.PreferencesKeys
 import io.github.aakira.napier.Napier
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 
 class PermissionViewModel(
     private val settings: ObservableSettings
-): ScreenModel {
+) : AppScopedScreenModel() {
 
     private val _state = MutableStateFlow(PermissionContract.State())
     val state: StateFlow<PermissionContract.State> = _state.asStateFlow()
-
-    private val _intentChannel = Channel<PermissionContract.Intent>(Channel.BUFFERED)
-
-    init {
-        screenModelScope.launch {
-            for (intent in _intentChannel) {
-                processIntent(intent)
-            }
-        }
-    }
-    fun sendIntent(intent: PermissionContract.Intent) {
-        screenModelScope.launch {
-            _intentChannel.send(intent)
-        }
-    }
-    private fun processIntent(intent: PermissionContract.Intent) {
-        when (intent) {
-            is PermissionContract.Intent.PermissionGranted -> {
-            }
-            is PermissionContract.Intent.PermissionDenied -> {
-            }
-        }
-    }
 
     fun updatePermission(type: PermissionType, granted: Boolean) {
         Napier.d(tag = "OnboardingVM", message = "Update permission: $type = $granted")
@@ -54,9 +28,23 @@ class PermissionViewModel(
             }
         }
     }
-
-    // 최초실행 권한 온보딩을 완료 표시해서, 다음부터는 홈 진입 시 이 화면으로 다시 보내지 않습니다.
     fun markOnboardingDone() {
         settings.putBoolean(PreferencesKeys.App.PERMISSION_ONBOARDING_DONE, true)
+    }
+
+    /** 수면 측정 안내 화면을 이미 본 적이 있는가. 첫 측정에만 보여주기 위한 값이다. */
+    fun isTrackingGuideShown(): Boolean =
+        settings.getBoolean(PreferencesKeys.App.TRACKING_GUIDE_SHOWN, false)
+
+    fun markTrackingGuideShown() {
+        settings.putBoolean(PreferencesKeys.App.TRACKING_GUIDE_SHOWN, true)
+    }
+
+    /** 권한 안내 화면을 이미 본 적이 있는가. 수면 가이드와 마찬가지로 최초 1회만 보여준다. */
+    fun isPermissionGuideShown(): Boolean =
+        settings.getBoolean(PreferencesKeys.App.PERMISSION_GUIDE_SHOWN, false)
+
+    fun markPermissionGuideShown() {
+        settings.putBoolean(PreferencesKeys.App.PERMISSION_GUIDE_SHOWN, true)
     }
 }

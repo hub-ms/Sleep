@@ -36,13 +36,6 @@ object AlarmContract {
         val isGradualVolumeEnabled: Boolean = false,
 
         val isAutoTrackingEnabled: Boolean = false,
-        val sleepTrackingModeList: List<SleepTrackingMode> = listOf(
-            SleepTrackingMode.AUTO_PHONE,
-            SleepTrackingMode.AUTO_WATCH,
-        ),
-        val selectedSleepTrackingModes: Set<SleepTrackingMode> = setOf(
-            SleepTrackingMode.AUTO_PHONE,
-        ),
         val autoTrackingTime: LocalTime? = null,
         val isReminderEnabled: Boolean = true,
 

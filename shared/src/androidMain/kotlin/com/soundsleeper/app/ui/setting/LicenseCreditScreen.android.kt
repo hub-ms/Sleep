@@ -36,7 +36,6 @@ import androidx.compose.ui.window.DialogProperties
 import com.mikepenz.aboutlibraries.entity.Library
 import com.mikepenz.aboutlibraries.ui.compose.android.produceLibraries
 import com.mikepenz.aboutlibraries.ui.compose.util.strippedLicenseContent
-import com.soundsleeper.app.R
 import com.soundsleeper.app.ui.theme.SleepTheme.primary
 import com.soundsleeper.app.ui.theme.SleepTheme.surface
 import com.soundsleeper.app.ui.theme.bodyHighlight
@@ -55,7 +54,9 @@ import com.soundsleeper.app.ui.theme.sectionTitle
 // 쓰면 앱 테마와 문구를 그대로 맞출 수 있다.
 @Composable
 actual fun LibraryListSection() {
-    val libs by produceLibraries(R.raw.aboutlibraries)
+    // 리소스 id 는 :androidApp 이 넘겨준다 (AboutLibrariesRes 주석 참고).
+    val resId = AboutLibrariesRes.rawResId
+    val libs = if (resId != null) produceLibraries(resId).value else null
     val libraries = libs?.libraries.orEmpty()
 
     LazyColumn(

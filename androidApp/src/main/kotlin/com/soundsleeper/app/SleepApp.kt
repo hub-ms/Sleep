@@ -9,7 +9,9 @@ import com.revenuecat.purchases.PurchasesConfiguration
 import com.soundsleeper.app.android.BuildConfig
 import com.soundsleeper.app.di.androidModule
 import com.soundsleeper.app.di.sharedModule
+import com.soundsleeper.app.android.R
 import com.soundsleeper.app.platform.AndroidContextProvider
+import com.soundsleeper.app.ui.setting.AboutLibrariesRes
 import com.soundsleeper.app.util.AppLogger
 import com.soundsleeper.app.util.plantCrashlytics
 import com.zoyi.channel.plugin.android.ChannelIO
@@ -38,6 +40,9 @@ class SleepApp : Application() {
             AppLogger.plantCrashlytics()
         }
         AndroidContextProvider.context = this
+        // 라이선스 목록 JSON 은 이 모듈에서 생성되므로 리소스 id 도 여기서 넘겨준다.
+        // 컴파일 시점 R 참조라 릴리스의 리소스 축소(isShrinkResources)가 지우지 않는다.
+        AboutLibrariesRes.rawResId = R.raw.aboutlibraries
         KakaoSdk.init(this, BuildConfig.KAKAO_NATIVE_APP_KEY)
         ChannelIO.initialize(this)
         // Purchases.configure()는 Purchases.sharedInstance를 쓰는 다른 모든 호출(상품 조회,

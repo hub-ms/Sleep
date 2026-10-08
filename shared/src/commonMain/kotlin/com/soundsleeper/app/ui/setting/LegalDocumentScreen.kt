@@ -50,6 +50,13 @@ import com.soundsleeper.app.domain.model.LegalSection
 import com.soundsleeper.app.enum_.LegalType
 import com.soundsleeper.app.resources.Res
 import com.soundsleeper.app.resources.ic_caret_left
+import com.soundsleeper.app.resources.common_back
+import com.soundsleeper.app.resources.common_retry
+import com.soundsleeper.app.resources.legal_effective_date_format
+import com.soundsleeper.app.resources.legal_load_failed
+import com.soundsleeper.app.resources.legal_quick_nav
+import com.soundsleeper.app.resources.legal_scroll_to_top
+import org.jetbrains.compose.resources.stringResource
 import com.soundsleeper.app.resources.ic_caret_up
 import com.soundsleeper.app.ui.theme.IconSize
 import com.soundsleeper.app.ui.component.ScreenTopBar
@@ -153,12 +160,12 @@ private fun LegalDocumentContent(
                     ) {
                         Icon(
                             painter = painterResource(Res.drawable.ic_caret_left),
-                            contentDescription = "뒤로가기",
+                            contentDescription = stringResource(Res.string.common_back),
                             tint = Color.White,
                             modifier = Modifier.size(IconSize.Default)
                         )
                         Text(
-                            text = "뒤로",
+                            text = stringResource(Res.string.common_back),
                             style = MaterialTheme.typography.bodyText,
                             color = Color.White
                         )
@@ -171,7 +178,11 @@ private fun LegalDocumentContent(
                     color = Color.White
                 )
                 Text(
-                    text = "시행일: ${document.effectiveDate} · 최종 수정일: ${document.updatedDate}",
+                    text = stringResource(
+                        Res.string.legal_effective_date_format,
+                        document.effectiveDate,
+                        document.updatedDate,
+                    ),
                     style = MaterialTheme.typography.caption,
                     color = Color.White
                 )
@@ -221,7 +232,7 @@ private fun LegalDocumentContent(
             Surface(
                 modifier = Modifier
                     .size(48.dp)
-                    .clickable(onClickLabel = "맨 위로 이동") {
+                    .clickable(onClickLabel = stringResource(Res.string.legal_scroll_to_top)) {
                         scope.launch { listState.animateScrollToItem(0) }
                     },
                 shape = CircleShape,
@@ -257,7 +268,7 @@ private fun QuickNavList(
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Text(
-            text = "빠른 이동",
+            text = stringResource(Res.string.legal_quick_nav),
             modifier = Modifier.padding(bottom = 4.dp),
             style = MaterialTheme.typography.caption,
             color = Color.White
@@ -412,14 +423,14 @@ private fun LegalErrorView(onRetry: () -> Unit, onBackClick: (() -> Unit)?) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "내용을 불러오지 못했어요.",
+            text = stringResource(Res.string.legal_load_failed),
             style = MaterialTheme.typography.bodyText,
             color = Color.White,
         )
         Spacer(Modifier.height(12.dp))
-        Button(onClick = onRetry) { Text("다시 시도") }
+        Button(onClick = onRetry) { Text(stringResource(Res.string.common_retry)) }
         if (onBackClick != null) {
-            TextButton(onClick = onBackClick) { Text("뒤로") }
+            TextButton(onClick = onBackClick) { Text(stringResource(Res.string.common_back)) }
         }
     }
 }

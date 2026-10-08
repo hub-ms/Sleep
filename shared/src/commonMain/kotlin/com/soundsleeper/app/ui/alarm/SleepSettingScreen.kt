@@ -80,6 +80,7 @@ import com.soundsleeper.app.domain.model.Alarm
 import com.soundsleeper.app.enum_.PermissionType
 import com.soundsleeper.app.platform.CircleCanvas
 import com.soundsleeper.app.platform.rememberPermissionHandler
+import com.soundsleeper.app.resources.common_off
 import com.soundsleeper.app.resources.Res
 import com.soundsleeper.app.resources.alarm_sound_label
 import com.soundsleeper.app.resources.alarm_sound_selection_description
@@ -130,10 +131,6 @@ import kotlin.math.roundToInt
 
 enum class Setting(val labelRes: StringResource) {
     ALARM(Res.string.setting_alarm), VIBRATION(Res.string.setting_vibration), SMART_ALARM(Res.string.setting_smart_alarm)
-}
-
-enum class SleepTrackingMode(val text: String) {
-    AUTO_PHONE("스마트폰"), AUTO_WATCH("스마트워치")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -563,7 +560,8 @@ private fun BedtimeStatusColumn(
     modifier: Modifier = Modifier,
 ) {
     val reminderMinutes = (alarmState.reminderHour * 60 + alarmState.reminderMinute).toLocalDateTime()
-    val reminderString = if (!alarmState.isReminderEnabled) "꺼짐" else reminderMinutes.to24TimeString()
+    val offText = stringResource(Res.string.common_off)
+    val reminderString = if (!alarmState.isReminderEnabled) offText else reminderMinutes.to24TimeString()
     StatusColumn(
         modifier = modifier,
         icon = painterResource(Res.drawable.ic_sleep),
@@ -578,7 +576,8 @@ private fun WakeStatusColumn(
     modifier: Modifier = Modifier,
 ) {
     val alarmMinutes = alarmState.alarmHour * 60 + alarmState.alarmMinute
-    val alarmString = if (!alarmState.isAlarmEnabled) "꺼짐"
+    val offText = stringResource(Res.string.common_off)
+    val alarmString = if (!alarmState.isAlarmEnabled) offText
     else {
         val smartStart = (alarmMinutes - alarmState.selectedSmartAlarmRange).toLocalDateTime()
         val smartEnd = alarmMinutes.toLocalDateTime()

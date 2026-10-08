@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.googleGmsServices)
     alias(libs.plugins.firebaseCrashlytics)
+    alias(libs.plugins.aboutLibraries)
 }
 
 val localProperties = Properties().apply {
@@ -77,4 +78,18 @@ dependencies {
     implementation(libs.channel.plugin.android)
     implementation(libs.firebase.crashlytics)
     implementation(libs.revenuecat.purchases)
+}
+// 오픈소스 라이선스 목록은 이 모듈에서 생성한다.
+//
+// 예전에는 :shared 에 플러그인을 걸었는데, 그 모듈은 androidTarget() 없이
+// com.android.kotlin.multiplatform.library 를 쓴다. AboutLibraries 수집기는 Android variant 의
+// 런타임 클래스패스를 훑으므로 그 variant 모델이 없으면 의존성을 하나도 해석하지 못하고,
+// res/raw/aboutlibraries.json 이 {"libraries":[],"licenses":{}} 30바이트로 생성됐다
+// (빌드는 성공하고 화면만 비어 있어서 원인을 찾기 어려웠다).
+// 평범한 com.android.application 모듈인 여기서는 debug/release variant 가 정상이라
+// 실제 의존성 목록이 담긴다.
+aboutLibraries {
+    collect {
+        includePlatform.set(true)
+    }
 }

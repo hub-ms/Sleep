@@ -12,6 +12,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.LineHeightStyle.Alignment
+import com.soundsleeper.app.resources.Res
+import com.soundsleeper.app.resources.auth_restore_account
+import com.soundsleeper.app.resources.auth_unusable_account_title
+import com.soundsleeper.app.resources.auth_withdrawn_title
+import com.soundsleeper.app.resources.common_cancel
+import com.soundsleeper.app.resources.common_confirm_short
+import org.jetbrains.compose.resources.stringResource
 import com.soundsleeper.app.enum_.AuthProvider
 import com.soundsleeper.app.ui.auth.AuthContract
 import com.soundsleeper.app.ui.theme.SleepTheme.primary
@@ -52,8 +59,10 @@ fun SignUpContent(
                 containerColor = surface,
                 title = {
                     Text(
-                        text = if (authState.isWithdrawnAccountRestorable) "탈퇴한 계정이에요"
-                        else "사용할 수 없는 계정이에요",
+                        text = stringResource(
+                            if (authState.isWithdrawnAccountRestorable) Res.string.auth_withdrawn_title
+                            else Res.string.auth_unusable_account_title
+                        ),
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 },
@@ -61,18 +70,18 @@ fun SignUpContent(
                 confirmButton = {
                     if (authState.isWithdrawnAccountRestorable) {
                         TextButton(onClick = onWithdrawnAccountRestore) {
-                            Text("계정 복구하기", color = primary)
+                            Text(stringResource(Res.string.auth_restore_account), color = primary)
                         }
                     } else {
                         TextButton(onClick = onWithdrawnAccountDismiss) {
-                            Text("확인", color = primary)
+                            Text(stringResource(Res.string.common_confirm_short), color = primary)
                         }
                     }
                 },
                 dismissButton = {
                     if (authState.isWithdrawnAccountRestorable) {
                         TextButton(onClick = onWithdrawnAccountDismiss) {
-                            Text("취소", color = Color.White)
+                            Text(stringResource(Res.string.common_cancel), color = Color.White)
                         }
                     }
                 }

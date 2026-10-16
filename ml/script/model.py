@@ -315,6 +315,54 @@ def build_context_transformer_body(
     )
 
 
+# 컨텍스트 바디의 도메인 FiLM 슬롯 수. 0=오디오, 1=가속도, 2=PSG(Sleep-EDF).
+# ⚠️ 모든 모델이 **같은 값**을 써야 한다 — ctx_body 가중치를 스테이지 간에 주고받으려면
+# (psg_context_pretrain -> accel_core) 도메인 임베딩의 shape 이 같아야 하기 때문이다.
+N_DOMAINS = 3
+DOMAIN_AUDIO, DOMAIN_ACCEL, DOMAIN_PSG = 0, 1, 2
+
+
+def build_psg_pretrain_model(
+    psg_window=1500, psg_channels=7, context_len=60, n_classes=4, d_model=128,
+    n_time_buckets=8, ctx_num_heads=8, ctx_num_layers=4,
+):
+    """Sleep-EDF(PSG: EEG/EOG/EMG)로 **컨텍스트 트랜스포머만** 사전학습하기 위한 모델.
+
+    왜 이런 게 필요한가: Sleep-EDF 는 가속도가 없어서 accel_core 와 같은 통에 넣을 수 없다
+    (채널 0~3 의 std 가 accel 소스보다 4자리 작고, activity 채널 2개는 아예 0이다).
+    하지만 "밤이 어떤 순서로 흘러가는가"(Wake→Light→Deep→Light→REM 의 주기 구조)는
+    센서 종류와 무관한 **사람의 수면 구조**이고, 그건 epoch 인코더가 아니라 컨텍스트
+    트랜스포머가 담당하는 지식이다. EEG 는 단계 판별이 훨씬 쉬우므로, 197명치 PSG 로
+    ctx_body 를 먼저 학습시킨 뒤 그 가중치를 accel_core 의 출발점으로 넘긴다
+    (라벨 있는 accel 피험자는 72명뿐이라 이 차이가 크다).
+
+    epoch 인코더는 accel 과 **공유하지 않는다** — 입력 신호의 물리적 의미가 전혀 다르므로
+    공유해 봐야 서로를 망가뜨린다. 넘겨받는 것은 ctx_body(+ 분류 헤드는 버림)뿐이다.
+    """
+    psg_enc = build_accel_epoch_encoder(psg_window, psg_channels, d_model, name="psg_epoch_encoder")
+    ctx_body = build_context_transformer_body(
+        context_len, d_model, ctx_num_heads, ctx_num_layers,
+        n_domains=N_DOMAINS, n_time_buckets=n_time_buckets,
+    )
+
+    psg_in = tf.keras.layers.Input(shape=(context_len, psg_window, psg_channels), name="psg_input")
+    time_bucket_in = tf.keras.layers.Input(shape=(), dtype="int32", name="time_bucket_id")
+
+    emb = tf.keras.layers.TimeDistributed(psg_enc)(psg_in)
+    emb = tf.keras.layers.Dense(d_model, activation="relu", name="psg_proj")(emb)
+    dom = ConstantDomainId(DOMAIN_PSG, name="psg_dom")(psg_in)
+    ctx = ctx_body([emb, dom, time_bucket_in])
+
+    logits = tf.keras.layers.Dense(n_classes, activation=None, name="psg_logits")(ctx)
+    out = tf.keras.layers.Activation("linear", dtype="float32", name="psg_output_act")(logits)
+
+    return {
+        "train_model": tf.keras.Model([psg_in, time_bucket_in], out),
+        "context_body": ctx_body,
+        "psg_encoder": psg_enc,
+    }
+
+
 # ============================================================
 # 4. 전체 모델 조립
 # ============================================================
@@ -357,7 +405,8 @@ def build_multimodal_model(
     audio_enc = build_audio_epoch_encoder(audio_n_mel_frames, audio_n_mels, d_model)
     accel_enc = build_accel_epoch_encoder(accel_window, accel_channels, d_model)
     ctx_body = build_context_transformer_body(
-        context_len, d_model, ctx_num_heads, ctx_num_layers, n_domains=2, n_time_buckets=n_time_buckets
+        context_len, d_model, ctx_num_heads, ctx_num_layers,
+        n_domains=N_DOMAINS, n_time_buckets=n_time_buckets,
     )
     crf = TransitionCRF(n_classes, init_transition_matrix, name="transition_crf")
 

@@ -32,11 +32,11 @@ import numpy as np
 BASE_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = BASE_DIR.parent
 CLASSIFIER_KT = (
-    REPO_ROOT / "shared" / "src" / "androidMain" / "kotlin" / "com" / "somniotune" / "app"
+    REPO_ROOT / "shared" / "src" / "androidMain" / "kotlin" / "com" / "soundsleeper" / "app"
     / "platform" / "SleepStageClassifier.kt"
 )
 PARITY_FIXTURE_OUT = (
-    REPO_ROOT / "shared" / "src" / "commonTest" / "kotlin" / "com" / "somniotune" / "app"
+    REPO_ROOT / "shared" / "src" / "commonTest" / "kotlin" / "com" / "soundsleeper" / "app"
     / "util" / "ParityFixture.kt"
 )
 
@@ -73,6 +73,73 @@ PSG_CHANNEL_NAMES = ["eeg1", "eeg2", "eog", "emg", "reserved1", "reserved2", "ti
 TIME_FEATURE_SPAN_SEC = 8 * 60 * 60.0
 
 LOOKBACK_EPOCHS = 6  # 30초 epoch 6개 = 최근 3분
+
+# ------------------------------------------------------------
+# 확장 채널 (파생 — 원본 .npy 를 다시 만들지 않고 학습 시점에 덧붙인다)
+# ------------------------------------------------------------
+# 수면주기 길이(초). NREM/REM 한 주기 ≈ 90분.
+SLEEP_CYCLE_SEC = 90 * 60.0
+
+CIRCADIAN_CHANNEL_NAMES = ["cycle_sin", "cycle_cos"]
+
+# 가속도 magnitude 의 대역별 상대 파워. 각각 호흡/심탄도(BCG)/체동 대역에 대응한다.
+# ⚠️ 실측(Deep epoch welch): 호흡대역 0.8~1.0%, BCG 대역 7~16%, 3~10Hz 가 과반.
+#    호흡 대역은 노이즈 플로어에 가까우므로 효과는 ablation 으로 판정할 것.
+BAND_EDGES_HZ = [(0.1, 0.5), (1.0, 3.0), (3.0, 10.0)]
+BAND_CHANNEL_NAMES = ["band_resp", "band_bcg", "band_motion"]
+
+# --channel-set 값 -> 최종 채널 이름 목록
+CHANNEL_SETS = {
+    "base": ACCEL_CHANNEL_NAMES,
+    "circadian": ACCEL_CHANNEL_NAMES + CIRCADIAN_CHANNEL_NAMES,
+    "full": ACCEL_CHANNEL_NAMES + CIRCADIAN_CHANNEL_NAMES + BAND_CHANNEL_NAMES,
+}
+
+
+def channel_count(channel_set="base"):
+    return len(CHANNEL_SETS[channel_set])
+
+
+def circadian_channels(time_feature_values):
+    """time_feature(0~1 램프)에서 수면주기 위상을 sin/cos 두 채널로 만든다.
+
+    왜: 지금 모델이 시간에 대해 아는 것은 "자기 시작 후 몇 %가 지났나" 하나뿐인 단조 램프다.
+    그런데 실제 수면 구조는 **주기적**이다 — Deep 은 전반부 주기에, REM 은 후반부 주기에
+    몰린다. 단조 램프로는 "지금이 주기의 어느 국면인가"를 표현할 수 없다. sin/cos 쌍은
+    위상을 불연속 없이(0과 1이 이어지게) 주는 표준 인코딩이다.
+
+    time_feature 에서 경과 초를 역산할 수 있으므로(elapsed = tf * TIME_FEATURE_SPAN_SEC)
+    원본 .npy 를 다시 만들지 않고 학습 시점에 파생할 수 있다 — 74GB 재생성을 피하려는 설계다.
+    단, time_feature 가 1.0 으로 포화된 구간(8시간 초과)은 위상도 함께 멈춘다는 한계가 있다.
+    """
+    elapsed = np.asarray(time_feature_values, dtype=np.float32) * TIME_FEATURE_SPAN_SEC
+    phase = 2.0 * np.pi * elapsed / SLEEP_CYCLE_SEC
+    return np.sin(phase).astype(np.float32), np.cos(phase).astype(np.float32)
+
+
+def epoch_band_powers(epoch_xyz, sample_rate=SAMPLE_RATE, bands=BAND_EDGES_HZ):
+    """한 epoch 의 가속도 magnitude 에서 대역별 **상대** 파워를 구한다(길이 = len(bands)).
+
+    상대값(전체 파워로 나눈 비율)을 쓰는 이유: 절대 파워는 기기 거치 상태/감도에 따라
+    몇 자릿수씩 달라지지만, 대역 간 "비율"은 그보다 훨씬 안정적이다.
+
+    epoch_xyz: (WINDOW, 3) 가속도 x/y/z.
+    """
+    mag = np.sqrt((np.asarray(epoch_xyz, dtype=np.float64) ** 2).sum(axis=-1))
+    mag = mag - mag.mean()
+    n = len(mag)
+    if n == 0:
+        return np.zeros(len(bands), dtype=np.float32)
+    spectrum = np.abs(np.fft.rfft(mag)) ** 2
+    freqs = np.fft.rfftfreq(n, d=1.0 / sample_rate)
+    total = spectrum[freqs >= bands[0][0]].sum()
+    if total <= 0:
+        return np.zeros(len(bands), dtype=np.float32)
+    out = np.empty(len(bands), dtype=np.float32)
+    for i, (lo, hi) in enumerate(bands):
+        sel = (freqs >= lo) & (freqs < hi)
+        out[i] = spectrum[sel].sum() / total
+    return out
 
 
 def causal_time_feature(elapsed_sec):
@@ -807,30 +874,80 @@ def check_kotlin_parity(stats):
     return ok
 
 
-def run_compute_stats():
-    print(f"채널 수 {N_CHANNELS} / Accel 채널: {ACCEL_CHANNEL_NAMES}")
+def run_build_bands(force=False):
+    """각 피험자의 X_*.npy 에서 epoch 별 대역 파워를 미리 계산해 `B_<sid>.npy` 로 저장한다.
 
-    compute_domain_stats_multi([EDF_SUBJECTS], N_CHANNELS, PSG_CHANNEL_NAMES, EDF_NORM_PATH)
+    왜 미리 계산하나: 학습 제네레이터는 이미 이 파이프라인의 병목이다(BATCH_SIZE 32→64 에서
+    8배 느려진 원인). 윈도마다 60 epoch × FFT 를 돌리면 학습이 사실상 멈춘다. 대역 파워는
+    epoch 당 스칼라 3개뿐이라 한 번 계산해 두면 파일도 아주 작다(피험자당 수십 KB).
 
-    accel_stats = compute_domain_stats_multi(
-        [BID_SUBJECTS, SA_SUBJECTS], N_CHANNELS, ACCEL_CHANNEL_NAMES, ACCEL_NORM_PATH
-    )
+    원본 X_*.npy 를 다시 만들 필요가 없다 — 이미 50Hz 원시 가속도가 그 안에 들어 있다.
+    """
+    targets = [BID_SUBJECTS, SA_SUBJECTS]
+    total, skipped = 0, 0
+    for directory in targets:
+        if not directory.exists():
+            print(f"건너뜀: {directory} 없음")
+            continue
+        for x_path in sorted(directory.glob("X_*.npy")):
+            out_path = directory / f"B_{x_path.stem[2:]}.npy"
+            if out_path.exists() and not force:
+                skipped += 1
+                continue
+            X = np.load(x_path, mmap_mode="r")
+            bands = np.empty((len(X), len(BAND_EDGES_HZ)), dtype=np.float32)
+            for i in range(len(X)):
+                bands[i] = epoch_band_powers(np.asarray(X[i][:, 0:3]))
+            np.save(out_path, bands)
+            total += 1
+            print(f"  {out_path.name}: {bands.shape} "
+                  f"(평균 {np.array2string(bands.mean(axis=0), precision=4)})")
+            del X
+    print(f"\n대역 파워 생성 완료: 새로 만든 파일 {total}개 / 이미 있어 건너뜀 {skipped}개"
+          f"{' (--force 로 재생성)' if skipped else ''}")
 
-    if APSAA_SUBJECTS.exists() or AIHUB_SUBJECTS.exists():
-        compute_audio_domain_stats([APSAA_SUBJECTS, AIHUB_SUBJECTS])
-    else:
-        print(f"\n건너뜀: {APSAA_SUBJECTS} / {AIHUB_SUBJECTS} 모두 없음 (오디오 전처리 미완료)")
 
-    edf_stats = np.load(EDF_NORM_PATH, allow_pickle=True).item() if EDF_NORM_PATH.exists() else None
-    if edf_stats is not None:
-        print("\n// Sleep-EDF Expanded (연구용 — 앱 미사용)")
-        print(to_kotlin_array("EDF_CHANNEL_MEAN", edf_stats["mean"]))
-        print(to_kotlin_array("EDF_CHANNEL_STD", edf_stats["std"]))
-    else:
-        print(f"\n건너뜀: {EDF_NORM_PATH} 없음")
+def run_compute_stats(domain="accel"):
+    """정규화 통계를 계산한다.
+
+    domain:
+      accel — BIDSleep+Sleep-Accel (앱이 실제로 쓰는 유일한 도메인). 기본값.
+      edf   — Sleep-EDF (연구/사전학습용). **27GB를 전부 float64로 읽으므로 몇십 분 걸린다.**
+      audio — APSAA/AI-Hub 멜 통계.
+      all   — 전부.
+
+    예전에는 인자 없이 항상 edf부터 돌려서, accel 통계 하나 뽑는 데도 27GB를 먼저 읽어야 했다.
+    """
+    print(f"채널 수 {N_CHANNELS} / Accel 채널: {ACCEL_CHANNEL_NAMES}  (domain={domain})")
+    want = {"accel", "edf", "audio"} if domain == "all" else {domain}
+
+    if "edf" in want:
+        compute_domain_stats_multi([EDF_SUBJECTS], N_CHANNELS, PSG_CHANNEL_NAMES, EDF_NORM_PATH)
+
+    accel_stats = None
+    if "accel" in want:
+        accel_stats = compute_domain_stats_multi(
+            [BID_SUBJECTS, SA_SUBJECTS], N_CHANNELS, ACCEL_CHANNEL_NAMES, ACCEL_NORM_PATH
+        )
+
+    if "audio" in want:
+        if APSAA_SUBJECTS.exists() or AIHUB_SUBJECTS.exists():
+            compute_audio_domain_stats([APSAA_SUBJECTS, AIHUB_SUBJECTS])
+        else:
+            print(f"\n건너뜀: {APSAA_SUBJECTS} / {AIHUB_SUBJECTS} 모두 없음 (오디오 전처리 미완료)")
+
+    if "edf" in want:
+        edf_stats = np.load(EDF_NORM_PATH, allow_pickle=True).item() if EDF_NORM_PATH.exists() else None
+        if edf_stats is not None:
+            print("\n// Sleep-EDF Expanded (연구용 — 앱 미사용)")
+            print(to_kotlin_array("EDF_CHANNEL_MEAN", edf_stats["mean"]))
+            print(to_kotlin_array("EDF_CHANNEL_STD", edf_stats["std"]))
+        else:
+            print(f"\n건너뜀: {EDF_NORM_PATH} 없음")
 
     if accel_stats is None:
-        print("\n건너뜀: Accel 통계를 계산할 .npy가 없습니다 — build_dataset_hybrid.py를 먼저 실행하세요.")
+        if "accel" in want:
+            print("\n건너뜀: Accel 통계를 계산할 .npy가 없습니다 — build_dataset_hybrid.py를 먼저 실행하세요.")
         return
 
     print("\n// Accel Domain (BIDSleep + Sleep-Accel 통합 — 학습과 앱이 공유하는 유일한 기준)")
@@ -919,7 +1036,7 @@ def run_export_parity_fixture():
         for frame in mel
     )
 
-    body = f'''package com.somniotune.app.util
+    body = f'''package com.soundsleeper.app.util
 
 /**
  * 자동 생성 파일 — 직접 수정하지 마세요.

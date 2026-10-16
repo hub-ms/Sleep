@@ -251,19 +251,34 @@ def _normalize(x_slice, mean, std):
     return (np.asarray(x_slice, dtype=np.float32) - mean) / std
 
 
-def _predict_windows(infer_model, windows, batch_size):
+def _predict_windows(infer_model, windows, batch_size, buckets=None):
     out = []
     for i in range(0, len(windows), batch_size):
         batch = np.stack(windows[i: i + batch_size], axis=0)
-        logits = infer_model.predict(batch, verbose=0).astype(np.float64)
+        if buckets is None:
+            logits = infer_model.predict(batch, verbose=0).astype(np.float64)
+        else:
+            logits = infer_model.predict(
+                batch, verbose=0, time_buckets=np.asarray(buckets[i: i + batch_size], dtype=np.int32)
+            ).astype(np.float64)
         logits -= logits.max(axis=-1, keepdims=True)
         exp = np.exp(logits)
         out.append(exp / exp.sum(axis=-1, keepdims=True))
     return np.concatenate(out, axis=0) if out else np.zeros((0, 0, 0))
 
 
-def predict_night_probs(infer_model, X, mean, std, context_len, n_classes, batch_size=8, overlap_stride=None):
-    """야간 전체에 대해 에포크당 정확히 하나의 확률 분포를 반환합니다. shape (n_epochs, n_classes)."""
+def predict_night_probs(infer_model, X, mean, std, context_len, n_classes, batch_size=8,
+                        overlap_stride=None, prepare_window=None, window_bucket=None):
+    """야간 전체에 대해 에포크당 정확히 하나의 확률 분포를 반환합니다. shape (n_epochs, n_classes).
+
+    prepare_window(x_slice, mean, std) -> 모델 입력 윈도우.
+        기본값은 단순 정규화([_normalize]). train.py 가 파생 채널(cycle_sin/cos, 대역 파워)을
+        덧붙이는 구성으로 학습했다면, **같은 변환**을 여기에 넘겨야 학습/평가가 일치한다.
+    window_bucket(x_slice) -> time_bucket_id(int).
+        **정규화 전** 윈도우를 받아 time bucket 을 돌려준다. 넘기지 않으면 모델에 버킷을
+        전달하지 않는다(단일 입력 모델이거나 래퍼가 알아서 처리하는 경우).
+    """
+    prepare_window = prepare_window or _normalize
     n_epochs = len(X)
     if n_epochs == 0:
         return np.zeros((0, n_classes), dtype=np.float64)
@@ -273,13 +288,18 @@ def predict_night_probs(infer_model, X, mean, std, context_len, n_classes, batch
         window = np.concatenate(
             [np.repeat(np.asarray(X[0:1]), pad, axis=0), np.asarray(X[:])], axis=0
         )
-        probs = _predict_windows(infer_model, [_normalize(window, mean, std)], batch_size)[0]
+        buckets = [window_bucket(window)] if window_bucket else None
+        probs = _predict_windows(
+            infer_model, [prepare_window(window, mean, std)], batch_size, buckets
+        )[0]
         return probs[pad:]
 
     if overlap_stride is None:
         starts = _tile_starts(n_epochs, context_len)
-        windows = [_normalize(X[s: s + context_len], mean, std) for s in starts]
-        preds = _predict_windows(infer_model, windows, batch_size)
+        raw = [np.asarray(X[s: s + context_len]) for s in starts]
+        windows = [prepare_window(r, mean, std) for r in raw]
+        buckets = [window_bucket(r) for r in raw] if window_bucket else None
+        preds = _predict_windows(infer_model, windows, batch_size, buckets)
 
         probs = np.zeros((n_epochs, n_classes), dtype=np.float64)
         filled = np.zeros(n_epochs, dtype=bool)
@@ -294,8 +314,10 @@ def predict_night_probs(infer_model, X, mean, std, context_len, n_classes, batch
     starts = list(range(0, n_epochs - context_len + 1, overlap_stride))
     if starts[-1] + context_len < n_epochs:
         starts.append(n_epochs - context_len)
-    windows = [_normalize(X[s: s + context_len], mean, std) for s in starts]
-    preds = _predict_windows(infer_model, windows, batch_size)
+    raw = [np.asarray(X[s: s + context_len]) for s in starts]
+    windows = [prepare_window(r, mean, std) for r in raw]
+    buckets = [window_bucket(r) for r in raw] if window_bucket else None
+    preds = _predict_windows(infer_model, windows, batch_size, buckets)
 
     acc = np.zeros((n_epochs, n_classes), dtype=np.float64)
     cnt = np.zeros((n_epochs, 1), dtype=np.float64)
@@ -308,6 +330,7 @@ def predict_night_probs(infer_model, X, mean, std, context_len, n_classes, batch
 def evaluate_subjects(
     infer_model, subjects, context_len, n_classes, class_names, out_dir, label,
     transition_matrix=None, mode_window=5, ma_window=5, batch_size=8, overlap_stride=None, save_probs=True,
+    prepare_window=None, window_bucket=None,
 ):
     """subject별 야간 전체 추론 → 후처리(raw/mode/moving_average/viterbi) → 에포크 1회 집계 지표.
 
@@ -324,6 +347,7 @@ def evaluate_subjects(
         probs = predict_night_probs(
             infer_model, X, mean, std, context_len, n_classes,
             batch_size=batch_size, overlap_stride=overlap_stride,
+            prepare_window=prepare_window, window_bucket=window_bucket,
         )
         n = min(len(y), len(probs))
         if n == 0:
@@ -622,11 +646,14 @@ def evaluate_accel_checkpoint(model_path: Path, out_dir: Path, folds: int, fold_
     transition_matrix = train.compute_transition_matrix(y_sequences)
 
     wrapped = train._SingleInputEvalWrapper(m, train.N_TIME_BUCKETS)
+    # 학습 때와 같은 윈도 변환(채널 구성 + 정규화 + time bucket)을 쓴다.
+    prepare_window, window_bucket = train.make_eval_window_fns()
     evaluate_subjects(
         wrapped, train.pairs_to_eval_subjects_accel(te_p, mean, std),
         train.CONTEXT_LEN, N_CLASSES, CLASS_NAMES, out_dir, label,
         transition_matrix=transition_matrix,
         batch_size=train.EVAL_BATCH_SIZE, overlap_stride=train.EVAL_OVERLAP_STRIDE,
+        prepare_window=prepare_window, window_bucket=window_bucket,
     )
 
 

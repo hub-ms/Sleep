@@ -8,6 +8,7 @@ import argparse
 import json
 from pathlib import Path
 
+import numpy as np
 import tensorflow as tf
 
 import model as model_module  # noqa: F401  (PositionalEmbedding/ConstantDomainId/TransitionCRF 커스텀 레이어 등록을 위해 import 자체가 필요)
@@ -62,6 +63,40 @@ def _convert_and_save(full_model, tflite_path: Path, metadata: dict):
     print(f"         메타데이터 저장 -> {meta_path}")
 
 
+TRANSITION_FILENAME = "accel_transition_matrix.npy"
+
+
+def _load_transition_matrix(run_dir: Path):
+    """학습 run 디렉토리에서 CRF 전이행렬을 읽는다. 없으면 None(경고만)."""
+    path = run_dir / TRANSITION_FILENAME
+    if not path.exists():
+        print(f"경고: {path} 가 없어 전이행렬을 메타데이터에 싣지 못했습니다 "
+              f"— 앱은 SleepStageTransitions.DEFAULT_MATRIX(생리학적 prior)를 계속 씁니다.")
+        return None
+    matrix = np.load(path)
+    # 행 합이 1이 아닐 수 있다(학습된 log_transitions 를 exp 한 값이라 정규화가 보장되지 않는다).
+    # Viterbi 는 로그를 취하므로 상수배는 무해하지만, Kotlin 쪽 상수로 박을 값이니 여기서 정규화한다.
+    row_sums = matrix.sum(axis=1, keepdims=True)
+    row_sums[row_sums <= 0] = 1.0
+    return matrix / row_sums
+
+
+def print_kotlin_transition_matrix(matrix):
+    """SleepStageTransitions.DEFAULT_MATRIX 에 붙여 넣을 Kotlin 리터럴을 출력한다.
+
+    앱은 meta.json 을 읽지 않으므로(에셋 파서가 없다) 이 값은 사람이 복사해 넣어야 한다 —
+    ACCEL_CHANNEL_MEAN/STD 와 같은 방식이다.
+    """
+    names = ["Wake ", "Light", "Deep ", "REM  "]
+    print("\n// SleepStageTransitions.DEFAULT_MATRIX 를 아래로 교체하세요")
+    print("    val DEFAULT_MATRIX: Array<FloatArray> = arrayOf(")
+    for i, row in enumerate(matrix):
+        values = ", ".join(f"{v:.6f}f" for v in row)
+        print(f"        floatArrayOf({values}), // {names[i]} ->")
+    print("    )")
+    print("// (Deep<->REM 은 Kotlin 쪽 maskImpossible 이 다시 0으로 눌러 주므로 그대로 붙여넣어도 됩니다)")
+
+
 def convert_accel_only(model_path: Path = None, tflite_path: Path = TFLITE_PATH):
     """가속도 단독 추론 모델(accel_infer_model, [accel_input, time_bucket_id] 2-입력)을 변환합니다.
     현재 앱(SleepStageClassifier.kt)이 실제로 쓰는, accel-only 온디바이스 배포 경로입니다."""
@@ -85,7 +120,16 @@ def convert_accel_only(model_path: Path = None, tflite_path: Path = TFLITE_PATH)
         "output": {"name": "softmax_probs", "shape": list(full_model.output_shape)},
         "variant": "accel_only",
     }
+    # 학습된 CRF 전이행렬을 함께 싣는다. CRF 자체는 .tflite 그래프에 들어가지 않으므로
+    # (여기서 Softmax 만 씌운다) 전이 제약은 기기 쪽 SleepHypnogramDecoder 가 건다 —
+    # 그 디코더가 쓸 행렬이 바로 이 값이다.
+    transition = _load_transition_matrix(model_path.parent)
+    if transition is not None:
+        metadata["transition_matrix"] = transition.tolist()
+        metadata["transition_class_names"] = ["Wake", "Light", "Deep", "REM"]
     _convert_and_save(full_model, tflite_path, metadata)
+    if transition is not None:
+        print_kotlin_transition_matrix(transition)
 
 
 def convert_fusion(model_path: Path = None, tflite_path: Path = None):

@@ -34,16 +34,21 @@ from pathlib import Path
 import numpy as np
 import tensorflow as tf
 from scipy.spatial.transform import Rotation
+from sklearn.metrics import f1_score
 
 import model as model_module
 from evaluate import evaluate_subjects
 from preprocess import (
     AUDIO_SAMPLE_RATE,
+    BAND_EDGES_HZ,
+    CHANNEL_SETS,
     N_CLASSES,
     N_MEL_FRAMES,
     N_MELS,
     audio_epoch_to_melspec,
     build_mel_filterbank,
+    channel_count,
+    circadian_channels,
     time_feature_bucket,
 )
 from splits import SPLIT_SEED, list_subject_pairs, pairs_to_by_dir, split_subject_pairs
@@ -75,21 +80,46 @@ WISDM_DIR = BASE_DIR / "data" / "wisdm" / "subjects"
 
 ACCEL_NORM_STATS_PATH = BASE_DIR / "data" / "accel_domain" / "norm_stats.npy"
 
+# Sleep-EDF Expanded(PSG: EEG/EOG/EMG). 가속도가 없어 accel_core 에는 쓸 수 없지만, 수면 "순서"를
+# 배우는 컨텍스트 트랜스포머 사전학습에는 쓴다 — run_psg_context_pretrain 참고.
+EDF_DIR = BASE_DIR / "data" / "sleep_edf" / "subjects"
+EDF_NORM_STATS_PATH = BASE_DIR / "data" / "sleep_edf" / "norm_stats.npy"
+
 ACCEL_WINDOW, ACCEL_CHANNELS = 1500, 7
+TIME_FEATURE_CHANNEL = 6  # ACCEL_CHANNEL_NAMES 에서 time_feature 의 인덱스
+
+# 모델 입력 채널 구성. --channel-set 으로 바꾼다.
+#   base      — 기존 7채널. **기본값**이라 베이스라인 실행은 영향을 받지 않는다.
+#   circadian — + cycle_sin, cycle_cos (9채널). 수면주기 위상.
+#   full      — + band_resp, band_bcg, band_motion (12채널). `preprocess bands` 가 필요하다.
+# 어느 쪽이 실제로 나은지는 fold 5개 ablation 으로 판정할 것 — 늘린다고 좋아진다는 보장이 없다.
+# ⚠️ base 가 아닌 구성으로 학습한 모델을 앱에 넣으려면 Kotlin 쪽
+#    AccelChannels.NUM_CHANNELS / SleepFeatureBuilder 도 같이 바꿔야 한다(그러지 않으면
+#    SleepStageClassifier.initialize() 의 shape 검사에서 바로 걸린다).
+CHANNEL_SET = "base"
 CONTEXT_LEN = 60  # accel/audio가 ctx_body를 공유하므로 두 도메인이 같은 컨텍스트 길이를 써야 함
 ACCEL_STRIDE = 3
 N_TIME_BUCKETS = 8  # 시간대 FiLM 버킷 수(약 1시간 단위, 8시간 기준)
 
-BATCH_SIZE = 32
+BATCH_SIZE = 32  # 올리지 말 것: 병목이 GPU가 아니라 Python 제네레이터라 32→64에서 8배 느려진다.
+# 한 에폭의 steps는 이제 분할의 실제 윈도 수에서 유도한다(count_accel_windows). 이 상수는
+# 그 값의 상한일 뿐이다 — 예전의 고정 300은 학습셋의 1/4만 훑고 한 에폭을 끝냈다.
+MAX_STEPS_PER_EPOCH = 600
+# 자기지도/디노이징 스테이지(mesa/wisdm/audio)는 라벨이 없어 "데이터를 한 번 훑는다"는 개념이
+# 중요하지 않고 고정 스텝 예산으로 돌린다 — 여기만 예전 값을 그대로 쓴다.
 STEPS_PER_EPOCH = 300
-VAL_STEPS = 40
-EPOCHS = 40
-PATIENCE = 20
+EPOCHS = 60
+PATIENCE = 8  # 감시 지표가 val_macro_f1로 바뀌어 예전(20)만큼 길게 기다릴 이유가 없다.
 
 FOCAL_GAMMA = 1.0
 LABEL_SMOOTHING = 0.1
 LAMBDA_CRF = 1.0  # focal loss 대비 CRF NLL 가중치. Colab에서 --lambda-crf 0 vs >0 ablation 권장.
 AUX_TRANSITION_LOSS_WEIGHT = 0.3  # 개선 5: 메인 분류 손실 대비 전이탐지 보조 손실 가중치.
+# CRF 전이행렬 초기값에서 POPULATION_TRANSITION_PRIOR를 몇 개의 가상 관측치로 셀지.
+# 기본 10은 실측 전이 19만 건 앞에서 사실상 0의 영향력이다 — 생리학적 제약을 실제로
+# 주입하려면 수천 단위가 필요하다. --transition-prior-weight로 ablation 할 것.
+TRANSITION_PRIOR_WEIGHT = 10.0
+USE_CLASS_WEIGHTS = True  # --no-class-weights 로 끄고 ablation
 
 CLASS_NAMES = ["Wake", "Light", "Deep", "REM"]
 EVAL_BATCH_SIZE = 8
@@ -121,30 +151,88 @@ class WarmupCosineDecay(tf.keras.optimizers.schedules.LearningRateSchedule):
         return {"peak_lr": self.peak_lr, "warmup_steps": self.warmup_steps}
 
 
-def weighted_focal_loss(gamma=FOCAL_GAMMA, label_smoothing=LABEL_SMOOTHING):
-    """클래스 불균형에 대응하는 focal loss(라벨 스무딩 포함). y_pred는 logits(from_logits=True)."""
+class ValMacroF1(tf.keras.callbacks.Callback):
+    """에폭 끝마다 검증셋 전체에 대해 macro F1을 계산해 `logs["val_macro_f1"]`에 넣는다.
+
+    왜 필요한가: EarlyStopping/ModelCheckpoint가 감시하던 `val_loss`는 focal + CRF NLL +
+    전이탐지 BCE의 합이라 우리가 실제로 올리려는 지표(macro F1)와 단조 관계가 아니다.
+    특히 클래스 가중치를 넣은 뒤로는 손실이 소수 클래스 쪽으로 기울어 val_loss 최소점과
+    macro F1 최대점이 더 벌어진다. 목표 지표를 직접 감시한다.
+
+    val_ds는 **유한(finite)** 데이터셋이어야 한다(repeat=False).
+    """
+
+    def __init__(self, val_ds):
+        super().__init__()
+        self._val_ds = val_ds
+
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs if logs is not None else {}
+        y_true_all, y_pred_all = [], []
+        for inputs, targets in self._val_ds:
+            logits = self.model(inputs, training=False)
+            # accel_train_model은 [분류, 전이탐지] 2-출력이라 첫 번째만 쓴다.
+            if isinstance(logits, (list, tuple)):
+                logits = logits[0]
+            elif isinstance(logits, dict):
+                logits = logits["accel_output"]
+            y_pred_all.append(np.argmax(np.asarray(logits, dtype=np.float32), axis=-1).ravel())
+            y_true = targets["accel_output"] if isinstance(targets, dict) else targets[0]
+            y_true_all.append(np.asarray(y_true).ravel())
+
+        if not y_true_all:
+            logs["val_macro_f1"] = 0.0
+            return
+        y_true = np.concatenate(y_true_all)
+        y_pred = np.concatenate(y_pred_all)
+        score = f1_score(y_true, y_pred, labels=list(range(N_CLASSES)),
+                         average="macro", zero_division=0)
+        logs["val_macro_f1"] = float(score)
+        per_class = f1_score(y_true, y_pred, labels=list(range(N_CLASSES)),
+                             average=None, zero_division=0)
+        detail = " ".join(f"{n}={v:.3f}" for n, v in zip(CLASS_NAMES, per_class))
+        print(f" — val_macro_f1: {score:.4f}  ({detail})")
+
+
+def weighted_focal_loss(gamma=FOCAL_GAMMA, label_smoothing=LABEL_SMOOTHING, class_weights=None):
+    """클래스 불균형에 대응하는 focal loss(라벨 스무딩 포함). y_pred는 logits(from_logits=True).
+
+    class_weights: 길이 N_CLASSES의 per-class 가중치. 정답 클래스의 가중치를 손실에 곱한다.
+    제네레이터가 멀티출력 dict를 내보내므로 Keras의 `class_weight=` 인자는 쓸 수 없다
+    (멀티출력 모델에서는 지원되지 않는다) — 그래서 손실 함수 안에서 직접 곱한다.
+    None이면 가중치 없음(이전 동작).
+    """
+    weight_table = None
+    if class_weights is not None:
+        weight_table = tf.constant(np.asarray(class_weights, dtype=np.float32))
+
     def loss_fn(y_true, y_pred):
         y_true = tf.cast(y_true, tf.int32)
         y_pred = tf.cast(y_pred, tf.float32)
         one_hot_y = tf.one_hot(y_true, depth=N_CLASSES)
-        one_hot_y = one_hot_y * (1.0 - label_smoothing) + (label_smoothing / N_CLASSES)
-        ce = tf.keras.losses.categorical_crossentropy(one_hot_y, y_pred, from_logits=True)
+        smoothed = one_hot_y * (1.0 - label_smoothing) + (label_smoothing / N_CLASSES)
+        ce = tf.keras.losses.categorical_crossentropy(smoothed, y_pred, from_logits=True)
         probs = tf.nn.softmax(y_pred, axis=-1)
-        pt = tf.reduce_sum(one_hot_y * probs, axis=-1)
+        pt = tf.reduce_sum(smoothed * probs, axis=-1)
         focal_weight = tf.pow(1.0 - pt, gamma)
-        return focal_weight * ce
+        loss = focal_weight * ce
+        if weight_table is not None:
+            # 스무딩 전 원-핫(=실제 정답 클래스)으로 가중치를 고른다. 스무딩된 분포로 고르면
+            # 모든 클래스 가중치가 조금씩 섞여 불균형 보정 효과가 희석된다.
+            loss = loss * tf.gather(weight_table, y_true)
+        return loss
     return loss_fn
 
 
 def make_crf_combined_loss(crf_layer, gamma=FOCAL_GAMMA, label_smoothing=LABEL_SMOOTHING,
-                            lambda_crf=LAMBDA_CRF):
+                            lambda_crf=LAMBDA_CRF, class_weights=None):
     """focal loss + CRF 음의 로그가능도를 더한 손실.
 
     CRF NLL은 시퀀스 하나당 스칼라 (B,)인데 focal loss는 (B,T)입니다. nll을 T번 복제해
     (B,T)로 브로드캐스트하면, Keras가 시간축에 대해 평균을 낼 때 결과적으로
     mean_t(focal_t) + lambda_crf * nll 이 되어(원하는 대로) nll이 T로 희석되지 않습니다.
     """
-    focal = weighted_focal_loss(gamma, label_smoothing)
+    focal = weighted_focal_loss(gamma, label_smoothing, class_weights)
 
     def loss_fn(y_true, y_pred):
         fl = focal(y_true, y_pred)  # (B, T)
@@ -170,7 +258,7 @@ POPULATION_TRANSITION_PRIOR = np.array([
 ], dtype=np.float64)
 
 
-def compute_transition_matrix(y_sequences, n_classes=N_CLASSES, prior_weight=10.0):
+def compute_transition_matrix(y_sequences, n_classes=N_CLASSES, prior_weight=None):
     """라벨 시퀀스 리스트에서 경험적 상태전이 확률을 계산합니다. CRF의 초기값으로 씁니다.
     (y_sequences: subject별 전체 라벨 시퀀스 리스트, 윈도우/stride 적용 전의 연속열)
 
@@ -180,6 +268,8 @@ def compute_transition_matrix(y_sequences, n_classes=N_CLASSES, prior_weight=10.
     prior_weight만큼의 가상 관측치로 섞는 Dirichlet 사후분포로 바꿉니다 — prior_weight는
     "경험적 데이터 몇 명 분량과 맞먹는 신뢰도로 prior를 믿을지"에 대응하고, subject 수가
     많아지면 경험적 카운트가 자연히 prior를 압도합니다."""
+    if prior_weight is None:
+        prior_weight = TRANSITION_PRIOR_WEIGHT  # 모듈 전역(=CLI로 덮어쓸 수 있는 값)을 호출 시점에 읽는다
     counts = POPULATION_TRANSITION_PRIOR[:n_classes, :n_classes].copy() * prior_weight
     for y in y_sequences:
         for a, b in zip(y[:-1], y[1:]):
@@ -198,14 +288,29 @@ def make_run_dir(tag: str) -> Path:
     return run_dir
 
 
+def compose_run_tag(stage_slug: str, user_tag, folds: int, fold_index: int) -> str:
+    """run_dir 이름에 fold 식별자를 **항상** 붙인다.
+
+    예전에는 `--tag base`를 주면 fold 5개가 전부 같은 이름(`{stamp}_base`)으로 저장돼
+    evaluate.summarize가 fold를 구분하지 못했고, `*base*of5*` 패턴과도 맞지 않았다.
+    이제 `base_fold0of5` … `base_fold4of5`가 되어 ablation 비교(`evaluate compare`)가
+    fold 단위로 짝지어진다."""
+    base = user_tag or stage_slug
+    return f"{base}_fold{fold_index}of{folds}" if folds > 1 else f"{base}_single"
+
+
 def snapshot_config(run_dir: Path, extra: dict):
     """이 실행의 하이퍼파라미터 전체를 JSON으로 남깁니다(나중 비교의 유일한 근거)."""
     config = {
         "context_len": CONTEXT_LEN, "n_classes": N_CLASSES,
-        "batch_size": BATCH_SIZE, "steps_per_epoch": STEPS_PER_EPOCH, "val_steps": VAL_STEPS,
-        "epochs": EPOCHS, "patience": PATIENCE,
+        "batch_size": BATCH_SIZE, "max_steps_per_epoch": MAX_STEPS_PER_EPOCH,
+        "epochs": EPOCHS, "patience": PATIENCE, "monitor": "val_macro_f1",
         "focal_gamma": FOCAL_GAMMA, "label_smoothing": LABEL_SMOOTHING, "lambda_crf": LAMBDA_CRF,
+        "transition_prior_weight": TRANSITION_PRIOR_WEIGHT,
+        "use_class_weights": USE_CLASS_WEIGHTS,
+        "aux_transition_loss_weight": AUX_TRANSITION_LOSS_WEIGHT,
         "n_time_buckets": N_TIME_BUCKETS,
+        "channel_set": CHANNEL_SET, "n_channels": channel_count(CHANNEL_SET),
         "split_seed": SPLIT_SEED,
         **extra,
     }
@@ -328,7 +433,70 @@ def _transition_labels(y_full, s, context_len):
     return transition
 
 
-def create_accel_generator(directories, subject_ids_by_dir, mean, std, stride, augment=False, shuffle=True):
+def count_accel_windows(directories, subject_ids_by_dir, stride):
+    """이 분할에서 나오는 (중복 없는) 학습 윈도우 총 개수. steps_per_epoch을 데이터 크기에
+    맞춰 잡기 위해 쓴다 — 예전에는 STEPS_PER_EPOCH이 300으로 고정돼 있어 한 에폭이 학습셋의
+    1/4만 훑었다."""
+    total = 0
+    for d in directories:
+        for sid in subject_ids_by_dir.get(d, []):
+            cached = _MEM_CACHE.get((str(d), sid))
+            if cached is None:
+                continue
+            n_epochs = len(cached[0])
+            if n_epochs >= CONTEXT_LEN:
+                total += (n_epochs - CONTEXT_LEN) // stride + 1
+    return total
+
+
+def _load_band_features(directory, sid, n_epochs):
+    """`B_<sid>.npy`(epoch별 대역 파워)를 읽어온다. 없으면 0으로 채운 배열(= 그 채널의 기여 없음).
+    `main.py preprocess bands` 가 만든다."""
+    cache_key = ("bands", str(directory), sid)
+    cached = _MEM_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+    path = directory / f"B_{sid}.npy"
+    n_bands = len(BAND_EDGES_HZ)
+    if path.exists():
+        bands = np.load(path).astype(np.float32)
+        if len(bands) != n_epochs:
+            print(f"경고: {path.name} 길이 불일치({len(bands)} != {n_epochs}) — 0으로 대체합니다.")
+            bands = np.zeros((n_epochs, n_bands), dtype=np.float32)
+    else:
+        bands = np.zeros((n_epochs, n_bands), dtype=np.float32)
+    _MEM_CACHE[cache_key] = bands
+    return bands
+
+
+def _extend_channels_for(x_slice, raw_time_feature, bands_slice, channel_set):
+    """정규화된 기본 7채널 윈도우에 파생 채널을 덧붙인다.
+
+    파생 채널은 **정규화하지 않는다** — sin/cos 는 이미 [-1,1] 이고 대역 파워는 상대비(0~1)라
+    둘 다 다른 채널과 비슷한 스케일이다. 더 중요한 건 이 값들이 norm_stats.npy(7채널 기준)에
+    들어 있지 않다는 점이고, 앱(Kotlin)도 같은 규칙을 따라야 학습/서빙이 일치한다.
+
+    raw_time_feature: (CONTEXT_LEN,) — **정규화 전**의 time_feature(0~1). 위상은 여기서 만든다.
+    bands_slice:      (CONTEXT_LEN, n_bands) — channel_set == "full" 일 때만 쓰인다.
+    """
+    if channel_set == "base":
+        return x_slice
+    sin_v, cos_v = circadian_channels(raw_time_feature)
+    extras = [sin_v, cos_v]
+    if channel_set == "full":
+        extras.extend(bands_slice[:, b] for b in range(bands_slice.shape[1]))
+    # 파생값은 epoch 하나 안에서 상수이므로 WINDOW 축으로 펼친다
+    # (activity_variability/trend/time_feature 가 이미 쓰는 것과 같은 규약).
+    stacked = np.stack(extras, axis=-1).astype(np.float32)  # (CONTEXT_LEN, n_extra)
+    tiled = np.repeat(stacked[:, None, :], x_slice.shape[1], axis=1)
+    return np.concatenate([x_slice, tiled], axis=-1)
+
+
+def create_accel_generator(directories, subject_ids_by_dir, mean, std, stride, augment=False,
+                           shuffle=True, repeat=True, channel_set=None):
+    channel_set = channel_set or CHANNEL_SET
+    n_bands = len(BAND_EDGES_HZ)
+
     def gen():
         pairs = [(d, sid) for d in directories for sid in subject_ids_by_dir.get(d, [])]
         while True:
@@ -338,28 +506,43 @@ def create_accel_generator(directories, subject_ids_by_dir, mean, std, stride, a
                 X, y = _MEM_CACHE.get((str(d), sid), (None, None))
                 if X is None:
                     continue
+                bands = (_load_band_features(d, sid, len(X)) if channel_set == "full"
+                         else np.zeros((len(X), n_bands), dtype=np.float32))
                 starts = list(range(0, len(X) - CONTEXT_LEN + 1, stride))
                 if shuffle:
                     np.random.shuffle(starts)
                 for s in starts:
                     x_slice = np.asarray(X[s:s + CONTEXT_LEN], dtype=np.float32)
+                    # 위상 채널은 **정규화 전**의 time_feature(0~1)에서 만들어야 한다.
+                    raw_time_feature = x_slice[:, 0, TIME_FEATURE_CHANNEL].copy()
                     if augment:
                         x_slice = _apply_rotation_augment(x_slice)
                     x_slice = (x_slice - mean) / std
                     if augment:
                         x_slice = augment_accel(x_slice)
-                    time_bucket = _time_bucket_from_channels(x_slice)
+                    # 🐛 time_bucket 은 **정규화 전** 값에서 뽑아야 한다. 예전에는 정규화된
+                    # x_slice 에서 읽어 밤의 앞 절반이 전부 bucket 0 으로 뭉개졌고, 평가 때는
+                    # 아예 중간값 4로 고정돼 학습/서빙이 어긋나 있었다.
+                    time_bucket = time_feature_bucket(float(raw_time_feature[-1]), N_TIME_BUCKETS)
+                    x_slice = _extend_channels_for(
+                        x_slice, raw_time_feature, bands[s:s + CONTEXT_LEN], channel_set
+                    )
                     transition = _transition_labels(y, s, CONTEXT_LEN)
                     yield x_slice, time_bucket, y[s:s + CONTEXT_LEN], transition
+            if not repeat:
+                return
     return gen
 
 
-def build_accel_dataset(directories, subject_ids_by_dir, mean, std, stride, augment=False, shuffle=True):
-    gen_fn = create_accel_generator(directories, subject_ids_by_dir, mean, std, stride, augment, shuffle)
+def build_accel_dataset(directories, subject_ids_by_dir, mean, std, stride, augment=False,
+                        shuffle=True, repeat=True, channel_set=None):
+    channel_set = channel_set or CHANNEL_SET
+    gen_fn = create_accel_generator(directories, subject_ids_by_dir, mean, std, stride, augment,
+                                    shuffle, repeat, channel_set)
     return tf.data.Dataset.from_generator(
         gen_fn,
         output_signature=(
-            tf.TensorSpec(shape=(CONTEXT_LEN, ACCEL_WINDOW, ACCEL_CHANNELS), dtype=tf.float32),
+            tf.TensorSpec(shape=(CONTEXT_LEN, ACCEL_WINDOW, channel_count(channel_set)), dtype=tf.float32),
             tf.TensorSpec(shape=(), dtype=tf.int32),
             tf.TensorSpec(shape=(CONTEXT_LEN,), dtype=tf.int32),
             tf.TensorSpec(shape=(CONTEXT_LEN,), dtype=tf.float32),
@@ -386,7 +569,8 @@ def pairs_to_eval_subjects_accel(pairs, mean, std):
 # ============================================================
 # 4. 스테이지: accel_core — 기존 3개 accel 소스로 가속도 인코더+ctx_body+CRF 지도학습
 # ============================================================
-def run_accel_core(folds=5, fold_index=0, tag=None, epochs=EPOCHS, init_accel_encoder=None):
+def run_accel_core(folds=5, fold_index=0, tag=None, epochs=EPOCHS, init_accel_encoder=None,
+                   init_context_body=None):
     """가속도 인코더를 기존 지도 데이터(BIDSleep + Sleep-Accel)로 학습합니다.
     옛 train.py의 Stage 2(Accel 파인튜닝)와 같은 역할이지만, PSG 전이학습 없이 ctx_body를
     처음부터 함께 학습합니다(오디오 core가 별도 데이터로 학습되므로 더 이상 PSG가 ctx_body를
@@ -396,7 +580,7 @@ def run_accel_core(folds=5, fold_index=0, tag=None, epochs=EPOCHS, init_accel_en
     accel_epoch_encoder.keras 경로. 주어지면 지도학습 시작 전에 그 가중치로 인코더를
     초기화합니다(라벨이 훨씬 적은 BIDSleep/Sleep-Accel만으로 처음부터 학습하는 대신, 더
     크고 다양한 WISDM 동작 데이터에서 먼저 "움직임이 어떻게 생겼는지"를 배운 뒤 시작)."""
-    tag = tag or (f"accelcore_fold{fold_index}of{folds}" if folds > 1 else "accelcore_single")
+    tag = compose_run_tag("accelcore", tag, folds, fold_index)
     run_dir = make_run_dir(tag)
 
     if not ACCEL_NORM_STATS_PATH.exists():
@@ -423,19 +607,34 @@ def run_accel_core(folds=5, fold_index=0, tag=None, epochs=EPOCHS, init_accel_en
         "test_subjects": [f"{d.parent.name}/{s}" for d, s in te_p],
     })
 
-    weights = compute_class_weights_multi([BID_DIR, ACCEL_DIR], tr)
     save_class_distribution([BID_DIR, ACCEL_DIR], tr, run_dir / "accel_train_class_distribution.txt")
-    print(f"가중치: {weights}")
+    # 예전에는 이 가중치를 계산해 출력만 하고 손실에 **전혀 넣지 않았다**(fit에 class_weight를
+    # 넘기지 않았고 weighted_focal_loss에도 per-class 항이 없었다). 이제 손실로 들어간다.
+    weights = compute_class_weights_multi([BID_DIR, ACCEL_DIR], tr) if USE_CLASS_WEIGHTS else None
+    print(f"클래스 가중치: {weights if weights else '사용 안 함(--no-class-weights)'}")
 
     train_ds = build_accel_dataset([BID_DIR, ACCEL_DIR], tr, mean, std, ACCEL_STRIDE, augment=True).prefetch(tf.data.AUTOTUNE)
-    val_ds = build_accel_dataset([BID_DIR, ACCEL_DIR], vl, mean, std, ACCEL_STRIDE, shuffle=False).prefetch(tf.data.AUTOTUNE)
+    # 검증셋은 **유한 + 비중첩**으로 바꾼다. 예전에는 무한 제네레이터를 shuffle=False로 돌리고
+    # validation_steps=40(=1280 윈도)만 소비해서, 매 에폭 val subject 14명 중 앞 1~2명의
+    # 똑같은 윈도만 반복 평가했다 — val_loss가 분할 전체를 대표하지 못했다.
+    # stride=CONTEXT_LEN이면 val 에포크를 겹치지 않게 한 번씩만 덮는다.
+    val_ds = build_accel_dataset(
+        [BID_DIR, ACCEL_DIR], vl, mean, std, CONTEXT_LEN, shuffle=False, repeat=False
+    ).prefetch(tf.data.AUTOTUNE)
+
+    # 한 에폭이 학습셋 전체를 (대략) 한 번 훑도록 steps를 데이터 크기에서 유도한다.
+    train_windows = count_accel_windows([BID_DIR, ACCEL_DIR], tr, ACCEL_STRIDE)
+    steps_per_epoch = max(1, min(train_windows // BATCH_SIZE, MAX_STEPS_PER_EPOCH))
+    val_windows = count_accel_windows([BID_DIR, ACCEL_DIR], vl, CONTEXT_LEN)
+    print(f"학습 윈도 {train_windows:,}개 → steps_per_epoch={steps_per_epoch} "
+          f"(batch {BATCH_SIZE}) / 검증 윈도 {val_windows:,}개(비중첩, 매 에폭 전체 소비)")
 
     y_sequences = [_MEM_CACHE[(str(d), sid)][1] for d, sid in tr_p if (str(d), sid) in _MEM_CACHE]
     init_transition = compute_transition_matrix(y_sequences)
 
     models = model_module.build_multimodal_model(
         audio_n_mel_frames=N_MEL_FRAMES, audio_n_mels=N_MELS,
-        accel_window=ACCEL_WINDOW, accel_channels=ACCEL_CHANNELS,
+        accel_window=ACCEL_WINDOW, accel_channels=channel_count(CHANNEL_SET),
         context_len=CONTEXT_LEN, n_classes=N_CLASSES, n_time_buckets=N_TIME_BUCKETS,
         init_transition_matrix=init_transition,
     )
@@ -452,60 +651,258 @@ def run_accel_core(folds=5, fold_index=0, tag=None, epochs=EPOCHS, init_accel_en
             models["accel_encoder"].set_weights(pretrained_enc.get_weights())
             print(f"WISDM 자기지도 사전학습 가중치 로드: {init_path}")
 
-    lr = WarmupCosineDecay(peak_lr=4e-4, warmup_steps=STEPS_PER_EPOCH * 2, decay_steps=STEPS_PER_EPOCH * epochs)
+    if init_context_body:
+        ctx_path = Path(init_context_body)
+        if not ctx_path.exists():
+            print(f"경고: init_context_body 경로가 없습니다({ctx_path}) — ctx_body 를 처음부터 학습합니다.")
+        else:
+            # psg_context_pretrain 이 저장한 ctx_body. 두 모델 모두 n_domains=N_DOMAINS 로
+            # 만들어지므로 도메인 임베딩 shape 이 맞는다(그래서 model.N_DOMAINS 를 한 곳에 뒀다).
+            pretrained_ctx = tf.keras.models.load_model(ctx_path, compile=False)
+            models["context_body"].set_weights(pretrained_ctx.get_weights())
+            print(f"PSG 컨텍스트 사전학습 가중치 로드: {ctx_path}")
+
+    lr = WarmupCosineDecay(peak_lr=4e-4, warmup_steps=steps_per_epoch * 2, decay_steps=steps_per_epoch * epochs)
     # 개선 5: accel_train_model(메인 분류 + 전이탐지 보조 출력 2개)로 학습합니다. accel_infer_model은
     # 같은 레이어(crf/ctx_body/accel_enc 등)를 공유하는 객체라 가중치가 함께 갱신되므로, 학습이
     # 끝난 뒤 보조 출력이 없는 accel_infer_model만 저장하면 배포/변환(convert.py)은 그대로입니다.
     accel_train_model.compile(
         optimizer=tf.keras.optimizers.AdamW(learning_rate=lr, weight_decay=1e-4, clipnorm=1.0),
         loss={
-            "accel_output": make_crf_combined_loss(crf),
+            # lambda_crf를 호출 시점에 넘긴다. 예전에는 기본 인자(def 시점 바인딩)에 의존해
+            # --lambda-crf 가 무시되고 항상 1.0으로 학습됐다(그런데 config.json에는 넘긴 값이
+            # 기록돼, ablation 비교가 사실상 같은 설정끼리의 비교였다).
+            "accel_output": make_crf_combined_loss(
+                crf, gamma=FOCAL_GAMMA, label_smoothing=LABEL_SMOOTHING,
+                lambda_crf=LAMBDA_CRF, class_weights=weights,
+            ),
             "accel_transition_output": tf.keras.losses.BinaryCrossentropy(),
         },
         loss_weights={"accel_output": 1.0, "accel_transition_output": AUX_TRANSITION_LOSS_WEIGHT},
     )
+    # ValMacroF1이 logs에 val_macro_f1을 넣은 뒤에 EarlyStopping/ModelCheckpoint가 읽어야 하므로
+    # 콜백 순서가 중요하다(Keras는 리스트 순서대로 on_epoch_end를 호출한다).
     callbacks = [
-        tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=PATIENCE, restore_best_weights=True),
-        tf.keras.callbacks.ModelCheckpoint(str(run_dir / "best_model.keras"), save_best_only=True),
+        ValMacroF1(val_ds),
+        tf.keras.callbacks.EarlyStopping(monitor="val_macro_f1", mode="max",
+                                         patience=PATIENCE, restore_best_weights=True),
+        tf.keras.callbacks.ModelCheckpoint(str(run_dir / "best_model.keras"),
+                                           monitor="val_macro_f1", mode="max", save_best_only=True),
         tf.keras.callbacks.CSVLogger(str(run_dir / "train_log.csv")),
     ]
     accel_train_model.fit(
         train_ds, validation_data=val_ds, epochs=epochs,
-        steps_per_epoch=STEPS_PER_EPOCH, validation_steps=VAL_STEPS, callbacks=callbacks,
+        steps_per_epoch=steps_per_epoch, callbacks=callbacks,
     )
     accel_infer_model.save(run_dir / "accel_inference_model.keras")
-    np.save(run_dir / "accel_transition_matrix.npy", init_transition)
+    # 🐛 예전에는 **초기** 전이행렬(init_transition)을 저장했다. 평가는 학습된 행렬
+    # (exp(log_transitions))을 쓰는데 디스크에 남는 건 초기값이라, convert.py 가 이 파일을
+    # 앱으로 내보내면 학습 결과가 아니라 prior 가 나가게 된다. 학습된 값을 저장한다.
+    learned_transition = np.exp(crf.log_transitions.numpy())
+    np.save(run_dir / "accel_transition_matrix.npy", learned_transition)
+    np.save(run_dir / "accel_transition_matrix_init.npy", init_transition)
 
     print("\n===== Accel 테스트셋 평가 =====")
     eval_subjects = pairs_to_eval_subjects_accel(te_p, mean, std)
     # evaluate.evaluate_subjects는 (context_len, window, channels) 단일 입력 모델을 가정합니다.
     # accel_infer_model은 [accel_input, time_bucket_id] 2-입력이므로 얇은 래퍼로 감쌉니다.
     wrapped = _SingleInputEvalWrapper(accel_infer_model, N_TIME_BUCKETS)
+    prepare_window, window_bucket = make_eval_window_fns()
     evaluate_subjects(
         wrapped, eval_subjects, CONTEXT_LEN, N_CLASSES, CLASS_NAMES, run_dir, "accel",
-        transition_matrix=np.exp(crf.log_transitions.numpy()),
+        transition_matrix=learned_transition,
         batch_size=EVAL_BATCH_SIZE, overlap_stride=EVAL_OVERLAP_STRIDE,
+        prepare_window=prepare_window, window_bucket=window_bucket,
     )
     print(f"\n이 실행의 모든 산출물: {run_dir}")
     return run_dir
 
 
 class _SingleInputEvalWrapper:
-    """evaluate.evaluate_subjects가 기대하는 model.predict(batch) 단일 입력 인터페이스를,
+    """evaluate.evaluate_subjects 가 기대하는 `model.predict(batch)` 인터페이스를,
     실제로는 [도메인 입력, time_bucket_id] 2-입력을 받는 *_infer_model 위에 씌우는 얇은 래퍼.
-    time_bucket_id는 평가 시 윈도우별로 정확히 복원하기보다(평가 스크립트가 time_feature를
-    따로 넘기지 않음) 중간값(버킷 절반)으로 고정합니다 — 평가 지표에 미치는 영향은 Colab에서
-    실측 후 필요하면 개선합니다."""
+
+    🐛 예전에는 time_bucket_id 를 **중간값(4)으로 고정**했다. 학습 쪽은 윈도마다 실제 값을
+    넣는데 평가에서만 상수를 넣으니 train/serve 가 어긋났고, 게다가 학습 쪽 버킷 계산도
+    정규화된 값에서 뽑고 있어 실제로는 4가 거의 등장하지 않는 값이었다. 이제 평가도
+    윈도별 실제 버킷을 받는다(evaluate.predict_night_probs 의 window_bucket).
+    """
 
     def __init__(self, infer_model, n_time_buckets):
         self._model = infer_model
-        self._mid_bucket = n_time_buckets // 2
+        self._fallback_bucket = n_time_buckets // 2
 
-    def predict(self, batch, verbose=0):
+    def predict(self, batch, verbose=0, time_buckets=None):
         batch_size = batch.shape[0]
-        time_bucket = np.full((batch_size,), self._mid_bucket, dtype=np.int32)
+        if time_buckets is None:
+            time_bucket = np.full((batch_size,), self._fallback_bucket, dtype=np.int32)
+        else:
+            time_bucket = np.asarray(time_buckets, dtype=np.int32)
         inputs = {self._model.input_names[0]: batch, "time_bucket_id": time_bucket}
         return self._model.predict(inputs, verbose=verbose)
+
+
+def make_eval_window_fns(channel_set=None):
+    """평가 경로가 학습과 **같은** 윈도 변환을 쓰도록 (prepare_window, window_bucket) 쌍을 만든다.
+
+    학습 제네레이터(create_accel_generator)와 한 글자도 다르면 안 되는 부분이라 여기 한 곳에
+    모아 둔다 — 정규화 → 파생 채널 덧붙이기 순서, 그리고 버킷을 **정규화 전** 값에서 뽑는 것.
+    """
+    channel_set = channel_set or CHANNEL_SET
+    n_bands = len(BAND_EDGES_HZ)
+
+    def prepare_window(x_slice, mean, std):
+        raw = np.asarray(x_slice, dtype=np.float32)
+        raw_time_feature = raw[:, 0, TIME_FEATURE_CHANNEL].copy()
+        normalized = (raw - mean) / std
+        # 평가 경로에는 B_*.npy 를 윈도 단위로 끌어올 수단이 없어 0으로 둔다.
+        # ⚠️ 그래서 channel_set="full" 로 학습했다면 평가의 대역 채널은 전부 0이 되어
+        #    지표가 과소평가된다 — full 구성을 실제로 채택할 때 이 경로를 먼저 보완할 것.
+        bands = np.zeros((raw.shape[0], n_bands), dtype=np.float32)
+        return _extend_channels_for(normalized, raw_time_feature, bands, channel_set)
+
+    def window_bucket(x_slice):
+        raw = np.asarray(x_slice, dtype=np.float32)
+        return time_feature_bucket(float(raw[-1, 0, TIME_FEATURE_CHANNEL]), N_TIME_BUCKETS)
+
+    return prepare_window, window_bucket
+
+
+# ============================================================
+# 4-b. 스테이지: psg_context_pretrain — Sleep-EDF(PSG)로 컨텍스트 트랜스포머 사전학습
+# ============================================================
+SLEEP_PERIOD_PAD_EPOCHS = 60  # 수면구간 앞뒤로 남길 여유(60 epoch = 30분)
+
+
+def trim_to_sleep_period(y, pad_epochs=SLEEP_PERIOD_PAD_EPOCHS):
+    """첫 비-Wake epoch 의 pad 이전 ~ 마지막 비-Wake epoch 의 pad 이후만 남기는 슬라이스를 돌려준다.
+
+    Sleep-EDF Cassette 녹화는 하루 24시간을 통째로 담고 있어서, 자르지 않으면 Wake 가 전체의
+    63.5% 를 차지한다(실측). 그 대부분은 "잠들기 한참 전"과 "일어난 뒤 한참"이라 수면 구조와
+    무관한 구간이다. 30분 여유를 두고 잘라내는 것이 Sleep-EDF 의 표준 전처리다.
+
+    전부 Wake 인 녹화는 (0, 0) 을 돌려준다 — 호출부가 건너뛴다.
+    """
+    non_wake = np.flatnonzero(y != 0)
+    if non_wake.size == 0:
+        return 0, 0
+    start = max(0, int(non_wake[0]) - pad_epochs)
+    end = min(len(y), int(non_wake[-1]) + pad_epochs + 1)
+    return start, end
+
+
+def run_psg_context_pretrain(folds=5, fold_index=0, tag=None, epochs=EPOCHS):
+    """Sleep-EDF 197명으로 컨텍스트 트랜스포머(ctx_body)를 먼저 학습시킨다.
+
+    accel_core 는 라벨 있는 피험자가 72명뿐이라 "밤이 어떻게 흘러가는가"를 배우기에 데이터가
+    얇다. EEG 는 단계 판별이 쉬우므로 그 구조를 197명치로 먼저 배워 두고, 그 ctx_body 가중치를
+    accel_core 에 `--init-context-body` 로 넘긴다. epoch 인코더는 공유하지 않는다(신호의
+    물리적 의미가 전혀 다르다).
+    """
+    tag = compose_run_tag("psgctx", tag, folds, fold_index)
+    run_dir = make_run_dir(tag)
+
+    if not EDF_NORM_STATS_PATH.exists():
+        print(f"norm_stats 없음: {EDF_NORM_STATS_PATH} — "
+              f"`python main.py preprocess stats --domain edf` 를 먼저 실행하세요.")
+        return None
+    if not EDF_DIR.exists():
+        print(f"건너뜀: {EDF_DIR} 없음 (Sleep-EDF 전처리 미완료)")
+        return None
+
+    stats = np.load(EDF_NORM_STATS_PATH, allow_pickle=True).item()
+    mean, std = stats["mean"], stats["std"]
+
+    pairs = list_subject_pairs([EDF_DIR])
+    if not pairs:
+        print(f"건너뜀: {EDF_DIR} 에 X_*.npy 가 없습니다.")
+        return None
+    tr_p, vl_p, te_p = split_subject_pairs(pairs, folds=folds, fold_index=fold_index)
+    load_subjects_lazy(EDF_DIR, [sid for d, sid in pairs])
+    tr, vl = map(pairs_to_by_dir, (tr_p, vl_p))
+
+    print(f"\nPSG 분할(fold {fold_index}/{folds}): train {len(tr_p)} / val {len(vl_p)} / test {len(te_p)} subject")
+
+    snapshot_config(run_dir, {
+        "stage": "psg_context_pretrain", "folds": folds, "fold_index": fold_index, "tag": tag,
+        "sleep_period_pad_epochs": SLEEP_PERIOD_PAD_EPOCHS,
+        "train_subjects": [f"{d.parent.name}/{s}" for d, s in tr_p],
+        "val_subjects": [f"{d.parent.name}/{s}" for d, s in vl_p],
+    })
+
+    # 수면구간으로 자른 뒤의 분포로 클래스 가중치를 잡는다(자르기 전 Wake 63.5% 기준으로
+    # 잡으면 Wake 를 지나치게 눌러 버린다).
+    train_ds = build_psg_dataset([EDF_DIR], tr, mean, std, shuffle=True, repeat=True)
+    val_ds = build_psg_dataset([EDF_DIR], vl, mean, std, shuffle=False, repeat=False)
+
+    models = model_module.build_psg_pretrain_model(
+        psg_window=ACCEL_WINDOW, psg_channels=ACCEL_CHANNELS,
+        context_len=CONTEXT_LEN, n_classes=N_CLASSES, n_time_buckets=N_TIME_BUCKETS,
+    )
+    train_model = models["train_model"]
+
+    lr = WarmupCosineDecay(peak_lr=4e-4, warmup_steps=STEPS_PER_EPOCH * 2,
+                           decay_steps=STEPS_PER_EPOCH * epochs)
+    train_model.compile(
+        optimizer=tf.keras.optimizers.AdamW(learning_rate=lr, weight_decay=1e-4, clipnorm=1.0),
+        loss=weighted_focal_loss(FOCAL_GAMMA, LABEL_SMOOTHING),
+    )
+    callbacks = [
+        tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=PATIENCE, restore_best_weights=True),
+        tf.keras.callbacks.CSVLogger(str(run_dir / "train_log.csv")),
+    ]
+    train_model.fit(
+        train_ds, validation_data=val_ds, epochs=epochs,
+        steps_per_epoch=STEPS_PER_EPOCH, callbacks=callbacks,
+    )
+
+    out_path = run_dir / "context_body_psg_pretrained.keras"
+    models["context_body"].save(out_path)
+    print(f"\nctx_body 사전학습 가중치 저장: {out_path}")
+    print(f"accel_core 에 넘기려면: --init-context-body {out_path}")
+    return run_dir
+
+
+def create_psg_generator(directories, subject_ids_by_dir, mean, std, shuffle=True, repeat=True):
+    """PSG 윈도우 제네레이터. accel 쪽과 다른 점은 (1) 수면구간으로 먼저 자르고,
+    (2) 증강(회전/스케일)을 하지 않는다는 것 — EEG 축은 회전 같은 물리적 의미가 없다."""
+    def gen():
+        pairs = [(d, sid) for d in directories for sid in subject_ids_by_dir.get(d, [])]
+        while True:
+            if shuffle:
+                np.random.shuffle(pairs)
+            for d, sid in pairs:
+                X, y = _MEM_CACHE.get((str(d), sid), (None, None))
+                if X is None:
+                    continue
+                lo, hi = trim_to_sleep_period(y)
+                if hi - lo < CONTEXT_LEN:
+                    continue
+                starts = list(range(lo, hi - CONTEXT_LEN + 1, CONTEXT_LEN))
+                if shuffle:
+                    np.random.shuffle(starts)
+                for s in starts:
+                    x_slice = np.asarray(X[s:s + CONTEXT_LEN], dtype=np.float32)
+                    x_slice = (x_slice - mean) / std
+                    time_bucket = _time_bucket_from_channels(x_slice)
+                    yield x_slice, time_bucket, y[s:s + CONTEXT_LEN]
+            if not repeat:
+                return
+    return gen
+
+
+def build_psg_dataset(directories, subject_ids_by_dir, mean, std, shuffle=True, repeat=True):
+    gen_fn = create_psg_generator(directories, subject_ids_by_dir, mean, std, shuffle, repeat)
+    return tf.data.Dataset.from_generator(
+        gen_fn,
+        output_signature=(
+            tf.TensorSpec(shape=(CONTEXT_LEN, ACCEL_WINDOW, ACCEL_CHANNELS), dtype=tf.float32),
+            tf.TensorSpec(shape=(), dtype=tf.int32),
+            tf.TensorSpec(shape=(CONTEXT_LEN,), dtype=tf.int32),
+        )
+    ).batch(BATCH_SIZE, drop_remainder=True).map(
+        lambda x, tb, y: ({"psg_input": x, "time_bucket_id": tb}, y)
+    ).prefetch(tf.data.AUTOTUNE)
 
 
 # ============================================================

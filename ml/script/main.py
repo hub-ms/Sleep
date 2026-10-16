@@ -23,8 +23,10 @@ import preprocess as preprocess_module
 def cmd_preprocess(args):
     if args.action == "build-features":
         preprocess_module.run_build_features(force=args.force)
+    elif args.action == "bands":
+        preprocess_module.run_build_bands(force=args.force)
     elif args.action == "stats":
-        preprocess_module.run_compute_stats()
+        preprocess_module.run_compute_stats(domain=args.domain)
     elif args.action == "fixture":
         preprocess_module.run_export_parity_fixture()
 
@@ -34,7 +36,19 @@ def cmd_train(args):
     # evaluate 서브커맨드만 쓰는 사용자가 TensorFlow 없이도 main.py를 쓸 수 있게 합니다.
     import train as train_module
 
+    # 모듈 전역을 덮어쓴다. train.py 쪽은 이 값들을 **호출 시점에** 읽도록 고쳐져 있어야 한다
+    # (예전엔 기본 인자로 def 시점에 묶여 --lambda-crf 가 조용히 무시됐다).
     train_module.LAMBDA_CRF = args.lambda_crf
+    if args.focal_gamma is not None:
+        train_module.FOCAL_GAMMA = args.focal_gamma
+    if args.label_smoothing is not None:
+        train_module.LABEL_SMOOTHING = args.label_smoothing
+    if args.transition_prior_weight is not None:
+        train_module.TRANSITION_PRIOR_WEIGHT = args.transition_prior_weight
+    if args.no_class_weights:
+        train_module.USE_CLASS_WEIGHTS = False
+    if args.channel_set is not None:
+        train_module.CHANNEL_SET = args.channel_set
 
     if not args.fold_loop:
         _dispatch_train_stage(train_module, args, args.fold_index)
@@ -47,12 +61,23 @@ def cmd_train(args):
         _dispatch_train_stage(train_module, args, k)
 
     print(f"\n{'=' * 70}\n집계\n{'=' * 70}")
-    evaluate_module.summarize(f"*{args.tag or args.stage}*of{args.folds}*")
+    evaluate_module.summarize(_fold_summary_pattern(args))
+
+
+def _fold_summary_pattern(args):
+    """run_dir 이름은 `{stamp}_{tag}` 이고, tag 기본값은 밑줄 없는 `accelcore_fold{k}of{n}` 이다
+    (train.py run_accel_core). 예전 코드는 stage 이름(`accel_core`)을 그대로 넣어 `*accel_core*of5*`
+    로 찾았기 때문에 어떤 디렉토리와도 매칭되지 않았다 — 집계가 항상 빈손으로 끝났다."""
+    base = args.tag or args.stage.replace("_", "")
+    return f"*{base}*of{args.folds}*"
 
 
 def _dispatch_train_stage(train_module, args, fold_index):
     if args.stage == "accel_core":
-        train_module.run_accel_core(args.folds, fold_index, args.tag, args.epochs, args.init_accel_encoder)
+        train_module.run_accel_core(args.folds, fold_index, args.tag, args.epochs,
+                                    args.init_accel_encoder, args.init_context_body)
+    elif args.stage == "psg_context_pretrain":
+        train_module.run_psg_context_pretrain(args.folds, fold_index, args.tag, args.epochs)
     elif args.stage == "mesa_selfsup":
         train_module.run_mesa_selfsup(args.epochs)
     elif args.stage == "audio_denoise_aux":
@@ -136,14 +161,19 @@ def build_parser():
     pp_sub = pp.add_subparsers(dest="action", required=True)
     bf = pp_sub.add_parser("build-features", help="X_*.npy -> F_*.npy")
     bf.add_argument("--force", action="store_true")
-    pp_sub.add_parser("stats", help="정규화 통계 + Kotlin parity 검사")
+    bd = pp_sub.add_parser("bands", help="X_*.npy -> B_*.npy (epoch별 대역 파워, --channel-set full 용)")
+    bd.add_argument("--force", action="store_true", help="이미 있는 B_*.npy 도 다시 계산")
+    st = pp_sub.add_parser("stats", help="정규화 통계 + Kotlin parity 검사")
+    st.add_argument("--domain", choices=["accel", "edf", "audio", "all"], default="accel",
+                    help="어느 도메인의 통계를 계산할지. 기본 accel — 앱이 쓰는 유일한 도메인이고, "
+                         "edf는 27GB를 전부 읽으므로 필요할 때만 따로 돌린다.")
     pp_sub.add_parser("fixture", help="Kotlin parity fixture 생성")
     pp.set_defaults(func=cmd_preprocess)
 
     tr = sub.add_parser("train", help="모델 학습")
     tr.add_argument("--stage", required=True,
-                     choices=["accel_core", "mesa_selfsup", "audio_denoise_aux",
-                              "accel_selfsup_wisdm", "fusion_finetune"])
+                     choices=["accel_core", "psg_context_pretrain", "mesa_selfsup",
+                              "audio_denoise_aux", "accel_selfsup_wisdm", "fusion_finetune"])
     tr.add_argument("--folds", type=int, default=5)
     tr.add_argument("--fold-index", type=int, default=0)
     tr.add_argument("--fold-loop", action="store_true",
@@ -151,12 +181,29 @@ def build_parser():
     tr.add_argument("--tag", type=str, default=None)
     tr.add_argument("--epochs", type=int, default=40)
     tr.add_argument("--lambda-crf", type=float, default=1.0)
+    tr.add_argument("--focal-gamma", type=float, default=None,
+                     help="focal loss의 gamma(기본 1.0). 소수 클래스(Wake/Deep)에 더 집중시키려면 1.5~2.0")
+    tr.add_argument("--label-smoothing", type=float, default=None,
+                     help="라벨 스무딩(기본 0.1). 0.1은 확신 상한을 0.925로 묶는다 — 0.05와 비교해 볼 것")
+    tr.add_argument("--transition-prior-weight", type=float, default=None,
+                     help="CRF 전이행렬 초기값에서 생리학적 prior를 몇 개의 가상 관측치로 셀지"
+                          "(기본 10 — 실측 19만 전이 앞에서는 사실상 무영향. 수천 단위를 권장)")
+    tr.add_argument("--no-class-weights", action="store_true",
+                     help="클래스 가중치를 손실에서 뺀다(ablation용). 기본은 적용")
+    tr.add_argument("--channel-set", choices=["base", "circadian", "full"], default=None,
+                     help="모델 입력 채널 구성. base=기존 7채널(기본), "
+                          "circadian=+수면주기 sin/cos(9채널), "
+                          "full=+대역파워 3채널(12채널, `preprocess bands` 선행 필요). "
+                          "base 가 아닌 모델을 앱에 넣으려면 Kotlin AccelChannels 도 같이 바꿀 것")
     tr.add_argument("--accel-checkpoint", default=None)
     tr.add_argument("--audio-denoise-checkpoint", default=None,
                      help="fusion_finetune용 audio_denoise_aux 사전학습 인코더 체크포인트(선택)")
     tr.add_argument("--init-accel-encoder", default=None,
                      help="accel_core 시작 전 accel_epoch_encoder를 초기화할 .keras 경로 "
                           "(accel_selfsup_wisdm이 저장한 사전학습 인코더)")
+    tr.add_argument("--init-context-body", default=None,
+                     help="accel_core 시작 전 컨텍스트 트랜스포머를 초기화할 .keras 경로 "
+                          "(psg_context_pretrain이 저장한 context_body_psg_pretrained.keras)")
     tr.set_defaults(func=cmd_train)
 
     ev = sub.add_parser("evaluate", help="평가/집계")

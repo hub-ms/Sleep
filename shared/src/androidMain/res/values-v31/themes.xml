@@ -10,7 +10,7 @@
       windowSplashScreenBackground 도 transparent 여서, 앱을 켜면 프로세스 시작부터
       Compose 첫 프레임까지 흰 창이 그대로 보였다 — 이것이 "스플래시 이전 흰 화면"의 원인이다.
     -->
-    <style name="Theme.SomnioTune" parent="Theme.AppCompat.NoActionBar">
+    <style name="Theme.SoundSleeper" parent="Theme.AppCompat.NoActionBar">
         <item name="android:windowBackground">@color/app_background</item>
         <item name="android:windowSplashScreenBackground">@color/app_background</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_transparent</item>

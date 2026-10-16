@@ -11,7 +11,7 @@ plugins {
 
 compose.resources {
     publicResClass = true
-    packageOfResClass = "com.somniotune.app.resources"
+    packageOfResClass = "com.soundsleeper.app.resources"
     generateResClass = auto
 }
 
@@ -23,7 +23,7 @@ kotlin {
         freeCompilerArgs.add("-Xexpect-actual-classes")
     }
     android {
-        namespace = "com.somniotune.app"
+        namespace = "com.soundsleeper.app"
         compileSdk = 37
         minSdk = 31
 
@@ -104,6 +104,7 @@ kotlin {
 
             implementation(libs.androidx.credentials)
             implementation(libs.androidx.credentials.play.services.auth)
+            implementation(libs.androidx.biometric)
             implementation(libs.googleid)
             implementation(libs.kakao.v2.user)
             implementation(libs.firebase.auth)
@@ -123,7 +124,7 @@ kotlin {
 sqldelight {
     databases {
         create("SleepDatabase") {
-            packageName.set("com.somniotune.app.data.local.generated")
+            packageName.set("com.soundsleeper.app.data.local.generated")
         }
     }
 }

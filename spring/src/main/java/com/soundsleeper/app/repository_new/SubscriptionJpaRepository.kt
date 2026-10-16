@@ -1,0 +1,15 @@
+package com.soundsleeper.app.repository_new
+
+import com.soundsleeper.app.entity_new.SubscriptionEntity
+import com.soundsleeper.app.entity_new.SubscriptionStatusType
+import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.stereotype.Repository
+
+@Repository
+interface SubscriptionJpaRepository : JpaRepository<SubscriptionEntity, Long> {
+    fun findByPurchaseToken(purchaseToken: String): SubscriptionEntity?
+    fun findFirstByUserIdAndStatusInOrderByExpiryTimeDesc(
+        userId: Long,
+        statuses: List<SubscriptionStatusType>,
+    ): SubscriptionEntity?
+}

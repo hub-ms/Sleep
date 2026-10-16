@@ -62,7 +62,7 @@
 #     -> @Serializable 의 $serializer/Companion 이 제거된 것
 #   NoDefinitionFound / NoBeanDefFoundException (Koin)
 #     -> single<Interface> 의 인터페이스가 병합된 것
-#        -> -keep interface com.somniotune.app.domain.repository.** { *; }
+#        -> -keep interface com.soundsleeper.app.domain.repository.** { *; }
 #
 # 참고: 기존에 있던 Retrofit 규칙 6줄은 제거했다. 이 프로젝트는 Ktor 를 쓰고
 # Retrofit 은 클래스패스에 아예 없어서 무용지물이었다.

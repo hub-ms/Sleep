@@ -1,7 +1,10 @@
 <resources>
+    <!-- 한국어가 기본 로케일이고 이 파일이 마스터다. values-en/strings.xml 은
+         구획 순서와 키 순서를 이 파일과 1:1 로 맞춘다 - 그래야 번역 누락이 diff 에서
+         바로 보인다. 키는 화면/흐름 단위 구획(===== 이름 ===== 주석)에 둔다. -->
 
     <!-- ===== 공용 UI ===== -->
-    <string name="common_off">꺼짐</string>
+    <string name="common_replay">다시보기</string>
     <string name="common_confirm_short">확인</string>
     <string name="common_cancel">취소</string>
     <string name="common_save">저장</string>
@@ -9,47 +12,99 @@
     <string name="common_delete">삭제</string>
     <string name="common_next">다음</string>
     <string name="common_back">뒤로</string>
-    <string name="common_edit">수정</string>
     <string name="common_retry">다시 시도</string>
-    <string name="common_loading">불러오는 중…</string>
     <string name="common_terms_of_service">이용약관</string>
     <string name="common_privacy_policy">개인정보처리방침</string>
     <string name="common_background_image_description">Background Image</string>
 
-    <!-- ===== 스플래시 / 온보딩 / 진단 결과 ===== -->
-    <string name="onboarding_page3_title">내 방에 찾아오는\n완벽한 평온</string>
-    <string name="onboarding_page3_description">솜니오튠와 함께 오늘 하루의 소음을 끄고, 마음을 진정시키는 아늑한 빛과 소리로 깊은 밤을 시작해 보세요</string>
-    <string name="onboarding_skip">건너뛰기</string>
-    <string name="onboarding_cta_last">내 수면상태 확인하기</string>
-    <string name="splash_title">오늘의 소음을 끄고\n솜니오튠으로 잠들어요</string>
-    <string name="diagnosis_result_title">수면 진단이 끝났어요</string>
-    <string name="diagnosis_result_description">로그인하면 나만의 수면 리포트를 바로 확인할 수 있어요</string>
-    <string name="diagnosis_result_cta">결과 확인하러 가기</string>
 
-    <!-- ===== 온보딩 설문 ===== -->
-    <string name="survey_q1_title">요즘 수면에서\n불편한 점은 무엇인가요?</string>
-    <string name="survey_q1_description">해당하는 것을 모두 골라 주세요. 나중에 언제든 바꿀 수 있어요.</string>
+    <!--<editor-fold desc="스플래시 화면">-->
+    <string name="splash_title">눈을 감으면 DIVE</string>
+    <string name="splash_subtitle">해수면 아래로 천천히 가라앉듯,\n깊은 잠 속으로</string>
+    <!--</editor-fold>-->
+
+
+    <!--<editor-fold desc="온보딩 화면">-->
+    <string name="onboarding_page1_title">10곡 이상의 수면 음악과 함께 잠들어보세요</string>
+    <string name="onboarding_page2_title">맞춤 수면 리포트로 수면 습관을 개선해 보세요</string>
+    <string name="onboarding_page3_title">DIVE와 함께 깊은 밤을 시작해 보세요</string>
+    <string name="onboarding_skip">건너뛰기</string>
+    <string name="onboarding_cta_last">시작하기</string>
+    <!--</editor-fold>-->
+
+    <!--<editor-fold desc="1번 설문 페이지">-->
+    <string name="survey_q1_title">요즘 수면 중에\n어떤 점이 가장 불편했나요?</string>
+    <string name="survey_q1_description">해당하는 것을 모두 골라 주세요.\n나중에 언제든지 바꿀 수 있어요.</string>
     <string name="survey_opt_sleep_latency">잠들기까지 오래 걸려요</string>
     <string name="survey_opt_frequent_waking">자다가 자주 깨요</string>
     <string name="survey_opt_tired_on_waking">자고 일어나도 피곤해요</string>
     <string name="survey_opt_snoring">코골이가 걱정돼요</string>
-    <string name="survey_q2_title">목표 수면 시간은\n어느 정도인가요?</string>
+    <!--</editor-fold>-->
+
+    <!--<editor-fold desc="2번 설문 페이지">-->
+    <string name="survey_q2_title">목표 수면 시간은\n몇 시간인가요?</string>
     <string name="survey_q2_description">리포트에서 이 시간을 기준으로 비교해 드릴게요.</string>
     <string name="survey_opt_under_6h">6시간 미만</string>
     <string name="survey_opt_6_7h">6~7시간</string>
     <string name="survey_opt_7_8h">7~8시간</string>
     <string name="survey_opt_over_8h">8시간 이상</string>
+    <!--</editor-fold>-->
+
+    <!--<editor-fold desc="3번 설문 페이지">-->
     <string name="survey_q3_title">가장 이루고 싶은 변화는\n무엇인가요?</string>
     <string name="survey_q3_description">하나만 골라 주세요. 리포트에서 이 목표를 중심으로 보여드릴게요.</string>
     <string name="survey_opt_deeper_sleep">더 깊게 자고 싶어요</string>
     <string name="survey_opt_refreshed_waking">아침에 개운하게 일어나고 싶어요</string>
-    <string name="survey_opt_faster_sleep_onset">잠드는 시간을 줄이고 싶어요</string>
-    <string name="survey_opt_regular_pattern">수면 패턴을 일정하게 만들고 싶어요</string>
-    <string name="survey_opt_reduce_snoring_goal">코골이·무호흡을 줄이고 싶어요</string>
-    <string name="survey_previous_question">이전 문항</string>
-    <string name="survey_done">완료</string>
+    <string name="survey_opt_faster_sleep_onset">더 빨리 잠들고 싶어요</string>
+    <string name="survey_opt_reduce_snoring_goal">코골이를 줄이고 싶어요</string>
+    <string name="survey_cta_reveal_animal">내 수면 유형 확인하기</string>
+    <!--</editor-fold>-->
+
+    <!--<editor-fold desc="수면 동물 유형">-->
+    <string name="animal_reveal_eyebrow">설문 결과, 당신의 수면 유형은</string>
+    <string name="animal_cat_title">생각이 많아 잠드는 고양이</string>
+    <string name="animal_cat_summary">눕고 나서 뒤척이는 시간이 아까운 타입이에요. 머릿속 잡념 때문에 빨리 잠드는 것이 가장 큰 목표인 고양이에게 DIVE의 차분한 사운드가 필요해요.</string>
+    <string name="animal_bear_title">밤새 조각잠을 자는 곰</string>
+    <string name="animal_bear_summary">한번 잠들면 중간에 깨지 않고 깊게 자고 싶은 타입이에요. 잠의 길이보다 밀도를 중요하게 여기는 곰이지만, 자꾸 끊기는 잠 때문에 수면 유도 백색소음이 필요합니다.</string>
+    <string name="animal_otter_title">아침이 흐릿한 수달</string>
+    <string name="animal_otter_summary">잘 잤는지는 아침이 말해준다고 믿는 타입이에요. 일어났을 때의 몸 상태를 가장 중요하게 여기지만, 자도 자도 피곤한 원인을 DIVE의 수면 리포트로 함께 찾아볼 시간이에요.</string>
+    <string name="animal_dolphin_title">숨 고르는 돌고래</string>
+    <string name="animal_dolphin_summary">수면 중 코골이와 호흡 상태가 유독 신경 쓰이는 타입이에요. 밤사이 내가 어떤 숨소리를 냈는지 DIVE의 정밀 녹음 분석으로 안전하고 투명하게 확인해 보세요.</string>
+    <string name="animal_s05_title">뒤척이다 깨어나는 고양이 곰</string>
+    <string name="animal_s05_summary">눕고 나서 잠들기까지 오래 걸리는데, 어렵게 든 잠마저 자주 깨는 상태입니다. 밤의 시작과 중간이 모두 불안정해 밀도 높은 깊은 잠으로 빠져들지 못하고 있어요.</string>
+    <string name="animal_s06_title">새벽까지 깨어있는 지친 수달</string>
+    <string name="animal_s06_summary">빨리 잠들고 싶지만 쉽게 눈이 감기지 않아, 내일 아침의 컨디션까지 미리 걱정하고 있네요. 뒤척이는 시간만큼 피로가 누적되어 아침이 무거워지는 악순환 속에 있습니다.</string>
+    <string name="animal_s07_title">숨소리가 신경 쓰여 눈 감는 돌고래</string>
+    <string name="animal_s07_summary">자신의 호흡 소리나 코골이가 신경 쓰여 잠자리에 드는 것 자체가 은연중에 스트레스가 된 유형입니다. 편안하게 숨 고르며 빠르게 잠들 수 있는 아늑한 소리가 필요해요.</string>
+    <string name="animal_s08_title">조각잠에 지쳐버린 곰 수달</string>
+    <string name="animal_s08_summary">자다 깨다를 반복하느라 잠의 밀도가 바닥으로 떨어졌고, 그 여파가 아침 몸 상태로 고스란히 나타나고 있습니다. 푹 자고 개운하게 깨어나는 완벽한 평온의 균형을 되찾아야 해요.</string>
+    <string name="animal_s09_title">답답한 숨소리에 깨어나는 돌고래 곰</string>
+    <string name="animal_s09_summary">밤새 깊은 잠을 자고 싶지만, 수면 중 거칠어지는 숨소리와 코골이가 수면 흐름을 툭툭 끊어놓고 있습니다. 나도 모르게 자꾸 깨는 진짜 원인을 소리로 분석할 시간이에요.</string>
+    <string name="animal_s10_title">아침이 무거운 호흡의 수달 돌고래</string>
+    <string name="animal_s10_summary">오래 누워있었어도 수면 중 호흡 효율이 떨어지면 일어났을 때 머리가 무겁습니다. 개운한 아침을 맞이하기 위해, 밤사이 숨소리 데이터를 확인하고 개선해 나가야 합니다.</string>
+    <string name="animal_s11_title">리듬을 잃고 헤매는 펭귄</string>
+    <string name="animal_s11_summary">잠들기도, 유지하기도 힘들고 아침 피로까지 겹쳐 들쭉날쭉한 수면 리듬 때문에 스트레스를 받는 상태입니다. 무너진 규칙성을 바로잡고 매일 밤 아늑한 루틴을 만들어야 해요.</string>
+    <string name="animal_s12_title">불안한 호흡에 잠 못 드는 돌고래 펭귄</string>
+    <string name="animal_s12_summary">입면 장애와 수면 유지 장애, 여기에 코골이 걱정까지 더해져 수면 리듬을 유지하기가 벅찬 고위험 유형입니다. 밤새 소리를 확인하고 취침 환경의 밀도를 전반적으로 높여야 합니다.</string>
+    <string name="animal_s13_title">아침이 두려워 잠 못 드는 수달 고양이</string>
+    <string name="animal_s13_summary">코골이로 인해 아침 몸 상태는 천근만근인데, 밤이 되면 제때 잠들지 못해 수면의 규칙성이 완전히 조각났습니다. 오늘 밤은 생각을 끄고 아늑한 조명과 소리에 몸을 맡겨보세요.</string>
+    <string name="animal_s14_title">답답함에 밤새 뒤척이는 수달 곰</string>
+    <string name="animal_s14_summary">거친 호흡 때문에 밤새 얕은 잠을 자며 자주 깨고, 이로 인해 일어났을 때 극심한 만성 피로를 느낍니다. 잠의 길이보다 밀도를 높여 개운한 아침을 만들 종합 솔루션이 필요합니다.</string>
+    <string name="animal_s15_title">수면 번아웃에 빠진 종합 종합 펭귄</string>
+    <string name="animal_s15_summary">잠들기, 깨기, 아침 피로, 코골이까지 모든 수면 지표의 균형이 무너져 가장 들쭉날쭉한 리듬을 겪고 있습니다. 지쳐있는 당신을 위해 DIVE가 방해 없는 완벽한 평온의 공간을 열어드릴게요.</string>
+    <string name="animal_locked_hint">자세한 분석과 맞춤 추천은\n가입 후에 볼 수 있어요</string>
+    <!--</editor-fold>-->
 
     <!-- ===== 로그인 / 가입 / 이메일 인증 ===== -->
+    <string name="signup_welcome_title_named">%1$s 님, 환영해요!</string>
+    <string name="auth_continue_email">이메일로 시작하기</string>
+    <string name="auth_continue_google">Google로 계속하기</string>
+    <string name="auth_continue_kakao">카카오톡으로 계속하기</string>
+    <string name="signup_welcome_cta">시작하기</string>
+    <string name="signup_welcome_description">이제 오늘 밤부터 수면을 기록할 수 있어요.\n머리맡에 폰을 두기만 하면 됩니다.</string>
+    <string name="signup_welcome_title">환영해요!</string>
+    <string name="signup_loading_description">잠시만 기다려주세요</string>
+    <string name="signup_loading_title">가입을 마무리하고 있어요</string>
     <string name="auth_restore_account">계정 복구하기</string>
     <string name="auth_unusable_account_title">사용할 수 없는 계정이에요</string>
     <string name="auth_withdrawn_title">탈퇴한 계정이에요</string>
@@ -62,14 +117,27 @@
     <string name="email_code_hint">메일로 받은 6자리 코드를 입력해 주세요</string>
     <string name="email_code_label">인증코드</string>
     <string name="email_connect_cta">이메일 연결</string>
+    <string name="email_save_card_cta">내 카드 저장하기</string>
+    <string name="email_device_account_label">이 기기의 계정</string>
+    <string name="email_awaiting_link_title">메일을 보냈어요</string>
+    <string name="email_awaiting_link_description">메일함에서 링크를 한 번만 눌러 주시면 가입이 끝나요</string>
+    <string name="email_open_mail_app">메일앱 열기</string>
+    <string name="email_use_another_address">다른 주소로 가입하기</string>
+
+    <!-- ===== 생체 인증 로그인 ===== -->
+    <string name="biometric_enroll_title">다음부터 지문으로 로그인할까요?</string>
+    <string name="biometric_enroll_description">이 기기에 안전하게 저장된 로그인 정보를 지문으로 꺼내 씁니다. 비밀번호를 입력하거나 메일을 다시 확인할 필요가 없어요.</string>
+    <string name="biometric_enroll_confirm">지문으로 로그인하기</string>
+    <string name="biometric_enroll_dismiss">나중에 할게요</string>
+    <string name="biometric_prompt_title">지문으로 로그인</string>
+    <string name="biometric_prompt_subtitle">등록된 지문으로 본인 확인을 해주세요</string>
+    <string name="biometric_prompt_cancel">다른 방법으로 로그인</string>
+    <string name="biometric_login_cta">지문으로 로그인</string>
     <string name="email_address_label">이메일 주소</string>
     <string name="auth_email_login">이메일로 로그인</string>
     <string name="auth_guest_browse">로그인 없이 둘러보기</string>
-    <string name="auth_terms_prefix">계속 진행함에 따라 솜니오튠의 </string>
+    <string name="auth_terms_prefix">계속 진행함에 따라 DIVE의 </string>
     <string name="auth_terms_suffix">에 동의하는 것으로 간주합니다</string>
-    <string name="auth_provider_kakao">카카오</string>
-    <string name="auth_provider_google">구글</string>
-    <string name="auth_provider_email">이메일</string>
     <string name="auth_session_expired">세션이 만료되었습니다. 다시 로그인해주세요.</string>
     <string name="auth_disconnect_failed">연결 해제 실패</string>
     <string name="auth_disconnect_unavailable">연결을 해제할 수 없습니다. 로그인 상태를 확인해주세요.</string>
@@ -78,10 +146,6 @@
     <string name="auth_verification_complete">인증이 완료되었습니다.</string>
     <string name="auth_profile_saved">프로필이 저장되었습니다.</string>
     <string name="auth_profile_save_failed">프로필 저장 실패</string>
-    <string name="auth_profile_image_reset">기본 이미지로 설정되었습니다.</string>
-    <string name="auth_profile_image_reset_failed">기본 이미지 설정 실패</string>
-    <string name="auth_profile_image_updated">프로필 이미지가 변경되었습니다.</string>
-    <string name="auth_profile_image_update_failed">이미지 변경 실패</string>
     <string name="auth_change_failed">변경 실패</string>
     <string name="auth_primary_provider_change_unavailable">대표 계정을 변경할 수 없습니다. 로그인 상태를 확인해주세요.</string>
     <string name="auth_unsupported_provider">지원하지 않는 소셜 로그인 공급자입니다: %1$s</string>
@@ -92,29 +156,37 @@
     <string name="auth_email_send_failed">이메일 발송 실패</string>
     <string name="auth_verification_failed">인증 실패</string>
     <string name="auth_withdraw_failed">탈퇴에 실패했어요. 잠시 후 다시 시도해 주세요.</string>
-    <string name="auth_data_reset_failed">데이터 초기화 실패</string>
 
     <!-- ===== 홈 / 하단 탭 / 수면 음악 ===== -->
+    <string name="music_favorite_add">즐겨찾기 추가</string>
+    <string name="music_play">재생</string>
+    <string name="music_pause">일시정지</string>
+    <string name="music_favorite_remove">즐겨찾기 해제</string>
     <string name="tab_home">홈</string>
     <string name="tab_report">리포트</string>
     <string name="tab_mypage">마이페이지</string>
     <string name="button_sleep_start">수면 시작</string>
-    <string name="button_sleep_end">수면 종료</string>
-    <string name="music_category_favorite">즐겨찾기</string>
     <string name="music_category_nature">자연</string>
     <string name="music_category_ambient">멜로디</string>
     <string name="music_category_wave">뇌파</string>
+    <string name="music_empty_card_title">어떤 음악과 함께 잠들어볼까요?</string>
+    <string name="music_empty_card_description">편안한 소리와 함께 더 깊은 잠에 들어보세요</string>
+    <string name="music_category_empty">준비 중인 카테고리예요.\n곧 새로운 음악으로 찾아올게요!</string>
     <string name="music_favorites_empty">즐겨찾는 음악이 없습니다.\n마음에 드는 음악에 별을 눌러보세요!</string>
-    <string name="title_campfire">모닥불</string>
-    <string name="title_cricket">귀뚜라미</string>
-    <string name="title_meditation">명상</string>
-    <string name="title_piano">피아노</string>
-    <string name="title_rain">빗소리</string>
-    <string name="title_relaxation">회복</string>
-    <string name="title_space">우주</string>
-    <string name="title_underwater">심해</string>
-    <string name="title_wave">파도</string>
-    <string name="title_wind">바람</string>
+    <string name="title_campfire">장작이 타닥이는 모닥불 옆</string>
+    <string name="title_cricket">풀벌레가 우는 시골의 밤</string>
+    <string name="title_meditation">생각을 하나씩 내려놓는 시간</string>
+    <string name="title_piano">새벽 두 시에 치는 피아노</string>
+    <string name="title_rain">창밖에 비가 오는 밤</string>
+    <string name="title_relaxation">어깨에서 힘이 풀리는 순간</string>
+    <string name="title_space">아무도 없는 우주를 떠다니며</string>
+    <string name="title_underwater">숨을 참고 들어간 물속</string>
+    <string name="title_wave">발끝에 닿았다 물러가는 파도</string>
+    <string name="title_wind">언덕을 넘어오는 밤바람</string>
+    <string name="title_delta">델타파 · 깊은 수면</string>
+    <string name="title_theta">세타파 · 잠결</string>
+    <string name="title_alpha">알파파 · 이완</string>
+    <string name="title_binaural">바이노럴 비트</string>
     <string name="title_alarm_bird">새벽을 깨우는 소리</string>
     <string name="title_alarm_cricket">고요한 정원의 풀벌레</string>
     <string name="title_alarm_piano">창가로 스미는 피아노</string>
@@ -133,13 +205,16 @@
     <string name="short_sleep_dialog_confirm">시작하기</string>
 
     <!-- ===== 수면 측정 ===== -->
+    <string name="wakeup_cta">일어나기</string>
+    <string name="wakeup_description">충분히 휴식하셨나요?</string>
+    <string name="wakeup_title">좋은 아침이에요!</string>
+    <string name="tracking_swipe_sideways_hint">화면을 왼쪽으로 밀어 마음에 드는 수면음악을 골라보세요.</string>
     <string name="tracking_in_progress_title">수면 측정 중</string>
     <string name="tracking_alarm_icon_description">알람 시간 변경 아이콘</string>
     <string name="tracking_change_alarm_time">알람 시간 변경</string>
     <string name="tracking_wake_alarm_label">기상 알람 %1$s</string>
     <string name="tracking_swipe_up_hint">위로 밀어서 수면 종료</string>
     <string name="tracking_swipe_up_all_the_way">화면을 위로 끝까지 밀어주세요</string>
-    <string name="tracking_swipe_sideways_hint">좌우로 밀어 음악 바꾸기</string>
     <string name="tracking_help_description">측정 도움말</string>
     <string name="tracking_help_title">수면 측정 도움말</string>
     <string name="tracking_help_body">충전기를 꽂고 머리맡에 두면 밤새 측정이 끊기지 않아요</string>
@@ -149,7 +224,6 @@
     <string name="tracking_finish_dialog_message_normal">지금까지의 기록을 저장하고 측정을 끝낼까요?</string>
     <string name="tracking_finish_confirm">측정 종료</string>
     <string name="tracking_finish_dismiss">계속 측정</string>
-    <string name="tracking_back_to_measuring">측정 화면으로</string>
     <string name="tracking_music_page_title">수면 음악</string>
     <string name="tracking_wake_time_setting_description">기상 시각 설정</string>
     <string name="tracking_stage_awake">깨어 있음</string>
@@ -166,18 +240,16 @@
     <string name="permission_guide_charger_unplugged_warning">충전기가 분리되어 있어요. 밤새 측정이 끊기지 않도록 충전기를 꽂아주세요.</string>
     <string name="permission_guide_charging_tip">충전기가 연결됐어요. 폰을 침대 옆에 두면 밤새 측정이 끊기지 않아요</string>
     <string name="permission_guide_charger_tip">충전기를 꽂고 머리맡에 두면 밤새 측정이 끊기지 않아요</string>
-    <string name="permission_sheet_title">수면 측정을 위해 권한이 필요해요</string>
-    <string name="permission_sheet_subtitle">아래 항목을 눌러 허용해 주세요</string>
     <string name="permission_explain_title">수면 측정을 위해 다음 권한이 필요해요</string>
     <string name="permission_explain_subtitle">확인을 누르면 각 권한을 허용하는 화면이 차례로 나타나요</string>
     <string name="permission_explain_confirm">확인했어요</string>
     <string name="permission_card_microphone">주변 소음을 녹음하기 위해 마이크 권한이 필요합니다</string>
     <string name="permission_card_notification">알람을 제시간에 울리기 위해 알림 권한이 필요합니다</string>
     <string name="permission_card_activity">정확한 수면 분석을 위해 신체 활동 권한이 필요합니다</string>
-    <string name="permission_card_battery">수면 중 측정이 끊기지 않도록 설정에서 배터리 사용량을 \'제한 없음\'으로 변경해 주세요.</string>
-    <string name="permission_granted_description">권한 허용됨</string>
+    <string name="permission_card_battery">수면 중 측정이 끊기지 않도록 설정에서 배터리 사용량을 '제한 없음'으로 변경해 주세요.</string>
 
     <!-- ===== 리포트 ===== -->
+    <string name="report_chart_no_data">측정된 데이터가 없어요</string>
     <string name="report_stage_awake">깨어남</string>
     <string name="report_stage_light">얕은수면</string>
     <string name="report_stage_rem">렘수면</string>
@@ -239,63 +311,78 @@
     <string name="advice_good_night">특별히 고칠 점이 보이지 않는 밤이었어요. 지금의 취침 습관을 그대로 이어가 보세요.</string>
 
     <!-- ===== 페이월 / 구독 ===== -->
+    <!-- 플랜 카드 -->
+    <string name="paywall_header_title">DIVE 프리미엄</string>
+    <string name="paywall_price_suffix_yearly">/년</string>
+    <string name="paywall_price_suffix_monthly">/월</string>
+    <!-- 아래 두 줄은 실제 수치가 아니다. isDebug 가드 뒤에서만 그려진다. -->
+    <string name="paywall_stat_rank_value">1위</string>
+    <string name="paywall_stat_rank_label">수면 앱 다운로드</string>
+    <string name="paywall_stat_users_value">12만+</string>
+    <string name="paywall_stat_users_label">함께 잠든 사용자</string>
+    <string name="paywall_reviews_title">먼저 써 본 사람들</string>
+    <string name="paywall_placeholder_badge">샘플 데이터</string>
     <string name="paywall_plan_monthly">월간 플랜</string>
     <string name="paywall_plan_yearly">연간 플랜</string>
-    <string name="paywall_cycle_weekly">매주</string>
-    <string name="paywall_cycle_monthly">매월</string>
-    <string name="paywall_cycle_quarterly">3개월마다</string>
-    <string name="paywall_cycle_semiannual">6개월마다</string>
-    <string name="paywall_cycle_yearly">매년</string>
-    <string name="paywall_header_title">솜니오튠 프리미엄</string>
-    <string name="paywall_header_subtitle">프리미엄 수면 음악과 상세 리포트로 더 깊은 잠을 준비하세요</string>
+    <string name="paywall_cycle_monthly">1달</string>
+    <string name="paywall_cycle_yearly">1년</string>
     <string name="paywall_badge_recommended">추천</string>
-    <string name="paywall_badge_free_trial">무료체험</string>
-    <string name="paywall_savings_monthly_equivalent">월 환산 %1$d%% 절약</string>
-    <string name="paywall_cta_already_premium">이미 프리미엄 이용 중</string>
+    <string name="paywall_savings_percent">%1$d% 할인</string>
+
+    <!-- 프리미엄 기능 목록 -->
+    <string name="paywall_feature_premium_music">프리미엄 수면 음악</string>
+    <string name="paywall_feature_snoring">코골이 분석</string>
+    <string name="paywall_feature_ai_advice">AI 수면 개선 조언</string>
+    <string name="paywall_feature_self_comparison">최근 수면과 비교</string>
+
+    <!-- 사용자 후기 — 실제 플레이스토어 리뷰만 넣는다(빈 값은 화면에서 건너뛴다) -->
+    <string name="paywall_review_1">알람 소리에 깜짝 놀라 깨는 게 싫었는데, 스마트 알람으로 바꾸고 나서는 아침이 덜 힘들어요.</string>
+    <string name="paywall_review_2">코골이 녹음을 처음 들어보고 좀 충격받았어요. 자세를 바꾸니까 확실히 줄더라고요.</string>
+    <string name="paywall_review_3">매일 아침 리포트 보는 게 습관이 됐어요. 몇 시에 자야 하는지 감이 잡혀요.</string>
+    <string name="paywall_review_4">빗소리 틀어두고 자면 뒤척이는 횟수가 눈에 띄게 줄어요. 숫자로 보이니까 믿게 돼요.</string>
+    <string name="paywall_review_5">주간 비교가 제일 좋아요. 야근한 주랑 아닌 주가 그래프로 바로 갈려요.</string>
+    <string name="paywall_review_6">유료 결제하고 한 달 썼는데, 잠드는 시간이 평균 20분 정도 짧아졌어요.</string>
+
+    <!-- 결제 CTA 와 갱신 고지 -->
     <string name="paywall_cta_start_trial_7day">7일 무료체험 시작하기</string>
     <string name="paywall_cta_subscribe">구독 시작하기</string>
-    <string name="paywall_renewal_notice_default">언제든 설정에서 자동 갱신을 해지할 수 있어요</string>
-    <string name="paywall_renewal_notice_trial">지금부터 %1$s 간 무료로 이용할 수 있어요. 무료체험이 끝나는 날 %2$s이 결제되고, 그 뒤로는 %3$s 자동 갱신돼요. 무료체험 기간에 해지하면 요금이 청구되지 않아요.</string>
-    <string name="paywall_renewal_notice_standard">오늘 %1$s이 결제되고, %2$s 자동 갱신돼요. 언제든 설정에서 해지할 수 있어요.</string>
-    <string name="paywall_comparison_title">무료 · 프리미엄 비교</string>
-    <string name="paywall_comparison_free_header">무료</string>
-    <string name="paywall_comparison_premium_header">프리미엄</string>
-    <string name="paywall_feature_sleep_tracking">수면 측정</string>
-    <string name="paywall_feature_basic_report">기본 수면 리포트</string>
-    <string name="paywall_feature_smart_alarm">스마트 알람</string>
-    <string name="paywall_feature_basic_music">기본 수면 음악</string>
-    <string name="paywall_feature_premium_music">프리미엄 수면 음악</string>
-    <string name="paywall_feature_available_free">무료에서도 사용 가능</string>
-    <string name="paywall_feature_unavailable_free">무료에서는 사용 불가</string>
-    <string name="paywall_feature_available_premium">프리미엄에서 사용 가능</string>
+    <string name="paywall_renewal_notice_trial">오늘부터 %1$s 무료체험이 시작돼요. 무료체험 종료 후 %2$s이 결제되며, 이후 %3$s마다 자동 갱신돼요. 무료체험 기간 내 언제든지 구독을 취소할 수 있어요.</string>
+    <string name="paywall_renewal_notice_standard">오늘 %1$s이 결제되고, 이후 %2$s마다 자동 갱신돼요. 언제든지 취소할 수 있어요.</string>
+
+    <!-- 오류 / 토스트 -->
     <string name="paywall_error_load_failed">구독 정보를 불러오지 못했어요. 네트워크를 확인하고 다시 시도해주세요.</string>
     <string name="paywall_error_products_empty">구독 상품 정보를 가져올 수 없어요. 잠시 후 다시 시도해주세요.</string>
     <string name="paywall_error_products_partial">일부 구독 상품 정보를 불러오지 못했어요.</string>
-    <string name="paywall_toast_subscribed">구독이 완료되었습니다</string>
     <string name="paywall_error_purchase_verify_failed">구매 확인에 실패했습니다. 잠시 후 다시 시도해주세요.</string>
+    <string name="paywall_error_restore_failed">구매 복원에 실패했습니다.</string>
+    <string name="paywall_toast_subscribed">구독이 완료되었습니다</string>
     <string name="paywall_toast_no_purchase_to_restore">복원할 구매 내역이 없습니다</string>
     <string name="paywall_toast_restored">구독이 복원되었습니다</string>
     <string name="paywall_toast_nothing_to_restore">복원할 구독이 없습니다</string>
-    <string name="paywall_error_restore_failed">구매 복원에 실패했습니다.</string>
 
     <!-- ===== 수면 및 알람 설정 ===== -->
-    <string name="setting_alarm">알람</string>
+    <string name="common_off">꺼짐</string>
+    <string name="setting_alarm">기상 알람</string>
     <string name="setting_vibration">진동</string>
     <string name="setting_smart_alarm">스마트 알람</string>
-    <string name="alarm_time_setting_description">알람 시각 설정</string>
-    <string name="bedtime_setting_description">취침 시각 설정</string>
+    <string name="alarm_time_setting_description">기상 알람 시각 설정</string>
+    <string name="bedtime_setting_description">취침 알림 시각 설정</string>
     <string name="alarm_sound_label">알람 사운드</string>
+    <string name="alarm_sound_enable_first_hint">기상 알람을 먼저 활성화해주세요</string>
     <string name="alarm_sound_selection_description">알람 사운드 선택</string>
     <string name="smart_alarm_range_minutes">%1$d분</string>
     <string name="sleep_reminder_on_message">취침 알림이 켜졌습니다</string>
     <string name="sleep_reminder_off_message">취침 알림이 꺼졌습니다</string>
-    <string name="selected_sound_description">선택된 사운드</string>
     <string name="sleep_setting_open_label">수면 설정 열기</string>
     <string name="bedtime_reminder_label">취침 알림</string>
-    <string name="wake_label">기상</string>
+    <string name="wake_label">기상 알람</string>
     <string name="volume_level_label">볼륨 크기</string>
 
     <!-- ===== 마이페이지 / 언어 / 라이선스 ===== -->
+    <string name="setting_version_current">현재 버전 v%1$s</string>
+    <string name="setting_version_update_available">업데이트 가능</string>
+    <string name="setting_version_latest">최신 버전입니다</string>
+    <string name="setting_version_checking">버전 확인 중</string>
     <string name="mypage_title">마이페이지</string>
     <string name="mypage_account_profile">계정 및 프로필</string>
     <string name="mypage_sleep_alarm_setting">수면 및 알람 설정</string>
@@ -312,53 +399,69 @@
     <string name="appearance_language_title">언어</string>
 
     <!-- ===== 계정 / 프로필 / 탈퇴 ===== -->
+    <string name="withdraw_loading_title">계정을 탈퇴하는 중입니다…</string>
+
+    <string name="auth_provider_kakao">카카오</string>
+    <string name="auth_provider_google">구글</string>
+    <string name="auth_provider_email">이메일</string>
     <string name="account_default_nickname">사용자</string>
     <string name="account_edit_profile">프로필 수정</string>
     <string name="account_label_email">이메일</string>
-    <string name="account_email_not_provided">제공되지 않음</string>
+    <string name="account_email_not_provided">등록된 이메일 주소가 없어요. 이메일을 등록하면 계정 복구에 이메일 주소를 사용할 수 있어요.</string>
     <string name="account_email_copied_message">이메일 주소가 복사되었습니다.</string>
     <string name="account_copy_description">%1$s 복사</string>
     <string name="account_logout">로그아웃</string>
+
     <string name="account_withdraw">회원탈퇴</string>
     <string name="account_email_connected_title">이메일이 연결되었어요</string>
     <string name="account_disconnect_blocked_title">연결을 해제할 수 없어요</string>
-    <string name="account_only_login_method">유일한 로그인 수단이에요</string>
+    <string name="account_disconnect_blocked_message">마지막 로그인 수단이에요. 다른 로그인 수단을 먼저 연결해 주세요.</string>
+    <string name="account_connect_other_method">다른 수단 연결하기</string>
     <string name="account_disconnect">연결 해제</string>
     <string name="account_connect">연결하기</string>
-    <string name="account_change_image_description">이미지 변경</string>
-    <string name="account_image_option_default">기본 이미지로 변경</string>
-    <string name="account_image_option_album">앨범에서 선택</string>
-    <string name="account_image_option_camera">사진 찍기</string>
+    <string name="account_email_connect_action">이메일 연결하기</string>
     <string name="account_nickname_label">닉네임</string>
     <string name="account_nickname_length_error">닉네임은 %1$d~%2$d자여야 해요.</string>
     <string name="account_nickname_rule_guide">%1$d~%2$d자 · 앞뒤 공백은 저장할 때 지워져요\n다른 사용자가 쓰고 있는 닉네임은 사용할 수 없어요\n한 번 바꾸면 %3$d일 동안 다시 바꿀 수 없어요</string>
-    <string name="account_withdraw_reason_title">떠나시려는 이유를 알려주세요</string>
-    <string name="account_withdraw_reason_subtitle">이유에 따라 더 나은 방법을 알려드릴 수 있어요.</string>
-    <string name="account_withdraw_data_loss_notice">탈퇴하면 수면 기록은 모두 삭제되며 다시 불러올 수 없어요.</string>
-    <string name="account_withdraw_continue">탈퇴 계속하기</string>
-    <string name="account_withdraw_alternative_section_title">탈퇴 대신 이런 방법도 있어요</string>
-    <string name="account_withdraw_reason_inconvenient">사용하기 불편해요</string>
-    <string name="account_withdraw_reason_too_many_notifications">알림이 너무 많이 와요</string>
-    <string name="account_withdraw_reason_inaccurate_data">데이터가 정확하지 않은 것 같아요</string>
+
+
+    <!--<editor-fold desc="회원탈퇴 이유 선택 화면">-->
+    <string name="account_withdraw_reason_title">%1$s님,\n어떤 이유로 떠나시나요?</string>
+
+    <string name="account_withdraw_reason_usability">원하는 수면 개선 효과를 보지 못했어요</string>
+    <string name="account_withdraw_reason_accuracy">수면 리포트가 정확하지 않은 것 같아요</string>
+    <string name="account_withdraw_reason_content">수면과 관련된 콘텐츠가 부족해요</string>
+    <string name="account_withdraw_reason_privacy">개인정보와 데이터 보안이 걱정돼요</string>
     <string name="account_withdraw_reason_other">기타</string>
-    <string name="account_alt_pause_title">잠시 쉬어갈까요?</string>
-    <string name="account_alt_pause_description">계정과 수면 기록은 그대로 둔 채로 측정만 멈출 수 있어요.</string>
-    <string name="account_alt_pause_action">잠시 쉬기</string>
-    <string name="account_alt_disable_notification_title">알림만 꺼볼까요?</string>
-    <string name="account_alt_disable_notification_description">계정은 그대로 두고 푸시 알림만 끌 수 있어요.</string>
-    <string name="account_alt_disable_notification_action">알림 끄기</string>
-    <string name="account_alt_to_guest_title">게스트로 전환할까요?</string>
-    <string name="account_alt_to_guest_description">로그인 정보만 지우고, 앱은 그대로 계속 사용할 수 있어요.</string>
-    <string name="account_alt_to_guest_action">게스트로 전환</string>
+
+    <string name="account_withdraw_solution_header">이런 방법은 어떠세요?</string>
+
+    <string name="account_withdraw_solution_usability">나에게 맞는 수면 루틴 가이드를 확인해 보세요</string>
+    <string name="account_withdraw_solution_accuracy">수면 측정 가이드를 확인해 보세요</string>
+    <string name="account_withdraw_solution_content">1:1 문의화면에 의견을 남겨주시면 다음 업데이트 때 적극적으로 반영할게요.</string>
+    <string name="account_withdraw_solution_privacy">DIVE는 철저한 암호화 기술로 회원님의 수면 데이터를 안전하게 보호합니다. 계정을 삭제하지 않고 데이터만 초기화할 수 있어요.</string>
+
+    <string name="account_withdraw_usability_action">수면 루틴 가이드 보러 가기</string>
+    <string name="account_withdraw_accuracy_action">수면 측정 가이드 보러 가기</string>
+    <string name="account_withdraw_content_action">1:1 문의화면으로 이동하기</string>
+    <string name="account_withdraw_privacy_action">앱 내 프라이버시 설정 메뉴로 이동하기</string>
+
+    <string name="account_withdraw_continue">다음</string>
+    <!--</editor-fold>-->
+
+    <!--<editor-fold desc="회원탈퇴 삭제 안내 화면">-->
     <string name="account_withdraw_confirm_title">정말 탈퇴하시겠어요?</string>
-    <string name="account_withdraw_confirm_subtitle">탈퇴 시 아래의 정보가 모두 사라집니다.</string>
-    <string name="account_withdraw_bullet_sleep_records">모든 수면 기록: 수면 단계·수면 점수·소음 기록과 날짜별 리포트가 전부 삭제되며 복구할 수 없어요.</string>
-    <string name="account_withdraw_bullet_alarm_settings">알람 및 알림 설정: 기상/취침 시각, 알람음, 진동·스마트 알람 설정이 초기화돼요.</string>
-    <string name="account_withdraw_bullet_social">연결된 소셜 계정: 카카오·구글 연결이 해제돼요. 같은 계정으로 다시 가입해도 이전 기록은 돌아오지 않아요.</string>
-    <string name="account_withdraw_bullet_music">저장된 음악: 즐겨찾기한 수면 음악과 타이머 설정이 사라져요.</string>
-    <string name="account_withdraw_bullet_profile">프로필 정보: 닉네임과 프로필 사진이 서버에서 삭제돼요.</string>
-    <string name="account_withdraw_bullet_subscription">구독 정보: 앱 내 구독 상태 정보가 삭제돼요. 다만 구글 플레이 정기결제는 자동으로 해지되지 않으니, 플레이스토어에서 따로 해지해 주세요.</string>
+    <string name="account_withdraw_confirm_subtitle">탈퇴 시 삭제되는 정보를 확인해주세요.</string>
+    <string name="account_withdraw_loss_info">탈퇴하시면 그동안 쌓아온 수면 리포트,\n즐겨찾기한 음악을 포함한 모든 수면 기록이 영구히 삭제됩니다.\n특히 나만을 위해 선명하게 빛나던 ‘동물 유형’ 데이터는\n 서버에서 완전히 지워져\n같은 계정으로 재가입해도\n결코 복구할 수 없습니다.\n(※ 유료구독은 자동으로 해지되지 않으니, 스토어에서 직접 해지해 주세요.)</string>
     <string name="account_withdraw_final">탈퇴하기</string>
+    <!--</editor-fold>-->
+
+    <!--<editor-fold desc="회원탈퇴 완료 안내 화면">-->
+    <string name="withdraw_complete_title">회원탈퇴가 완료되었습니다.</string>
+    <string name="account_withdraw_complete_description">그동안 서비스를 이용해 주셔서 감사합니다.\n앞으로 더 좋은 서비스를 제공해 드리는 수면 앱으로 발전해 가겠습니다.</string>
+    <string name="withdraw_complete_cta">홈으로 이동</string>
+    <!--</editor-fold>-->
+
 
     <!-- ===== 약관 / 개인정보처리방침 ===== -->
     <string name="legal_load_failed">내용을 불러오지 못했어요.</string>

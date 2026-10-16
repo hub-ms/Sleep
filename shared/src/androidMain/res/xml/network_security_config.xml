@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
+    <!-- 평문 HTTP 는 개발용 호스트(루프백/에뮬레이터)에만 허용한다.
+         운영 서버는 HTTPS 이므로 여기에 등록할 필요가 없고, 실수로 평문 호출이 생기면
+         logcat 에 "CLEARTEXT communication to ... not permitted" 로 드러난다. -->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">localhost</domain>
         <domain includeSubdomains="true">10.0.2.2</domain>
-        <domain includeSubdomains="true">marvelous-robust-coauthor.ngrok-free.dev</domain>
         <domain includeSubdomains="true">kakaocdn.net</domain>
         <domain includeSubdomains="true">kakao.co.kr</domain>
     </domain-config>

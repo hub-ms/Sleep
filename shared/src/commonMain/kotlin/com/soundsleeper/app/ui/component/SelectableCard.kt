@@ -1,0 +1,92 @@
+package com.soundsleeper.app.ui.component
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
+import com.soundsleeper.app.resources.Res
+import com.soundsleeper.app.resources.ic_check
+import com.soundsleeper.app.ui.theme.IconSize
+import com.soundsleeper.app.ui.theme.SleepTheme.primary
+import com.soundsleeper.app.ui.theme.bodyText
+import org.jetbrains.compose.resources.painterResource
+
+/**
+ * 하나를 고르는 카드. 설문 선택지와 언어 설정에서 쓴다.
+ *
+ * 예전에는 선택 여부에 따라 면 색이 primary 40% ↔ LightGray 40% 로 함께 바뀌어,
+ * 고르는 순간 카드 전체가 다른 색으로 변했다. 선택 표시는 테두리 하나로 충분하고,
+ * 면 색까지 바뀌면 목록 안에서 어느 것이 선택됐는지보다 색 변화가 먼저 눈에 들어온다.
+ * 면 색은 고정하고 테두리 색만 바꾼다.
+ *
+ * 체크 아이콘 자리는 **선택 여부와 무관하게 항상 잡아 둔다.** 예전에는 선택됐을 때만
+ * Icon 을 넣어서, 행 높이가 글자 높이(≈20dp)에서 아이콘 높이(24dp)로 늘어났다. 설문처럼
+ * 카드를 세로로 쌓아 둔 화면에서는 하나를 고를 때마다 그 아래 항목들이 몇 dp 씩 밀려
+ * 내려갔다. 자리를 미리 선점하고 보이기만 토글한다.
+ */
+@Composable
+fun SelectableCard(
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .selectable(selected = isSelected, onClick = onClick, role = Role.RadioButton),
+        shape = RoundedCornerShape(16.dp),
+        // 선택 여부와 무관하게 고정한다.
+        color = Color.White.copy(alpha = 0.06f),
+        border = BorderStroke(
+            width = 2.dp,
+            color = if (isSelected) primary else Color.White.copy(alpha = 0.18f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyText,
+                color = Color.White
+            )
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    // 아이콘이 없을 때도 같은 높이를 차지하게 한다.
+                    .height(IconSize.Default),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Icon(
+                    painter = painterResource(Res.drawable.ic_check),
+                    contentDescription = null,
+                    tint = primary,
+                    modifier = Modifier
+                        .size(IconSize.Default)
+                        .alpha(if (isSelected) 1f else 0f)
+                )
+            }
+        }
+    }
+}

@@ -61,3 +61,11 @@ Thumbs.db
 /sleep_ml_code.zip
 /config/
 /shared/release/
+
+# 모듈 분리(:androidApp) 후 release 산출물 경로. /shared/release/ 와 같은 이유로 제외한다
+# (aab + mapping.txt + native 심볼 = 169MB).
+/androidApp/release/
+
+# Colab 업로드용으로 로컬에서 만드는 데이터 묶음. ml/data/ 안의 소스 폴더는 이미 제외돼
+# 있지만 tar 는 그 규칙에 안 걸린다(edf.tar.gz 혼자 13GB).
+ml/data/*.tar.gz

@@ -21,8 +21,8 @@ export SKIP_JDK_VERSION_CHECK=1
 AVD_NAME="run_skill_phone"
 APK="$ROOT/androidApp/build/outputs/apk/debug/androidApp-debug.apk"
 APK_RELEASE="$ROOT/androidApp/build/outputs/apk/release/androidApp-release.apk"
-APP_ID="com.somniotune.app"
-MAIN_ACTIVITY="$APP_ID/com.somniotune.app.MainActivity"
+APP_ID="com.soundsleeper.app"
+MAIN_ACTIVITY="$APP_ID/com.soundsleeper.app.MainActivity"
 OUT_DIR="$ROOT/.artifacts/run-skill"
 SPRING_LOG="$OUT_DIR/spring_boot.log"
 SPRING_PID_FILE="$OUT_DIR/spring.pid"
@@ -68,7 +68,16 @@ cmd_build_release() {
   ./gradlew.bat :androidApp:assembleRelease --console=plain
 }
 
+# 폰의 localhost:<port> 를 PC 의 같은 포트로 보낸다. adb 서버가 재시작되거나 USB 를 다시 꽂으면
+# 조용히 사라지므로 install 앞에서 매번 다시 걸어준다. 에뮬레이터는 10.0.2.2 를 쓰니 없어도 무해하다.
+cmd_reverse() {
+  local port="${1:-8080}"
+  "$ADB" reverse "tcp:$port" "tcp:$port"
+  "$ADB" reverse --list
+}
+
 cmd_install_app() {
+  cmd_reverse >/dev/null 2>&1 || true
   "$ADB" install -r "$APK"
 }
 
@@ -192,6 +201,7 @@ case "$cmd" in
   instr) cmd_instr ;;
   release-smoke) cmd_release_smoke ;;
   install-app) cmd_install_app ;;
+  reverse) cmd_reverse "$@" ;;
   launch-app) cmd_launch_app ;;
   ss) cmd_ss "$@" ;;
   tap) cmd_tap "$@" ;;
@@ -201,7 +211,7 @@ case "$cmd" in
   spring-stop) cmd_spring_stop ;;
   spring-smoke) cmd_spring_smoke ;;
   *)
-    echo "Usage: driver.sh <avd-setup|emulator-start|emulator-stop|build-app|build-release|install-app|launch-app|ss [path]|tap x y|text str|all-android|unit|verify|instr|release-smoke|spring-start|spring-stop|spring-smoke>" >&2
+    echo "Usage: driver.sh <avd-setup|emulator-start|emulator-stop|build-app|build-release|install-app|launch-app|reverse [port]|ss [path]|tap x y|text str|all-android|unit|verify|instr|release-smoke|spring-start|spring-stop|spring-smoke>" >&2
     exit 1
     ;;
 esac

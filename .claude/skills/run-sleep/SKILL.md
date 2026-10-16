@@ -48,7 +48,8 @@ Individual steps (reuse a device you already booted):
 | `driver.sh build-app` | `gradlew.bat :androidApp:assembleDebug` |
 | `driver.sh build-release` | `gradlew.bat :androidApp:assembleRelease` (minified; currently **unsigned** — no release signingConfig exists) |
 | `driver.sh install-app` | `adb install -r` the debug APK |
-| `driver.sh launch-app` | `adb shell am start` on `com.somniotune.app/com.somniotune.app.MainActivity` |
+| `driver.sh launch-app` | `adb shell am start` on `com.soundsleeper.app/com.soundsleeper.app.MainActivity` |
+| `driver.sh reverse [port]` | `adb reverse tcp:8080 tcp:8080` — 실기기에서 PC 의 `localhost:8080` 을 쓰기 위한 역터널. `install-app` 이 자동으로 먼저 호출한다 |
 | `driver.sh ss [path]` | `adb exec-out screencap -p` to a PNG (default `.artifacts/run-skill/screenshot.png`) |
 | `driver.sh tap X Y` / `driver.sh text STR` | `adb shell input tap/text` |
 | `driver.sh emulator-stop` | `adb emu kill` |
@@ -66,6 +67,10 @@ bash .claude/skills/run-sleep/driver.sh spring-start   # blocks until "Started S
 bash .claude/skills/run-sleep/driver.sh spring-smoke    # curls one public + one protected endpoint, prints status lines
 bash .claude/skills/run-sleep/driver.sh spring-stop     # kills whatever is bound to :8080
 ```
+
+앱이 이 서버에 붙으려면 `local.properties` 의 `server.base.url.debug` 가 맞아야 한다 — 실기기는
+`http://localhost:8080/` + `driver.sh reverse`(역터널은 adb 재시작 때마다 사라진다), 에뮬레이터는
+`http://10.0.2.2:8080/`. `network_security_config.xml` 이 평문 허용하는 호스트도 이 둘뿐이다.
 
 `spring-start` really boots Tomcat on port 8080 and opens a live Hikari pool to `sleep_db` — confirmed in this session (`Started SleepApplicationKt in 13.057 seconds`).
 

@@ -42,6 +42,11 @@ class SecurityConfig(
             // 아무 보호된 API도 호출할 수 없게 된다.
             .exceptionHandling { it.authenticationEntryPoint(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)) }
             .authorizeHttpRequests {
+                // 플랫폼 헬스체크. 인증을 걸면 로드밸런서가 멀쩡한 인스턴스를 죽은 것으로 본다.
+                it.requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
+                // 에러 디스패치까지 막혀 있으면 공개 엔드포인트의 미처리 예외가 전부 빈 403 으로
+                // 나온다. 진짜 원인(400/500)이 가려져서 원격 호스트에서는 손도 못 댄다.
+                it.requestMatchers("/error").permitAll()
                 it.requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
                 it.requestMatchers(HttpMethod.GET, "/legal/**").permitAll()
                 it.requestMatchers("/auth/social/disconnect/**", "/auth/email/disconnect",
@@ -50,6 +55,12 @@ class SecurityConfig(
                 it.requestMatchers(HttpMethod.POST, "/auth/social/*").permitAll()
                 it.requestMatchers(HttpMethod.POST, "/auth/email/send", "/auth/refresh").permitAll()
                 it.requestMatchers(HttpMethod.GET, "/auth/email/verify-token").permitAll()
+                // Google Play RTDN(Pub/Sub 푸시). RtdnWebhookController 주석은 permitAll 이라고
+                // 적혀 있었지만 실제 규칙에는 없어서 anyRequest().authenticated() 에 걸렸다.
+                // Pub/Sub 가 붙여 보내는 OIDC 토큰은 JwtAuthenticationFilter 가 검증할 수 있는
+                // JWT 가 아니라, 모든 배달이 컨트롤러에 닿기도 전에 401 을 받고 무한 재시도됐다.
+                // 실제 발신자 검증은 RtdnPushVerifier 가 따로 한다.
+                it.requestMatchers(HttpMethod.POST, "/api/billing/rtdn/**").permitAll()
                 it.anyRequest().authenticated()
             }
             // ✅ FIX #3: Filter ordering is correct

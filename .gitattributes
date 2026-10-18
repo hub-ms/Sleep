@@ -1,0 +1,8 @@
+# gradlew 가 CRLF 로 체크인돼 있어 Linux 빌드 컨테이너에서 "#!/bin/sh\r" 셔뱅이 깨져
+# "./gradlew: not found" (exit 127)로 실패했다. Windows 에서 다시 체크아웃해도 같은 문제가
+# 재발하지 않도록 이 파일이 끝줄을 강제한다.
+gradlew text eol=lf
+*.sh text eol=lf
+
+# 반대로 .bat 파일은 CRLF 가 맞다 - Windows cmd.exe 용이다.
+*.bat text eol=crlf
